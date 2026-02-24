@@ -1,0 +1,13 @@
+{
+  "name": "ccc",
+  "version": "0.1.0",
+  "description": "Claude Command Center — unified dashboard for managing multiple Claude Code sessions",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  }
+}

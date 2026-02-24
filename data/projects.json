@@ -1,0 +1,30 @@
+{
+  "groups": [
+    {
+      "name": "Active",
+      "order": 0
+    },
+    {
+      "name": "Bug Fixing",
+      "order": 1
+    },
+    {
+      "name": "Parked",
+      "order": 2
+    }
+  ],
+  "projects": [
+    {
+      "id": "3b7c2ac6-ffbe-4939-93b8-a905056553f8",
+      "name": "CCC",
+      "path": "SC-Development/CCC",
+      "group": "Active",
+      "order": 0,
+      "coreFiles": {
+        "claude": "CLAUDE.md",
+        "concept": "docs/CCC_concept.md",
+        "tasklist": "docs/CCC_tasklist.md"
+      }
+    }
+  ]
+}

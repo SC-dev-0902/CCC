@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CCC — Claude Command Center</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar / Tree View -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <span class="logo">&#x2B21;</span> CCC
+        <span class="sidebar-header-spacer"></span>
+        <button class="add-project-btn" id="addProjectBtn" title="Add project">+</button>
+      </div>
+
+      <nav class="tree-view" id="treeView">
+        <!-- Rendered by app.js -->
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="settings-entry" id="settingsEntry" title="Application settings">
+          <span class="settings-icon">&#x2699;</span> Settings
+        </div>
+      </div>
+    </aside>
+
+    <!-- Resize Handle -->
+    <div class="resize-handle" id="resizeHandle"></div>
+
+    <!-- Main Panel -->
+    <main class="main-panel">
+      <div class="tab-bar" id="tabBar">
+        <!-- Rendered by app.js -->
+      </div>
+
+      <div class="tab-content" id="tabContent">
+        <!-- Rendered by app.js -->
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
