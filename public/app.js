@@ -1,6 +1,6 @@
 /* ============================================
    CCC — Claude Command Center
-   Stage 03: Terminal Sessions (PTY + xterm.js)
+   Stage 04: Status Detection (Parser Module)
    ============================================ */
 
 // --- State ---
@@ -14,7 +14,7 @@ let collapsedGroups = new Set();
 let dragState = null;
 let settings = {};
 
-// Terminal instances: projectId -> { terminal, fitAddon, ws, container, state }
+// Terminal instances: projectId -> { terminal, fitAddon, ws, container, state, claudeStatus, degraded }
 const terminalInstances = new Map();
 
 // --- API ---
@@ -64,6 +64,58 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+/**
+ * Get the display status for a project's status dot.
+ * Maps parser state → CSS class for the dot colour.
+ *
+ * Claude Code sessions: uses claudeStatus from parser
+ * Shell sessions: active = running, exited = completed
+ * No session: unknown
+ */
+function getProjectStatus(projectId) {
+  const instance = terminalInstances.get(projectId);
+  if (!instance) return 'unknown';
+
+  // Exited sessions are grey regardless
+  if (instance.state === 'exited') return 'unknown';
+
+  // If degraded, all dots fall back to unknown (grey)
+  if (instance.degraded) return 'unknown';
+
+  // Claude Code session with parser status
+  if (instance.claudeStatus) {
+    return instance.claudeStatus; // waiting, running, completed, error, unknown
+  }
+
+  // Plain shell session
+  if (instance.state === 'active') return 'running';
+
+  return 'unknown';
+}
+
+/**
+ * Show degraded state warning banner in the UI.
+ */
+function showDegradedBanner() {
+  // Don't show multiple banners
+  if (document.getElementById('degradedBanner')) return;
+
+  const banner = document.createElement('div');
+  banner.id = 'degradedBanner';
+  banner.className = 'degraded-banner';
+  banner.innerHTML = `
+    <span>Status detection is degraded. Claude Code output format may have changed.</span>
+    <a href="https://github.com/Phet/CCC/issues" target="_blank" rel="noopener">View issues</a>
+    <button class="degraded-dismiss" title="Dismiss warning">&times;</button>
+  `;
+  banner.querySelector('.degraded-dismiss').addEventListener('click', () => {
+    banner.remove();
+  });
+
+  const mainPanel = document.querySelector('.main-panel');
+  mainPanel.insertBefore(banner, mainPanel.firstChild);
+}
+
 // --- Terminal Management ---
 
 function createTerminal(projectId) {
@@ -111,7 +163,9 @@ function createTerminal(projectId) {
     fitAddon,
     ws: null,
     container,
-    state: 'none' // none, active, exited
+    state: 'none',       // none, active, exited
+    claudeStatus: null,  // null (shell), or: waiting, running, completed, error, unknown
+    degraded: false
   };
 
   terminalInstances.set(projectId, instance);
@@ -146,9 +200,19 @@ function connectTerminal(projectId) {
         instance.state = msg.state;
         renderTreeView();
         renderTabBar();
+      } else if (msg.type === 'claudeStatus') {
+        instance.claudeStatus = msg.status;
+        renderTreeView();
+        renderTabBar();
+      } else if (msg.type === 'degraded') {
+        instance.degraded = true;
+        renderTreeView();
+        renderTabBar();
+        showDegradedBanner();
       } else if (msg.type === 'exit') {
         instance.state = 'exited';
-        instance.terminal.write('\r\n\x1b[90m[Session ended]\x1b[0m\r\n');
+        instance.claudeStatus = null;
+        instance.degraded = false;
         renderTreeView();
         renderTabBar();
         renderTabContent();
@@ -297,13 +361,8 @@ function renderTreeView() {
       row.className = 'tree-project-row' + (activeTab === project.id ? ' active' : '');
       row.draggable = true;
 
-      // Get session state for status dot
-      const instance = terminalInstances.get(project.id);
-      let status = 'unknown';
-      if (instance) {
-        if (instance.state === 'active') status = 'running';
-        else if (instance.state === 'exited') status = 'completed';
-      }
+      // Get status for dot colour
+      const status = getProjectStatus(project.id);
 
       row.innerHTML = `
         <span class="tree-project-chevron">&#x25B8;</span>
@@ -484,13 +543,7 @@ function getTabInfo(tabId) {
   const project = findProject(tabId);
   if (!project) return null;
 
-  const instance = terminalInstances.get(tabId);
-  let status = 'unknown';
-  if (instance) {
-    if (instance.state === 'active') status = 'running';
-    else if (instance.state === 'exited') status = 'completed';
-  }
-  return { name: project.name, status };
+  return { name: project.name, status: getProjectStatus(tabId) };
 }
 
 // --- Tab Content ---

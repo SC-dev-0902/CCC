@@ -26,6 +26,8 @@ Read `docs/CCC_concept.md` before starting any task. It is the single source of 
 - **Never begin the next stage without an explicit Go from the developer.**
 - **Never modify files in an imported project directory.** CCC is read-only on the filesystem except for its own `projects.json` and `settings.json`.
 - **Never write version numbers into filenames.** Version history lives in Git.
+- **Never use filesystem symlinks.** Active version is tracked in `projects.json`, not on the filesystem.
+- **Never use platform-specific APIs or hardcoded paths.** v1.0 targets macOS but must not close the door on cross-platform support. Use `path.join()` for all paths. No `/Users/`, no `~/Library/`, no assumptions about zsh.
 - **Parser module is sacred.** All Claude Code output parsing lives exclusively in `src/parser.js`. Nothing else touches raw output interpretation.
 
 ---
@@ -52,9 +54,30 @@ CCC/
 │   ├── projects.json          ← project registry (committed, no absolute paths)
 │   └── settings.json          ← user settings (gitignored)
 └── docs/
-    ├── CCC_concept.md         ← source of truth
-    └── CCC_tasklist.md        ← stage-gated task breakdown
+    ├── v1.0/
+    │   ├── CCC_concept.md     ← v1.0 concept
+    │   └── CCC_tasklist.md    ← v1.0 tasklist
+    └── v1.1/
+        ├── CCC_concept.md     ← v1.1 concept (active)
+        └── CCC_tasklist.md    ← v1.1 tasklist
 ```
+
+---
+
+## Project Versioning
+
+CCC models project evolution through explicit versions. Each version is a full development cycle.
+
+- **A version is a container** — it has its own concept doc, tasklist, stage progression, and Go/NoGo gates.
+- **Major (X.0) and Minor (x.Y) versions** get their own concept doc and tasklist.
+- **Patch versions (x.y.Z)** get their own tasklist but inherit the parent minor version's concept doc.
+- **Version documents live in `docs/vX.Y/`** — e.g., `docs/v1.1/CCC_concept.md`.
+- **Patch version documents nest inside their parent** — e.g., `docs/v1.1/v1.1.1/CCC_tasklist.md`.
+- **The active version is tracked in `projects.json`** via the `activeVersion` field. Never use filesystem symlinks.
+- **CLAUDE.md stays at the project root** and is always derived from the active version's concept doc.
+- **When a version's final stage receives a Go**, prompt for a Git tag matching the version number.
+
+Read `docs/CCC_concept.md` → Project Versioning section for the full specification.
 
 ---
 

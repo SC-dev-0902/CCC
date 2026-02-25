@@ -87,18 +87,18 @@
 **Focus:** Live status dots derived from Claude Code output. The intelligence layer of CCC.
 
 ### Tasks
-- [ ] Create `src/parser.js` — isolated, single responsibility
-- [ ] Define the five state patterns: WAITING_FOR_INPUT, RUNNING, COMPLETED, ERROR, UNKNOWN
-- [ ] Research and document current Claude Code output patterns for each state
-- [ ] Parser receives PTY output stream and emits state change events
-- [ ] State changes propagate via WebSocket to frontend
-- [ ] Tree view status dots update live
-- [ ] Tab colours update live
-- [ ] Parser confidence monitoring: flag degraded state after 60s of unrecognised output
-- [ ] Degraded state: all dots fall back to ⚫
-- [ ] Degraded state: warning banner with link to GitHub issues
-- [ ] Optional: auto-file GitHub issue on degradation (requires GitHub token in Settings)
-- [ ] Parser is fully unit-testable in isolation
+- [x] Create `src/parser.js` — isolated, single responsibility
+- [x] Define the five state patterns: WAITING_FOR_INPUT, RUNNING, COMPLETED, ERROR, UNKNOWN
+- [x] Research and document current Claude Code output patterns for each state
+- [x] Parser receives PTY output stream and emits state change events
+- [x] State changes propagate via WebSocket to frontend
+- [x] Tree view status dots update live
+- [x] Tab colours update live
+- [x] Parser confidence monitoring: flag degraded state after 60s of unrecognised output
+- [x] Degraded state: all dots fall back to ⚫
+- [x] Degraded state: warning banner with link to GitHub issues
+- [x] Optional: auto-file GitHub issue on degradation (requires GitHub token in Settings)
+- [x] Parser is fully unit-testable in isolation
 
 ### Go/NoGo Gate
 > Do status dots accurately reflect Claude Code state in real usage?

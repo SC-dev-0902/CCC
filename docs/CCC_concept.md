@@ -1,5 +1,5 @@
 # Claude Command Center (CCC)
-**Concept Document v0.8**
+**Concept Document v0.9**
 *A unified dashboard for managing multiple Claude Code sessions*
 
 ---
@@ -39,6 +39,8 @@ TradingMaster/
 ```
 
 The pattern is always: `{ProjectFolderName}_concept.md` and `{ProjectFolderName}_tasklist.md`, stored in `/docs/`. `CLAUDE.md` always lives at the project root — this is required by Claude Code.
+
+**Note:** For versioned projects, concept and tasklist files live inside version subdirectories within `docs/`. See **Project Versioning** for the full folder structure. The naming convention (`{ProjectFolderName}_concept.md`, `{ProjectFolderName}_tasklist.md`) remains the same — only the directory changes.
 
 ---
 
@@ -84,6 +86,85 @@ A session is a live terminal process (Claude Code or a shell) attached to a proj
 
 ### Group
 A named folder in the tree view that contains projects. Groups are user-defined and a project can belong to one group at a time. Projects can be moved between groups via drag & drop. Example groups: Active, Bug Fixing, Parked, Client A.
+
+---
+
+### Project Versioning
+
+A project in CCC is not a single pass from start to finish. Projects evolve — v1.0 ships, then v1.1 adds features, then v2.0 reimagines the concept. CCC models this explicitly: each **version** of a project is a full development cycle with its own concept doc, tasklist, stage progression, and Go/NoGo gates.
+
+#### Version Types
+
+| Type | Pattern | Meaning | Has own concept doc? | Has own tasklist? |
+|------|---------|---------|----------------------|-------------------|
+| Major | X.0 | Major update, new or substantially revised concept | Yes | Yes |
+| Minor | x.Y | New feature integration, expanded concept | Yes | Yes |
+| Patch | x.y.Z | Bug fix / repair | No — inherits parent minor version's concept | Yes |
+
+A major or minor version represents a new mandate for the project. It gets its own concept doc (which may be entirely new or an evolution of the previous one), its own tasklist, and its own full stage progression from Stage 01 to Stage 10.
+
+A patch version is a focused repair cycle. It inherits the concept from its parent minor version — because a bugfix does not need a new vision — but gets its own tasklist and stage progression.
+
+#### Versioned Folder Structure
+
+Version documents live in versioned subdirectories inside `docs/`:
+
+```
+CCC/
+├── CLAUDE.md                       ← project root (always current version)
+├── .env
+└── docs/
+    ├── v1.0/
+    │   ├── CCC_concept.md          ← v1.0 concept
+    │   └── CCC_tasklist.md         ← v1.0 tasklist
+    ├── v1.1/
+    │   ├── CCC_concept.md          ← v1.1 concept (expanded or new)
+    │   ├── CCC_tasklist.md         ← v1.1 tasklist
+    │   └── v1.1.1/
+    │       └── CCC_tasklist.md     ← bugfix tasklist (inherits v1.1 concept)
+    └── v2.0/
+        ├── CCC_concept.md          ← v2.0 concept (major revision)
+        └── CCC_tasklist.md         ← v2.0 tasklist
+```
+
+The `docs/` folder becomes the versioned knowledge base of the project. Open it in Finder and the full lineage is visible at a glance.
+
+**CLAUDE.md remains at the project root.** It is always derived from the active version's concept doc and is updated when the active version changes.
+
+#### Active Version Pointer
+
+The active version is tracked in `projects.json` via an `activeVersion` field per project — not via filesystem symlinks. Symlinks are fragile across platforms (Windows requires elevated permissions, Git stores them as text files) and add unnecessary filesystem complexity. The JSON pointer is explicit, portable, and already part of CCC's persistence model.
+
+When a new version is created, CCC updates `activeVersion` in `projects.json` and regenerates or prompts for an updated CLAUDE.md derived from the new version's concept doc.
+
+#### Tree View with Versions
+
+The tree view expands to show versions nested under the project:
+
+```
+▾ Active
+  ▾ CCC                           🔴
+    ▾ Versions
+        v1.0                       🟢
+        ▾ v1.1                     🔴  ← active version
+            📄 CCC_concept.md
+            📄 CCC_tasklist.md
+            v1.1.1                 ⚫
+        v2.0                       ⚫
+    📄 CLAUDE.md
+```
+
+The active version is visually distinguished. Expanding a version shows its core files. The project-level status dot reflects the active version's status.
+
+#### Version Lifecycle
+
+1. Developer creates a new version from within CCC (via a "New Version" action on the project)
+2. CCC scaffolds the version folder inside `docs/` with concept and tasklist templates
+3. The new version becomes the active version
+4. Development proceeds through the stage-gated process (stages, Go/NoGo gates)
+5. When the final stage receives a Go, CCC prompts for a Git tag matching the version number (e.g., `v1.1.0`)
+6. The version is marked as completed (🟢)
+7. The project can continue with a new version or remain on the completed one
 
 ---
 
@@ -448,6 +529,23 @@ The user can keep working. They just lose the status colours temporarily.
 
 ---
 
+## Platform Target
+
+v1.0 targets **macOS** as the development and testing platform. Cross-platform support (Linux, Windows) is not a v1.0 goal but is explicitly not excluded.
+
+Design choices must not close the door on future cross-platform support:
+- No platform-specific APIs (e.g., macOS-only system calls)
+- No hardcoded paths (e.g., `/Users/`, `~/Library/`)
+- No assumptions about the default shell being zsh
+- Use `path.join()` for all filesystem path construction
+- No filesystem symlinks (fragile across platforms — see Project Versioning)
+
+The underlying tech stack (Node.js, Express, xterm.js, node-pty) is inherently cross-platform. `node-pty` requires platform-specific build tools (Xcode CLI on macOS, build-essential on Linux, Visual Studio Build Tools on Windows) but compiles on all three.
+
+Cross-platform support is a candidate for a future version if demand warrants it after the Promotion Tour.
+
+---
+
 ## Out of Scope (for v1)
 
 - Cloud sync or multi-machine support
@@ -455,6 +553,7 @@ The user can keep working. They just lose the status colours temporarily.
 - Built-in text editor (read + external edit is sufficient)
 - Git integration beyond what Claude Code handles
 - Mobile / tablet support
+- Cross-platform support (Linux, Windows) — see Platform Target
 
 ---
 

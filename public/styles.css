@@ -378,6 +378,45 @@ html, body {
 
 /* --- Tab Bar --- */
 
+/* Degraded state warning banner */
+
+.degraded-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 16px;
+  background: #3d2a00;
+  border-bottom: 1px solid var(--status-error);
+  color: var(--status-running);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.degraded-banner a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.degraded-banner a:hover {
+  color: var(--text-primary);
+}
+
+.degraded-dismiss {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.degraded-dismiss:hover {
+  color: var(--text-primary);
+}
+
+/* Tab bar */
+
 .tab-bar {
   height: var(--tab-bar-height);
   background: var(--bg-tab-bar);
