@@ -1,6 +1,6 @@
 /* ============================================
    CCC — Claude Command Center
-   Stage 04: Status Detection (Parser Module)
+   Stage 06: Project Versioning
    ============================================ */
 
 // --- State ---
@@ -17,6 +17,13 @@ let settings = {};
 // Terminal instances: projectId -> { terminal, fitAddon, ws, container, state, claudeStatus, degraded }
 const terminalInstances = new Map();
 
+// Version state: projectId -> { activeVersion, versions: [...], hasFlatDocs }
+const projectVersions = new Map();
+// "projectId:version" strings for expanded version rows
+const expandedVersions = new Set();
+// "projectId" strings for expanded Versions header
+const expandedVersionHeaders = new Set();
+
 // --- API ---
 
 async function api(method, url, body) {
@@ -26,15 +33,25 @@ async function api(method, url, body) {
   return res.json();
 }
 
+let suppressRender = false;
+
 async function loadProjects() {
   const data = await api('GET', '/api/projects');
   groups = (data.groups || []).sort((a, b) => a.order - b.order);
   projectsList = data.projects || [];
-  render();
+  if (!suppressRender) render();
 }
 
 async function loadSettings() {
   settings = await api('GET', '/api/settings');
+}
+
+// --- Version Loading ---
+
+async function loadProjectVersions(projectId) {
+  const data = await api('GET', `/api/projects/${projectId}/versions`);
+  projectVersions.set(projectId, data);
+  return data;
 }
 
 // --- Helpers ---
@@ -434,11 +451,71 @@ function renderTreeView() {
 
       projectEl.appendChild(row);
 
-      // Core files
-      const files = getProjectFiles(project);
-      if (files.length > 0) {
-        const filesEl = document.createElement('div');
-        filesEl.className = 'tree-project-files';
+      // Project children (versioned or flat)
+      const filesEl = document.createElement('div');
+      filesEl.className = 'tree-project-files';
+
+      if (project.activeVersion) {
+        // --- Versioned project ---
+        // CLAUDE.md always at project level
+        if (project.coreFiles && project.coreFiles.claude) {
+          const claudeEl = document.createElement('div');
+          claudeEl.className = 'tree-file';
+          claudeEl.innerHTML = `<span class="tree-file-icon">&#x1F4C4;</span><span class="tree-file-name">${escapeHtml(project.coreFiles.claude)}</span>`;
+          claudeEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openFileTab(project.id, project.name, project.coreFiles.claude);
+          });
+          filesEl.appendChild(claudeEl);
+        }
+
+        // Versions header
+        const versionsHeaderExpanded = expandedVersionHeaders.has(project.id);
+        const versionsHeader = document.createElement('div');
+        versionsHeader.className = 'tree-versions-header' + (versionsHeaderExpanded ? ' expanded' : '');
+        versionsHeader.innerHTML = `
+          <span class="tree-versions-chevron">&#x25B8;</span>
+          <span>Versions</span>
+          <button class="add-version-btn" title="New version">+</button>
+        `;
+
+        versionsHeader.addEventListener('click', async (e) => {
+          if (e.target.closest('.add-version-btn')) {
+            e.stopPropagation();
+            showNewVersionModal(project);
+            return;
+          }
+          e.stopPropagation();
+          if (expandedVersionHeaders.has(project.id)) {
+            expandedVersionHeaders.delete(project.id);
+          } else {
+            expandedVersionHeaders.add(project.id);
+            // Lazy load versions on first expand
+            if (!projectVersions.has(project.id)) {
+              await loadProjectVersions(project.id);
+            }
+          }
+          renderTreeView();
+        });
+
+        filesEl.appendChild(versionsHeader);
+
+        // Version rows (if expanded)
+        const versionsChildren = document.createElement('div');
+        versionsChildren.className = 'tree-versions-children' + (versionsHeaderExpanded ? ' expanded' : '');
+
+        const vData = projectVersions.get(project.id);
+        if (vData && vData.versions) {
+          for (const ver of vData.versions) {
+            renderVersionRow(versionsChildren, project, ver, vData.activeVersion);
+          }
+        }
+
+        filesEl.appendChild(versionsChildren);
+
+      } else {
+        // --- Non-versioned project: show flat coreFiles ---
+        const files = getProjectFiles(project);
         files.forEach(file => {
           const fileEl = document.createElement('div');
           fileEl.className = 'tree-file';
@@ -449,8 +526,23 @@ function renderTreeView() {
           });
           filesEl.appendChild(fileEl);
         });
-        projectEl.appendChild(filesEl);
+
+        // Check for flat docs and show migration prompt
+        if (expandedProjects.has(project.id) && !projectVersions.has(project.id)) {
+          loadProjectVersions(project.id).then(data => {
+            if (data.hasFlatDocs) {
+              renderMigrationHint(filesEl, project);
+            }
+          });
+        } else if (projectVersions.has(project.id)) {
+          const vData = projectVersions.get(project.id);
+          if (vData.hasFlatDocs) {
+            renderMigrationHint(filesEl, project);
+          }
+        }
       }
+
+      projectEl.appendChild(filesEl);
 
       children.appendChild(projectEl);
     });
@@ -462,6 +554,231 @@ function renderTreeView() {
 
 function clearDropIndicators() {
   document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+}
+
+// --- Version Tree Helpers ---
+
+function renderVersionRow(container, project, ver, activeVersion) {
+  const isActive = ver.version === activeVersion;
+  const expandKey = project.id + ':' + ver.version;
+  const isExpanded = expandedVersions.has(expandKey);
+
+  const row = document.createElement('div');
+  row.className = 'tree-version-row' + (isActive ? ' active-version' : '') + (isExpanded ? ' expanded' : '');
+
+  const hasChildren = ver.files.length > 0 || ver.patches.length > 0;
+
+  row.innerHTML = `
+    ${hasChildren ? '<span class="tree-version-chevron">&#x25B8;</span>' : '<span class="tree-version-chevron" style="visibility:hidden">&#x25B8;</span>'}
+    <span class="version-active-dot"></span>
+    <span class="tree-version-name">v${escapeHtml(ver.version)}</span>
+    <span class="tree-version-actions">
+      ${isActive ? '<span class="action-btn mark-complete-btn" title="Mark complete (git tag)">&#x2713;</span>' : ''}
+      ${!isActive ? '<span class="action-btn set-active-btn" title="Set as active version">&#x25C9;</span>' : ''}
+    </span>
+  `;
+
+  // Chevron: toggle expand
+  if (hasChildren) {
+    row.querySelector('.tree-version-chevron').addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (expandedVersions.has(expandKey)) {
+        expandedVersions.delete(expandKey);
+      } else {
+        expandedVersions.add(expandKey);
+      }
+      renderTreeView();
+    });
+  }
+
+  // Row click: if active → toggle expand; if not active → set as active
+  row.addEventListener('click', async (e) => {
+    if (e.target.closest('.action-btn')) return;
+    if (e.target.closest('.tree-version-chevron')) {
+      // Chevron always toggles expand
+      e.stopPropagation();
+      if (expandedVersions.has(expandKey)) {
+        expandedVersions.delete(expandKey);
+      } else {
+        expandedVersions.add(expandKey);
+      }
+      renderTreeView();
+      return;
+    }
+    e.stopPropagation();
+    if (isActive) {
+      // Already active — toggle expand
+      if (hasChildren) {
+        if (expandedVersions.has(expandKey)) {
+          expandedVersions.delete(expandKey);
+        } else {
+          expandedVersions.add(expandKey);
+        }
+        renderTreeView();
+      }
+    } else {
+      // Not active — set as active
+      await api('PUT', `/api/projects/${project.id}/active-version`, { version: ver.version });
+      suppressRender = true;
+      await loadProjects();
+      suppressRender = false;
+      await loadProjectVersions(project.id);
+      render();
+      showToast('Active version changed to v' + ver.version + '. Remember to update CLAUDE.md to reflect the new active version.');
+    }
+  });
+
+  // Mark complete button
+  const markCompleteBtn = row.querySelector('.mark-complete-btn');
+  if (markCompleteBtn) {
+    markCompleteBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showMarkCompleteModal(project, ver.version);
+    });
+  }
+
+  container.appendChild(row);
+
+  // Version files (if expanded)
+  if (isExpanded) {
+    const versionFiles = document.createElement('div');
+    versionFiles.className = 'tree-version-files expanded';
+
+    for (const fileName of ver.files) {
+      const fileEl = document.createElement('div');
+      fileEl.className = 'tree-file';
+      const filePath = ver.folder + '/' + fileName;
+      fileEl.innerHTML = `<span class="tree-file-icon">&#x1F4C4;</span><span class="tree-file-name">${escapeHtml(fileName)}</span>`;
+      fileEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openFileTab(project.id, project.name, filePath);
+      });
+      versionFiles.appendChild(fileEl);
+    }
+
+    container.appendChild(versionFiles);
+
+    // Render patch versions nested under this version
+    for (const patch of ver.patches) {
+      renderPatchRow(container, project, patch, activeVersion);
+    }
+  }
+}
+
+function renderPatchRow(container, project, patch, activeVersion) {
+  const isActive = patch.version === activeVersion;
+  const expandKey = project.id + ':' + patch.version;
+  const isExpanded = expandedVersions.has(expandKey);
+
+  const row = document.createElement('div');
+  row.className = 'tree-version-row tree-patch-row' + (isActive ? ' active-version' : '') + (isExpanded ? ' expanded' : '');
+
+  const hasFiles = patch.files.length > 0;
+
+  row.innerHTML = `
+    ${hasFiles ? '<span class="tree-version-chevron">&#x25B8;</span>' : '<span class="tree-version-chevron" style="visibility:hidden">&#x25B8;</span>'}
+    <span class="version-active-dot"></span>
+    <span class="tree-version-name">v${escapeHtml(patch.version)}</span>
+    <span class="tree-version-actions">
+      ${isActive ? '<span class="action-btn mark-complete-btn" title="Mark complete (git tag)">&#x2713;</span>' : ''}
+      ${!isActive ? '<span class="action-btn set-active-btn" title="Set as active version">&#x25C9;</span>' : ''}
+    </span>
+  `;
+
+  // Mark complete button
+  const markCompleteBtn = row.querySelector('.mark-complete-btn');
+  if (markCompleteBtn) {
+    markCompleteBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showMarkCompleteModal(project, patch.version);
+    });
+  }
+
+  // Row click: if active → toggle expand; if not active → set as active
+  row.addEventListener('click', async (e) => {
+    if (e.target.closest('.action-btn')) return;
+    if (e.target.closest('.tree-version-chevron')) {
+      e.stopPropagation();
+      if (expandedVersions.has(expandKey)) {
+        expandedVersions.delete(expandKey);
+      } else {
+        expandedVersions.add(expandKey);
+      }
+      renderTreeView();
+      return;
+    }
+    e.stopPropagation();
+    if (isActive) {
+      if (hasFiles) {
+        if (expandedVersions.has(expandKey)) {
+          expandedVersions.delete(expandKey);
+        } else {
+          expandedVersions.add(expandKey);
+        }
+        renderTreeView();
+      }
+    } else {
+      await api('PUT', `/api/projects/${project.id}/active-version`, { version: patch.version });
+      suppressRender = true;
+      await loadProjects();
+      suppressRender = false;
+      await loadProjectVersions(project.id);
+      render();
+      showToast('Active version changed to v' + patch.version + '. Remember to update CLAUDE.md to reflect the new active version.');
+    }
+  });
+
+  container.appendChild(row);
+
+  if (isExpanded) {
+    const patchFiles = document.createElement('div');
+    patchFiles.className = 'tree-patch-files expanded';
+
+    for (const fileName of patch.files) {
+      const fileEl = document.createElement('div');
+      fileEl.className = 'tree-file';
+      const filePath = patch.folder + '/' + fileName;
+      fileEl.innerHTML = `<span class="tree-file-icon">&#x1F4C4;</span><span class="tree-file-name">${escapeHtml(fileName)}</span>`;
+      fileEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openFileTab(project.id, project.name, filePath);
+      });
+      patchFiles.appendChild(fileEl);
+    }
+
+    container.appendChild(patchFiles);
+  }
+}
+
+function renderMigrationHint(container, project) {
+  // Don't add duplicates
+  if (container.querySelector('.tree-migration-prompt')) return;
+
+  const hint = document.createElement('div');
+  hint.className = 'tree-migration-prompt';
+  hint.innerHTML = `<button class="btn" title="Migrate flat docs into a versioned folder structure">Migrate to versioned</button>`;
+  hint.querySelector('.btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    showMigrationPrompt(project);
+  });
+  container.appendChild(hint);
+}
+
+// --- Toast Notification ---
+
+function showToast(message, duration) {
+  const existing = document.querySelector('.toast-notification');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.className = 'toast-notification';
+  toast.innerHTML = `<span>${escapeHtml(message)}</span><span class="toast-close">&times;</span>`;
+  toast.querySelector('.toast-close').addEventListener('click', () => toast.remove());
+  document.body.appendChild(toast);
+
+  setTimeout(() => {
+    if (toast.parentNode) toast.remove();
+  }, duration || 6000);
 }
 
 // --- Drag & Drop Handler ---
@@ -536,9 +853,12 @@ function getTabInfo(tabId) {
     return { name: 'Settings', status: 'unknown' };
   }
   if (tabId.includes(':')) {
-    const [projectId, fileName] = tabId.split(':');
+    const [projectId, ...rest] = tabId.split(':');
+    const filePath = rest.join(':');
     const project = findProject(projectId);
-    return project ? { name: fileName, status: 'unknown' } : null;
+    // Show just the filename in the tab, not the full path
+    const displayName = filePath.split('/').pop() || filePath;
+    return project ? { name: displayName, status: 'unknown' } : null;
   }
   const project = findProject(tabId);
   if (!project) return null;
@@ -574,7 +894,8 @@ function renderTabContent() {
   }
 
   if (activeTab.includes(':')) {
-    const [projectId, fileName] = activeTab.split(':');
+    const [projectId, ...rest] = activeTab.split(':');
+    const fileName = rest.join(':');
     const project = findProject(projectId);
     renderReadPanel(container, project, fileName);
     return;
@@ -669,19 +990,49 @@ function renderSettings(container) {
   });
 }
 
-function renderReadPanel(container, project, fileName) {
+async function renderReadPanel(container, project, fileName) {
   const name = project ? project.name : 'Unknown';
   const panel = document.createElement('div');
+  panel.className = 'read-panel';
   panel.innerHTML = `
-    <div class="read-panel">
-      <button class="btn open-editor-btn">Open in Editor</button>
-      <h1>${escapeHtml(fileName)}</h1>
-      <p><em>${escapeHtml(name)}</em></p>
-      <h2>Preview</h2>
-      <p>This is a rendered Markdown preview of the file. In later stages, this will use marked.js to render the actual file contents with full Markdown support — headings, tables, code blocks, task lists.</p>
+    <div class="read-panel-header">
+      <div class="read-panel-title">
+        <h1>${escapeHtml(fileName)}</h1>
+        <span class="read-panel-project">${escapeHtml(name)}</span>
+      </div>
+      <button class="btn open-editor-btn" title="Open this file in the configured external editor">Open in Editor</button>
+    </div>
+    <div class="read-panel-content">
+      <div class="read-panel-loading">Loading...</div>
     </div>
   `;
   container.appendChild(panel);
+
+  // Load file content from server
+  try {
+    const data = await api('GET', `/api/file/${project.id}?filePath=${encodeURIComponent(fileName)}`);
+    const contentEl = panel.querySelector('.read-panel-content');
+
+    if (data.error) {
+      contentEl.innerHTML = `<div class="read-panel-error">${escapeHtml(data.error)}</div>`;
+      return;
+    }
+
+    // Render Markdown using marked.js
+    const rendered = marked.parse(data.content, {
+      gfm: true,
+      breaks: false
+    });
+    contentEl.innerHTML = rendered;
+
+    // Wire "Open in Editor" button
+    panel.querySelector('.open-editor-btn').addEventListener('click', async () => {
+      await api('POST', '/api/open-editor', { filePath: data.fullPath });
+    });
+  } catch (err) {
+    const contentEl = panel.querySelector('.read-panel-content');
+    contentEl.innerHTML = `<div class="read-panel-error">Failed to load file</div>`;
+  }
 }
 
 // --- Tab Management ---
@@ -943,6 +1294,128 @@ function showRemoveConfirm(project) {
     }
 
     await loadProjects();
+  });
+}
+
+// --- Version Modals ---
+
+function showNewVersionModal(project) {
+  // Determine smart default for next version
+  const vData = projectVersions.get(project.id);
+  let defaultVersion = '1.0';
+  if (vData && vData.versions && vData.versions.length > 0) {
+    const last = vData.versions[vData.versions.length - 1];
+    const parts = last.version.split('.').map(Number);
+    // Default to next minor
+    defaultVersion = parts[0] + '.' + (parts[1] + 1);
+  }
+
+  const body = `
+    <div class="settings-group">
+      <label>Version Number</label>
+      <input type="text" id="newVersionNumber" value="${escapeHtml(defaultVersion)}" placeholder="e.g. 1.1, 2.0, 1.1.1">
+    </div>
+    <div class="settings-group">
+      <label>Type</label>
+      <div style="display:flex; gap:16px; margin-top:4px;">
+        <label style="display:flex; align-items:center; gap:4px; text-transform:none; font-weight:normal; font-size:13px;">
+          <input type="radio" name="versionType" value="major"> Major (X.0)
+        </label>
+        <label style="display:flex; align-items:center; gap:4px; text-transform:none; font-weight:normal; font-size:13px;">
+          <input type="radio" name="versionType" value="minor" checked> Minor (x.Y)
+        </label>
+        <label style="display:flex; align-items:center; gap:4px; text-transform:none; font-weight:normal; font-size:13px;">
+          <input type="radio" name="versionType" value="patch"> Patch (x.y.Z)
+        </label>
+      </div>
+      <span class="settings-hint" id="versionTypeHint">Gets its own concept doc and tasklist.</span>
+    </div>
+  `;
+
+  showModal('New Version', body, async (overlay) => {
+    const version = overlay.querySelector('#newVersionNumber').value.trim();
+    const type = overlay.querySelector('input[name="versionType"]:checked').value;
+    if (!version) return;
+
+    const result = await api('POST', `/api/projects/${project.id}/versions`, { version, type });
+    if (result.error) {
+      alert(result.error);
+      return;
+    }
+
+    // Reload project and version data
+    await loadProjects();
+    await loadProjectVersions(project.id);
+    expandedVersionHeaders.add(project.id);
+    showToast('Version v' + version + ' created and set as active. Remember to update CLAUDE.md.');
+    renderTreeView();
+  });
+
+  // Update hint based on type selection
+  const overlay = document.getElementById('modal');
+  overlay.querySelectorAll('input[name="versionType"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      const hint = overlay.querySelector('#versionTypeHint');
+      if (radio.value === 'patch') {
+        hint.textContent = 'Inherits parent minor version\'s concept doc. Gets its own tasklist.';
+      } else {
+        hint.textContent = 'Gets its own concept doc and tasklist.';
+      }
+    });
+  });
+}
+
+function showMarkCompleteModal(project, version) {
+  const defaultTag = 'v' + version;
+
+  const body = `
+    <div class="settings-group">
+      <label>Git Tag Name</label>
+      <input type="text" id="tagName" value="${escapeHtml(defaultTag)}" placeholder="e.g. v1.0.0">
+    </div>
+    <p style="margin-top:8px;">This will create a Git tag in the project directory.</p>
+  `;
+
+  showModal('Mark Version Complete', body, async (overlay) => {
+    const tagName = overlay.querySelector('#tagName').value.trim();
+    if (!tagName) return;
+
+    const result = await api('POST', `/api/projects/${project.id}/versions/${version}/complete`, { tagName });
+    if (result.error) {
+      alert(result.error);
+      return;
+    }
+
+    showToast('Git tag \'' + tagName + '\' created successfully.');
+  });
+}
+
+function showMigrationPrompt(project) {
+  const body = `
+    <p>This project has concept/tasklist files directly in <code>docs/</code>. Migrate them into a versioned folder structure?</p>
+    <div class="settings-group" style="margin-top:16px;">
+      <label>Initial Version</label>
+      <input type="text" id="migrateVersion" value="1.0" placeholder="e.g. 1.0">
+    </div>
+    <p style="margin-top:8px; font-size:12px; color:var(--text-muted);">Files will be moved to <code>docs/v1.0/</code>. This cannot be undone from the UI.</p>
+  `;
+
+  showModal('Migrate to Versioned Structure', body, async (overlay) => {
+    const version = overlay.querySelector('#migrateVersion').value.trim();
+    if (!version) return;
+
+    const result = await api('POST', `/api/projects/${project.id}/migrate-versions`, { version });
+    if (result.error) {
+      alert(result.error);
+      return;
+    }
+
+    // Reload everything
+    await loadProjects();
+    await loadProjectVersions(project.id);
+    expandedVersionHeaders.add(project.id);
+    showToast('Migrated to versioned structure (v' + version + '). Remember to update CLAUDE.md.');
+    renderTreeView();
   });
 }
 

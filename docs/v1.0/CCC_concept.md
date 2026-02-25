@@ -1,5 +1,5 @@
 # Claude Command Center (CCC)
-**Concept Document v0.9**
+**Concept Document v1.0**
 *A unified dashboard for managing multiple Claude Code sessions*
 
 ---
@@ -85,7 +85,7 @@ A project is a directory on disk that CCC tracks. Each project has:
 A session is a live terminal process (Claude Code or a shell) attached to a project. Sessions are created on demand and persist until closed. Each project can have one active session.
 
 ### Group
-A named folder in the tree view that contains projects. Groups are user-defined and a project can belong to one group at a time. Projects can be moved between groups via drag & drop. Example groups: Active, Bug Fixing, Parked, Client A.
+A named folder in the tree view that contains projects. Groups are user-defined and a project can belong to one group at a time. Projects can be moved between groups via drag & drop. Default groups: Active, Parked. Users can create custom groups (e.g., Client A, Research).
 
 ---
 
@@ -99,11 +99,11 @@ A project in CCC is not a single pass from start to finish. Projects evolve — 
 |------|---------|---------|----------------------|-------------------|
 | Major | X.0 | Major update, new or substantially revised concept | Yes | Yes |
 | Minor | x.Y | New feature integration, expanded concept | Yes | Yes |
-| Patch | x.y.Z | Bug fix / repair | No — inherits parent minor version's concept | Yes |
+| Patch | x.y.Z | Bug fix / repair | Yes — seeded from parent minor version's concept | Yes |
 
-A major or minor version represents a new mandate for the project. It gets its own concept doc (which may be entirely new or an evolution of the previous one), its own tasklist, and its own full stage progression from Stage 01 to Stage 10.
+A major or minor version represents a new mandate for the project. It gets its own concept doc (which may be entirely new or an evolution of the previous one), its own tasklist, and its own full stage progression from Stage 01 to Stage 12.
 
-A patch version is a focused repair cycle. It inherits the concept from its parent minor version — because a bugfix does not need a new vision — but gets its own tasklist and stage progression.
+A patch version is a focused repair cycle. It gets its own concept doc (seeded from the parent minor version's concept as a starting point), its own tasklist, and its own stage progression.
 
 #### Versioned Folder Structure
 
@@ -121,7 +121,8 @@ CCC/
     │   ├── CCC_concept.md          ← v1.1 concept (expanded or new)
     │   ├── CCC_tasklist.md         ← v1.1 tasklist
     │   └── v1.1.1/
-    │       └── CCC_tasklist.md     ← bugfix tasklist (inherits v1.1 concept)
+    │       ├── CCC_concept.md     ← bugfix concept (seeded from v1.1 concept)
+    │       └── CCC_tasklist.md    ← bugfix tasklist
     └── v2.0/
         ├── CCC_concept.md          ← v2.0 concept (major revision)
         └── CCC_tasklist.md         ← v2.0 tasklist
@@ -221,13 +222,11 @@ All projects created via the New Project Wizard are placed in **Parked** by defa
 │  ▾ Active           │  ┌────────────────────────────────────────┐  │
 │    Project A   🔴   │  │                                        │  │
 │    Project B   🟡   │  │   Terminal / Markdown / Settings view  │  │
+│    Legacy API  🟠   │  │                                        │  │
 │                     │  │                                        │  │
-│  ▾ Bug Fixing       │  │                                        │  │
-│    Legacy API  🔴   │  │                                        │  │
-│                     │  │                                        │  │
-│  ▾ Parked           │  └────────────────────────────────────────┘  │
-│    Experiment  ⚫   │                                              │
-│                     │                                              │
+│  ▾ Parked           │  │                                        │  │
+│    Experiment  ⚫   │  │                                        │  │
+│                     │  └────────────────────────────────────────┘  │
 │  ─────────────────  │                                              │
 │  ⚙ Settings        │                                              │
 └─────────────────────┴──────────────────────────────────────────────┘
@@ -529,6 +528,62 @@ The user can keep working. They just lose the status colours temporarily.
 
 ---
 
+## Project Memory
+
+### The Problem Within the Problem
+
+CCC solves terminal sprawl, but there is a deeper pain: every Claude Code session starts from zero. Decisions made, approaches tried, errors hit, solutions found — all lost the moment the terminal closes. The developer is forced to carry context manually (via SHP) or repeat themselves. CCC should give Claude Code the memory that the tool itself lacks.
+
+### The Solution: File-Based SHP Storage
+
+CCC captures an end-of-day Session Handover Pack per project and stores it as a dated Markdown file. When a new session starts, CCC serves the most recent SHP to Claude Code automatically. No manual pasting, no lost context.
+
+#### Storage Structure
+
+SHPs are stored per project inside `docs/shp/`:
+
+```
+CCC/
+└── docs/
+    ├── v1.0/
+    │   ├── CCC_concept.md
+    │   └── CCC_tasklist.md
+    └── shp/
+        ├── 2026-02-25.md
+        ├── 2026-02-26.md
+        └── 2026-02-27.md
+```
+
+Each SHP file is a standard Markdown document — human-readable, Git-friendly, openable in CotEditor or any editor.
+
+#### Slash Commands
+
+Three global slash commands power the workflow. These belong in `~/.claude/commands/` (global, not per-project) because every project benefits from the same lifecycle:
+
+| Command | When | What it does |
+|---------|------|-------------|
+| `/start-project` | First session on a new project | Claude Code reads CLAUDE.md, concept doc, tasklist. Asks comprehension questions. Waits for instruction. |
+| `/continue` | Every returning session | CCC reads the most recent SHP from `docs/shp/` and feeds it to Claude Code. Picks up where yesterday left off. |
+| `/eod` | End of project day | Claude Code writes the SHP — what was done, decided, what's open, what's next. CCC saves it as a dated file in `docs/shp/`. |
+
+#### The Daily Workflow
+
+```
+Day 1:  /start-project → work → /eod
+Day 2:  /continue → work → /eod
+Day 3:  /continue → work → /eod
+```
+
+#### CCC Dependency
+
+`/continue` and `/eod` require CCC to be running — CCC manages the SHP storage and retrieval. `/start-project` works independently (file reading only). This dependency is by design: CCC is the infrastructure that gives Claude Code memory.
+
+#### Why File-Based (v1.0) and Not SQLite
+
+File-based SHP storage is sufficient for v1.0: one Markdown file per day, human-readable, Git-friendly, no new dependencies. SQLite becomes the upgrade path in v2.0 when search across SHPs and richer context layering justify it. See `docs/CCC_Roadmap.md` for the version plan.
+
+---
+
 ## Platform Target
 
 v1.0 targets **macOS** as the development and testing platform. Cross-platform support (Linux, Windows) is not a v1.0 goal but is explicitly not excluded.
@@ -559,7 +614,10 @@ Cross-platform support is a candidate for a future version if demand warrants it
 
 ## Future Ideas (post-v1)
 
-- **Claude.ai API integration (v1.5)** — Add an optional Anthropic API key in Settings. With it, the full document generation flow happens inside CCC: paste your Owner-Concept, click generate, and CCC produces `*_concept.md`, `CLAUDE.md`, and `*_tasklist.md` in one move. Without the API key, CCC directs the user to Claude.ai. The key is stored locally, never committed to Git.
+For the full version plan including v1.1 (Promotion Tour) and v2.0 (Advanced Project Memory with SQLite), see `docs/CCC_Roadmap.md`.
+
+Unassigned ideas:
+
 - Menu bar icon showing global status (how many projects need attention)
 - Desktop notifications when a project turns red
 - Session logs / history per project

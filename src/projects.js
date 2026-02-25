@@ -3,6 +3,25 @@ const path = require('path');
 const crypto = require('crypto');
 
 const DATA_FILE = path.join(__dirname, '..', 'data', 'projects.json');
+const SETTINGS_FILE = path.join(__dirname, '..', 'data', 'settings.json');
+
+/**
+ * Resolve a project's relative path to an absolute path using settings.projectRoot.
+ * If the path is already absolute, returns it as-is.
+ */
+function resolveProjectPath(projectPath) {
+  if (path.isAbsolute(projectPath)) return projectPath;
+
+  try {
+    const settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
+    if (settings.projectRoot) {
+      return path.join(settings.projectRoot, projectPath);
+    }
+  } catch (e) {
+    // Fall back to raw path
+  }
+  return projectPath;
+}
 
 function readData() {
   const raw = fs.readFileSync(DATA_FILE, 'utf8');
@@ -55,7 +74,7 @@ function updateProject(id, updates) {
   const index = data.projects.findIndex(p => p.id === id);
   if (index === -1) return null;
 
-  const allowed = ['name', 'group', 'coreFiles'];
+  const allowed = ['name', 'group', 'coreFiles', 'activeVersion'];
   for (const key of allowed) {
     if (updates[key] !== undefined) {
       data.projects[index][key] = updates[key];
@@ -120,5 +139,6 @@ module.exports = {
   removeProject,
   reorderProjects,
   addGroup,
-  removeGroup
+  removeGroup,
+  resolveProjectPath
 };

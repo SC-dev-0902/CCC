@@ -70,14 +70,30 @@ CCC models project evolution through explicit versions. Each version is a full d
 
 - **A version is a container** — it has its own concept doc, tasklist, stage progression, and Go/NoGo gates.
 - **Major (X.0) and Minor (x.Y) versions** get their own concept doc and tasklist.
-- **Patch versions (x.y.Z)** get their own tasklist but inherit the parent minor version's concept doc.
+- **Patch versions (x.y.Z)** get their own concept doc (seeded from parent minor version) and their own tasklist.
 - **Version documents live in `docs/vX.Y/`** — e.g., `docs/v1.1/CCC_concept.md`.
-- **Patch version documents nest inside their parent** — e.g., `docs/v1.1/v1.1.1/CCC_tasklist.md`.
+- **Patch version documents nest inside their parent** — e.g., `docs/v1.1/v1.1.1/CCC_concept.md` and `CCC_tasklist.md`.
 - **The active version is tracked in `projects.json`** via the `activeVersion` field. Never use filesystem symlinks.
 - **CLAUDE.md stays at the project root** and is always derived from the active version's concept doc.
 - **When a version's final stage receives a Go**, prompt for a Git tag matching the version number.
 
 Read `docs/CCC_concept.md` → Project Versioning section for the full specification.
+
+---
+
+## Project Memory
+
+CCC gives Claude Code session continuity through file-based SHP (Session Handover Pack) storage.
+
+- **SHPs are stored as dated Markdown files** in `docs/shp/` per project (e.g., `docs/shp/2026-02-25.md`).
+- **Three global slash commands** drive the workflow: `/start-project`, `/continue`, `/eod`.
+- **`/start-project`** — reads CLAUDE.md, concept, tasklist. Asks comprehension questions. Works without CCC.
+- **`/continue`** — CCC feeds the most recent SHP to Claude Code. Requires CCC to be running.
+- **`/eod`** — Claude Code writes the SHP. CCC stores it. Requires CCC to be running.
+- **SHP files are human-readable Markdown** — Git-friendly, openable in any editor.
+- **Never store SHPs in the database.** v1.0 uses file-based storage. SQLite is a v2.0 upgrade.
+
+Read `docs/CCC_concept.md` → Project Memory section for the full specification.
 
 ---
 
@@ -122,7 +138,7 @@ If the parser receives unrecognised output for more than 60 seconds of activity,
 
 ## Stage Gate Process
 
-Development proceeds in defined stages. See `docs/CCC_tasklist.md` for the full breakdown.
+Development proceeds in defined stages. See `docs/CCC_tasklist.md` for the full breakdown. See `docs/CCC_Roadmap.md` for the version plan (v1.0, v1.1, v2.0).
 
 - Each stage has a defined set of tasks
 - Each stage ends with a Go/NoGo decision

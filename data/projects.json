@@ -22,9 +22,10 @@
       "order": 0,
       "coreFiles": {
         "claude": "CLAUDE.md",
-        "concept": "docs/CCC_concept.md",
-        "tasklist": "docs/CCC_tasklist.md"
-      }
+        "concept": "docs/v1.0/CCC_concept.md",
+        "tasklist": "docs/v1.0/CCC_tasklist.md"
+      },
+      "activeVersion": "1.0"
     },
     {
       "id": "41407945-8a4f-4d2b-ac62-fb105a60ebf4",

@@ -11,7 +11,7 @@
 ### Tasks
 - [x] Set up project folder structure (`src/`, `public/`, `data/`, `docs/`)
 - [x] Create `index.html` with split-pane layout (tree view left, main panel right)
-- [x] Tree view: render hardcoded project groups (Active, Bug Fixing, Parked)
+- [x] Tree view: render hardcoded project groups (Active, Parked)
 - [x] Tree view: render hardcoded projects with status dots (all five colours represented)
 - [x] Tree view: collapsible groups
 - [x] Tree view: expandable project node showing three core files
@@ -114,13 +114,13 @@
 **Focus:** Inline Markdown preview of core project files. Read in CCC, edit in external editor.
 
 ### Tasks
-- [ ] Clicking a core file in the tree opens the Read panel in the main area
-- [ ] Render Markdown as sanitised HTML (`marked.js` + sanitisation)
-- [ ] "Open in Editor" button launches configured external editor with the file path
-- [ ] Default external editor reads from `settings.json` (default: system default)
-- [ ] Read panel and terminal panel coexist per tab (toggle between them)
-- [ ] Markdown renders cleanly: headings, tables, code blocks, task lists
-- [ ] Read panel is read-only — no inline editing
+- [x] Clicking a core file in the tree opens the Read panel in the main area
+- [x] Render Markdown as sanitised HTML (`marked.js` + sanitisation)
+- [x] "Open in Editor" button launches configured external editor with the file path
+- [x] Default external editor reads from `settings.json` (default: system default)
+- [x] Read panel and terminal panel coexist per tab (toggle between them)
+- [x] Markdown renders cleanly: headings, tables, code blocks, task lists
+- [x] Read panel is read-only — no inline editing
 
 ### Go/NoGo Gate
 > Can you read CLAUDE.md and the tasklist comfortably without leaving CCC?
@@ -131,7 +131,34 @@
 
 ---
 
-## Stage 06 — New Project Wizard
+## Stage 06 — Project Versioning
+**Focus:** Version management in the tree view and on disk. Projects can evolve through versioned development cycles.
+
+### Tasks
+- [x] Extend `projects.json` schema with `activeVersion` field per project
+- [x] Create versioned folder structure: `docs/vX.Y/` containing concept and tasklist per version
+- [x] Tree view: expand project node to show Versions list with nested version entries
+- [x] Tree view: active version visually distinguished (bold, indicator, or highlight)
+- [x] Tree view: expanding a version shows its core files (concept, tasklist)
+- [x] Tree view: project-level status dot reflects active version's status
+- [x] "New Version" action on a project: scaffolds `docs/vX.Y/` with concept and tasklist templates
+- [x] New version automatically becomes active version (updates `activeVersion` in `projects.json`)
+- [x] Patch version (x.y.Z) nests inside parent minor folder, gets own concept doc seeded from parent
+- [x] Version completion: when final stage receives Go, prompt for Git tag matching version number
+- [x] CLAUDE.md at project root reflects active version's concept doc
+- [x] Migrate existing flat `docs/` projects to versioned structure on first use
+
+### Go/NoGo Gate
+> Can you create a new version of an existing project and see it in the tree?
+> Does the active version pointer persist correctly across restarts?
+> Is the versioned folder structure on disk clean and human-readable?
+
+**→ GO:** Proceed to Stage 07
+**→ NOGO:** Fix versioning issues, re-evaluate
+
+---
+
+## Stage 07 — New Project Wizard
 **Focus:** Scaffold new projects from inside CCC. CCC becomes the starting point of every project.
 
 ### Tasks
@@ -154,12 +181,12 @@
 > Are all scaffolded files correct and immediately usable?
 > Does the project land in Parked as expected?
 
-**→ GO:** Proceed to Stage 07
+**→ GO:** Proceed to Stage 08
 **→ NOGO:** Fix wizard flow or scaffolding issues, re-evaluate
 
 ---
 
-## Stage 07 — Import Existing Projects
+## Stage 08 — Import Existing Projects
 **Focus:** Bring existing projects under CCC management. Non-destructive, filesystem read-only.
 
 ### Tasks
@@ -177,12 +204,12 @@
 > Is the hard gate on missing concept doc clear and instructive?
 > Is import genuinely non-destructive?
 
-**→ GO:** Proceed to Stage 08
+**→ GO:** Proceed to Stage 09
 **→ NOGO:** Fix import flow, re-evaluate
 
 ---
 
-## Stage 08 — Settings Panel
+## Stage 09 — Settings Panel
 **Focus:** All user-configurable preferences in one clean panel.
 
 ### Tasks
@@ -199,12 +226,37 @@
 > Can you configure all settings and have them persist across restarts?
 > Does the external editor launch correctly after configuration?
 
-**→ GO:** Proceed to Stage 09
+**→ GO:** Proceed to Stage 10
 **→ NOGO:** Fix settings persistence or editor issues, re-evaluate
 
 ---
 
-## Stage 09 — Resilience & Polish
+## Stage 10 — Project Memory (SHP Storage)
+**Focus:** File-based Session Handover Pack storage. CCC gives Claude Code session continuity.
+
+### Tasks
+- [ ] Create `docs/shp/` directory structure per project
+- [ ] `/start-project` slash command: reads CLAUDE.md, concept doc, tasklist, asks comprehension questions
+- [ ] `/eod` slash command: Claude Code generates SHP, CCC saves as dated Markdown file in `docs/shp/`
+- [ ] `/continue` slash command: CCC reads most recent SHP from `docs/shp/`, feeds to Claude Code session
+- [ ] SHP file format: standard Markdown, human-readable, Git-friendly
+- [ ] SHP contains: work done, decisions made, open items, next actions, current stage status
+- [ ] Global slash commands installed in `~/.claude/commands/` (not per-project)
+- [ ] CCC UI: SHP history visible per project (list of dated entries in tree view or read panel)
+- [ ] CCC handles missing `docs/shp/` gracefully (first session on a project)
+- [ ] `/continue` handles no existing SHP gracefully (falls back to `/start-project` behaviour)
+
+### Go/NoGo Gate
+> Does `/eod` produce a useful, complete SHP?
+> Does `/continue` pick up context seamlessly the next day?
+> Would you trust this to carry your project context overnight?
+
+**→ GO:** Proceed to Stage 11
+**→ NOGO:** Fix SHP generation or retrieval issues, re-evaluate
+
+---
+
+## Stage 11 — Resilience & Polish
 **Focus:** Edge cases, error states, and production-readiness.
 
 ### Tasks
@@ -214,7 +266,7 @@
 - [ ] App handles invalid project paths gracefully
 - [ ] Session crash recovery: detect exited PTY, offer restart
 - [ ] Port conflict: clear error message if PORT is already in use
-- [ ] `README.md` written: install, configure, run
+- [ ] `README.md` written: install, configure, run (includes macOS target note)
 - [ ] `.env.example` complete and documented
 - [ ] All console errors resolved
 - [ ] Performance: switching tabs is instant, no lag on 10+ projects
@@ -223,16 +275,16 @@
 > Is CCC stable enough to use as your daily driver?
 > Would you be comfortable sharing this on GitHub today?
 
-**→ GO:** Proceed to Stage 10
+**→ GO:** Proceed to Stage 12
 **→ NOGO:** Fix stability issues, re-evaluate
 
 ---
 
-## Stage 10 — v1.0 Release
+## Stage 12 — v1.0 Release
 **Focus:** Ship it.
 
 ### Tasks
-- [ ] Final README review
+- [ ] Final README review (must state macOS target, cross-platform planned)
 - [ ] Git repository cleaned up (no debug code, no stray files)
 - [ ] `v1.0.0` tag created
 - [ ] GitHub repository made public

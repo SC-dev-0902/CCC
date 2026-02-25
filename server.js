@@ -8,6 +8,7 @@ const os = require('os');
 const WebSocket = require('ws');
 const projects = require('./src/projects');
 const sessions = require('./src/sessions');
+const versions = require('./src/versions');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -22,6 +23,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/vendor/xterm', express.static(path.join(__dirname, 'node_modules', '@xterm', 'xterm')));
 app.use('/vendor/xterm-addon-fit', express.static(path.join(__dirname, 'node_modules', '@xterm', 'addon-fit')));
 app.use('/vendor/xterm-addon-webgl', express.static(path.join(__dirname, 'node_modules', '@xterm', 'addon-webgl')));
+app.use('/vendor/marked', express.static(path.join(__dirname, 'node_modules', 'marked', 'lib')));
 
 // --- API Routes ---
 
@@ -151,6 +153,192 @@ app.get('/api/settings', (req, res) => {
   }
 });
 
+// --- File API ---
+
+// Read a project file (for Markdown preview)
+app.get('/api/file/:projectId', (req, res) => {
+  const { projectId } = req.params;
+  const { filePath } = req.query;
+
+  if (!filePath) return res.status(400).json({ error: 'filePath query parameter required' });
+
+  const project = projects.getAllProjects().projects.find(p => p.id === projectId);
+  if (!project) return res.status(404).json({ error: 'Project not found' });
+
+  const projectPath = projects.resolveProjectPath(project.path);
+  const fullPath = path.join(projectPath, filePath);
+
+  // Security: ensure the resolved path is within the project directory
+  const resolvedProject = path.resolve(projectPath);
+  const resolvedFile = path.resolve(fullPath);
+  if (!resolvedFile.startsWith(resolvedProject)) {
+    return res.status(403).json({ error: 'Access denied: path outside project directory' });
+  }
+
+  try {
+    if (!fs.existsSync(fullPath)) {
+      return res.status(404).json({ error: 'File not found: ' + filePath });
+    }
+    const content = fs.readFileSync(fullPath, 'utf8');
+    res.json({ content, filePath, fullPath: resolvedFile });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to read file' });
+  }
+});
+
+// Open a file in the configured external editor
+app.post('/api/open-editor', (req, res) => {
+  const { filePath } = req.body;
+  if (!filePath) return res.status(400).json({ error: 'filePath is required' });
+
+  // Read editor from settings
+  let editor = 'open'; // macOS default
+  try {
+    const settingsPath = path.join(__dirname, 'data', 'settings.json');
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    if (settings.editor) {
+      editor = settings.editor;
+    }
+  } catch (e) {
+    // Fall back to system default
+  }
+
+  try {
+    const { exec } = require('child_process');
+    // Use 'open -a <editor>' on macOS for app names, or direct command for binary paths
+    if (editor === 'open' || editor === '') {
+      exec(`open "${filePath}"`);
+    } else {
+      exec(`open -a "${editor}" "${filePath}"`);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to open editor' });
+  }
+});
+
+// --- Version API ---
+
+// Helper: find project and resolve path
+function findProjectWithPath(projectId) {
+  const project = projects.getAllProjects().projects.find(p => p.id === projectId);
+  if (!project) return null;
+  return { project, absPath: projects.resolveProjectPath(project.path) };
+}
+
+// Scan project versions
+app.get('/api/projects/:id/versions', (req, res) => {
+  try {
+    const found = findProjectWithPath(req.params.id);
+    if (!found) return res.status(404).json({ error: 'Project not found' });
+
+    const result = versions.scanVersions(found.absPath, found.project.name);
+    result.activeVersion = found.project.activeVersion || null;
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to scan versions: ' + err.message });
+  }
+});
+
+// Create a new version
+app.post('/api/projects/:id/versions', (req, res) => {
+  const { version, type } = req.body;
+  if (!version || !type) return res.status(400).json({ error: 'version and type are required' });
+
+  try {
+    const found = findProjectWithPath(req.params.id);
+    if (!found) return res.status(404).json({ error: 'Project not found' });
+
+    // Read previous version's concept doc to seed the new one
+    // For patches: read from parent minor version
+    // For major/minor: read from current active version
+    let previousConceptContent = null;
+    let sourceVersion = found.project.activeVersion;
+    if (type === 'patch') {
+      const parsed = versions.parseVersionString(version);
+      sourceVersion = `${parsed.major}.${parsed.minor}`;
+    }
+    if (sourceVersion) {
+      const prevFolder = versions.getVersionFolder(sourceVersion);
+      const prevConceptPath = path.join(found.absPath, prevFolder, `${found.project.name}_concept.md`);
+      try {
+        if (fs.existsSync(prevConceptPath)) {
+          previousConceptContent = fs.readFileSync(prevConceptPath, 'utf8');
+        }
+      } catch (e) {
+        // Fall back to blank template
+      }
+    }
+
+    const result = versions.createVersion(found.absPath, found.project.name, version, type, previousConceptContent);
+
+    // Set as active version
+    projects.updateProject(req.params.id, { activeVersion: version });
+
+    res.status(201).json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create version: ' + err.message });
+  }
+});
+
+// Set active version
+app.put('/api/projects/:id/active-version', (req, res) => {
+  const { version } = req.body;
+  if (!version) return res.status(400).json({ error: 'version is required' });
+
+  try {
+    const updated = projects.updateProject(req.params.id, { activeVersion: version });
+    if (!updated) return res.status(404).json({ error: 'Project not found' });
+    res.json({ ok: true, activeVersion: version });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to set active version: ' + err.message });
+  }
+});
+
+// Mark version complete (git tag)
+app.post('/api/projects/:id/versions/:version/complete', async (req, res) => {
+  const { tagName } = req.body;
+  if (!tagName) return res.status(400).json({ error: 'tagName is required' });
+
+  try {
+    const found = findProjectWithPath(req.params.id);
+    if (!found) return res.status(404).json({ error: 'Project not found' });
+
+    const result = await versions.runGitTag(found.absPath, tagName);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create git tag: ' + err.message });
+  }
+});
+
+// Migrate flat docs to versioned structure
+app.post('/api/projects/:id/migrate-versions', (req, res) => {
+  const { version } = req.body;
+  if (!version) return res.status(400).json({ error: 'version is required' });
+
+  try {
+    const found = findProjectWithPath(req.params.id);
+    if (!found) return res.status(404).json({ error: 'Project not found' });
+
+    const result = versions.migrateToVersioned(found.absPath, found.project.name, version);
+
+    // Set as active version and update coreFiles to point to versioned paths
+    const versionFolder = versions.getVersionFolder(version);
+    projects.updateProject(req.params.id, {
+      activeVersion: version,
+      coreFiles: {
+        claude: 'CLAUDE.md',
+        concept: path.join(versionFolder, `${found.project.name}_concept.md`),
+        tasklist: path.join(versionFolder, `${found.project.name}_tasklist.md`)
+      }
+    });
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to migrate: ' + err.message });
+  }
+});
+
 // --- Session API ---
 
 // Start a session for a project
@@ -161,17 +349,7 @@ app.post('/api/sessions/:projectId', (req, res) => {
   const project = projects.getAllProjects().projects.find(p => p.id === projectId);
   if (!project) return res.status(404).json({ error: 'Project not found' });
 
-  // Resolve project path using settings projectRoot
-  let projectPath = project.path;
-  try {
-    const settingsPath = path.join(__dirname, 'data', 'settings.json');
-    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-    if (settings.projectRoot && !path.isAbsolute(projectPath)) {
-      projectPath = path.join(settings.projectRoot, projectPath);
-    }
-  } catch (e) {
-    // Fall back to raw path
-  }
+  const projectPath = projects.resolveProjectPath(project.path);
 
   if (!fs.existsSync(projectPath)) {
     return res.status(400).json({ error: 'Project path does not exist: ' + projectPath });
