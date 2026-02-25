@@ -60,18 +60,18 @@
 **Focus:** Real, fully interactive terminal sessions per project. The core of CCC.
 
 ### Tasks
-- [ ] Integrate `node-pty` on the server
-- [ ] WebSocket server (`ws`) — one connection per terminal session
-- [ ] Integrate `xterm.js` in the frontend
-- [ ] Spawn PTY session in project directory on demand
-- [ ] Full bidirectional input/output between xterm.js and PTY
-- [ ] Terminal resize handling (cols/rows sync on window resize)
-- [ ] Sessions persist in background when switching tabs
-- [ ] Terminal auto-start: "Start Claude Code" / "Open Shell" prompt for new sessions
-- [ ] Session state tracked per project (active / exited)
-- [ ] Keyboard shortcuts work: Ctrl+C, Ctrl+D, arrow keys, tab completion, history
-- [ ] Colours and formatting: 256-colour / truecolor via xterm.js
-- [ ] Scroll back through session history
+- [x] Integrate `node-pty` on the server
+- [x] WebSocket server (`ws`) — one connection per terminal session
+- [x] Integrate `xterm.js` in the frontend
+- [x] Spawn PTY session in project directory on demand
+- [x] Full bidirectional input/output between xterm.js and PTY
+- [x] Terminal resize handling (cols/rows sync on window resize)
+- [x] Sessions persist in background when switching tabs
+- [x] Terminal auto-start: "Start Claude Code" / "Open Shell" prompt for new sessions
+- [x] Session state tracked per project (active / exited)
+- [x] Keyboard shortcuts work: Ctrl+C, Ctrl+D, arrow keys, tab completion, history
+- [x] Colours and formatting: 256-colour / truecolor via xterm.js
+- [x] Scroll back through session history
 
 ### Go/NoGo Gate
 > Can you run Claude Code in a terminal tab and interact with it fully?

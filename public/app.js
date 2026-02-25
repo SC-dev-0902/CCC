@@ -1,6 +1,6 @@
 /* ============================================
    CCC — Claude Command Center
-   Stage 02: Dynamic data from API
+   Stage 03: Terminal Sessions (PTY + xterm.js)
    ============================================ */
 
 // --- State ---
@@ -13,6 +13,9 @@ let expandedProjects = new Set();
 let collapsedGroups = new Set();
 let dragState = null;
 let settings = {};
+
+// Terminal instances: projectId -> { terminal, fitAddon, ws, container, state }
+const terminalInstances = new Map();
 
 // --- API ---
 
@@ -59,6 +62,181 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+// --- Terminal Management ---
+
+function createTerminal(projectId) {
+  const terminal = new Terminal({
+    cursorBlink: true,
+    fontSize: 13,
+    fontFamily: '"SF Mono", "Cascadia Code", "Fira Code", "JetBrains Mono", Menlo, Consolas, monospace',
+    theme: {
+      background: '#0d1117',
+      foreground: '#e6edf3',
+      cursor: '#58a6ff',
+      cursorAccent: '#0d1117',
+      selectionBackground: 'rgba(88, 166, 255, 0.3)',
+      black: '#484f58',
+      red: '#f85149',
+      green: '#3fb950',
+      yellow: '#d29922',
+      blue: '#58a6ff',
+      magenta: '#bc8cff',
+      cyan: '#39d2c0',
+      white: '#e6edf3',
+      brightBlack: '#6e7681',
+      brightRed: '#ffa198',
+      brightGreen: '#56d364',
+      brightYellow: '#e3b341',
+      brightBlue: '#79c0ff',
+      brightMagenta: '#d2a8ff',
+      brightCyan: '#56d4dd',
+      brightWhite: '#ffffff'
+    },
+    scrollback: 10000,
+    allowProposedApi: true
+  });
+
+  const fitAddon = new FitAddon.FitAddon();
+  terminal.loadAddon(fitAddon);
+
+  // Create a persistent container div
+  const container = document.createElement('div');
+  container.className = 'terminal-container';
+  container.style.display = 'none';
+
+  const instance = {
+    terminal,
+    fitAddon,
+    ws: null,
+    container,
+    state: 'none' // none, active, exited
+  };
+
+  terminalInstances.set(projectId, instance);
+  return instance;
+}
+
+function connectTerminal(projectId) {
+  const instance = terminalInstances.get(projectId);
+  if (!instance) return;
+
+  // Close existing WebSocket if any
+  if (instance.ws) {
+    instance.ws.close();
+  }
+
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws?projectId=${projectId}`);
+
+  ws.onopen = () => {
+    // Sync terminal size
+    const { cols, rows } = instance.terminal;
+    ws.send(JSON.stringify({ type: 'resize', cols, rows }));
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+
+      if (msg.type === 'output') {
+        instance.terminal.write(msg.data);
+      } else if (msg.type === 'state') {
+        instance.state = msg.state;
+        renderTreeView();
+        renderTabBar();
+      } else if (msg.type === 'exit') {
+        instance.state = 'exited';
+        instance.terminal.write('\r\n\x1b[90m[Session ended]\x1b[0m\r\n');
+        renderTreeView();
+        renderTabBar();
+        renderTabContent();
+      }
+    } catch (e) {
+      // Ignore parse errors
+    }
+  };
+
+  ws.onclose = () => {
+    instance.ws = null;
+  };
+
+  instance.ws = ws;
+
+  // Forward terminal input to WebSocket
+  instance.terminal.onData((data) => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'input', data }));
+    }
+  });
+
+  // Forward resize events
+  instance.terminal.onResize(({ cols, rows }) => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'resize', cols, rows }));
+    }
+  });
+}
+
+async function startSession(projectId, command) {
+  try {
+    // Create terminal instance if it doesn't exist
+    let instance = terminalInstances.get(projectId);
+    if (!instance) {
+      instance = createTerminal(projectId);
+    }
+
+    // Reset terminal for new session
+    instance.terminal.reset();
+    instance.state = 'active';
+
+    // Start session on server
+    const result = await api('POST', `/api/sessions/${projectId}`, { command });
+    if (result.error) {
+      console.error('Session start failed:', result.error);
+      alert('Failed to start session: ' + result.error);
+      return;
+    }
+
+    // Connect WebSocket
+    connectTerminal(projectId);
+
+    // Render to show terminal
+    renderTabContent();
+  } catch (err) {
+    console.error('startSession error:', err);
+    alert('Error starting session: ' + err.message);
+  }
+}
+
+function showTerminal(projectId) {
+  const contentEl = document.getElementById('tabContent');
+
+  // Hide all terminal containers
+  terminalInstances.forEach((inst) => {
+    inst.container.style.display = 'none';
+  });
+
+  const instance = terminalInstances.get(projectId);
+  if (!instance) return;
+
+  // Ensure container is in the DOM
+  if (!instance.container.parentNode) {
+    contentEl.appendChild(instance.container);
+    instance.terminal.open(instance.container);
+  }
+
+  instance.container.style.display = 'flex';
+
+  // Fit terminal to container after a brief layout delay
+  requestAnimationFrame(() => {
+    try {
+      instance.fitAddon.fit();
+    } catch (e) {
+      // Ignore fit errors during initial render
+    }
+  });
 }
 
 // --- Tree View Rendering ---
@@ -119,8 +297,13 @@ function renderTreeView() {
       row.className = 'tree-project-row' + (activeTab === project.id ? ' active' : '');
       row.draggable = true;
 
-      // Status — all projects start as unknown (no session) until Stage 04
-      const status = 'unknown';
+      // Get session state for status dot
+      const instance = terminalInstances.get(project.id);
+      let status = 'unknown';
+      if (instance) {
+        if (instance.state === 'active') status = 'running';
+        else if (instance.state === 'exited') status = 'completed';
+      }
 
       row.innerHTML = `
         <span class="tree-project-chevron">&#x25B8;</span>
@@ -230,7 +413,6 @@ async function handleDrop(targetGroup, beforeProjectId) {
   const dragged = findProject(draggedId);
   if (!dragged) return;
 
-  // Build new order for the target group
   let groupProjects = projectsInGroup(targetGroup).filter(p => p.id !== draggedId);
 
   if (beforeProjectId) {
@@ -241,19 +423,14 @@ async function handleDrop(targetGroup, beforeProjectId) {
       groupProjects.push(dragged);
     }
   } else {
-    // Dropped on group header — append to end
     groupProjects.push(dragged);
   }
 
-  // Build reorder payload
   const orderedIds = [];
-
-  // Re-index the target group
   groupProjects.forEach((p, i) => {
     orderedIds.push({ id: p.id, group: targetGroup, order: i });
   });
 
-  // If the project moved from a different group, re-index the source group too
   if (dragged.group !== targetGroup) {
     const sourceProjects = projectsInGroup(dragged.group).filter(p => p.id !== draggedId);
     sourceProjects.forEach((p, i) => {
@@ -305,14 +482,33 @@ function getTabInfo(tabId) {
     return project ? { name: fileName, status: 'unknown' } : null;
   }
   const project = findProject(tabId);
-  return project ? { name: project.name, status: 'unknown' } : null;
+  if (!project) return null;
+
+  const instance = terminalInstances.get(tabId);
+  let status = 'unknown';
+  if (instance) {
+    if (instance.state === 'active') status = 'running';
+    else if (instance.state === 'exited') status = 'completed';
+  }
+  return { name: project.name, status };
 }
 
 // --- Tab Content ---
 
 function renderTabContent() {
   const container = document.getElementById('tabContent');
-  container.innerHTML = '';
+
+  // Hide all terminal containers (but keep them in DOM)
+  terminalInstances.forEach((inst) => {
+    inst.container.style.display = 'none';
+  });
+
+  // Remove everything except terminal containers
+  Array.from(container.children).forEach(child => {
+    if (!child.classList.contains('terminal-container')) {
+      child.remove();
+    }
+  });
 
   if (!activeTab) {
     container.innerHTML = '<div class="no-session"><span class="no-session-text">Select a project from the tree view</span></div>';
@@ -337,21 +533,40 @@ function renderTabContent() {
     return;
   }
 
-  // No session view — terminal sessions come in Stage 03
-  container.innerHTML = `
-    <div class="no-session">
+  const instance = terminalInstances.get(activeTab);
+
+  if (instance && instance.state === 'active') {
+    // Show the existing terminal
+    showTerminal(activeTab);
+  } else {
+    // Clean up exited terminal
+    if (instance && instance.state === 'exited') {
+      if (instance.ws) instance.ws.close();
+      instance.terminal.dispose();
+      if (instance.container.parentNode) instance.container.remove();
+      terminalInstances.delete(activeTab);
+    }
+
+    // No session — show start prompt
+    const prompt = document.createElement('div');
+    prompt.className = 'no-session';
+    prompt.innerHTML = `
       <span class="no-session-text">No active session. Start Claude Code in this project?</span>
       <div class="no-session-actions">
         <button class="btn btn-primary" title="Launch Claude Code in this project directory">Start Claude Code</button>
         <button class="btn" title="Open a plain shell in this project directory">Open Shell</button>
       </div>
       <div class="no-session-path">${escapeHtml(project.path)}</div>
-    </div>
-  `;
+    `;
+    prompt.querySelector('.btn-primary').addEventListener('click', () => startSession(activeTab, 'claude'));
+    prompt.querySelector('.btn:not(.btn-primary)').addEventListener('click', () => startSession(activeTab, 'shell'));
+    container.appendChild(prompt);
+  }
 }
 
 function renderSettings(container) {
-  container.innerHTML = `
+  const panel = document.createElement('div');
+  panel.innerHTML = `
     <div class="settings-panel">
       <h2>Settings</h2>
       <div class="settings-group">
@@ -391,9 +606,10 @@ function renderSettings(container) {
       </div>
     </div>
   `;
+  container.appendChild(panel);
 
-  container.querySelector('#settingsRootBrowse').addEventListener('click', () => {
-    const input = container.querySelector('#settingsProjectRoot');
+  panel.querySelector('#settingsRootBrowse').addEventListener('click', () => {
+    const input = panel.querySelector('#settingsProjectRoot');
     showBrowseModal(input.value || '/', (selected) => {
       input.value = selected;
     });
@@ -402,7 +618,8 @@ function renderSettings(container) {
 
 function renderReadPanel(container, project, fileName) {
   const name = project ? project.name : 'Unknown';
-  container.innerHTML = `
+  const panel = document.createElement('div');
+  panel.innerHTML = `
     <div class="read-panel">
       <button class="btn open-editor-btn">Open in Editor</button>
       <h1>${escapeHtml(fileName)}</h1>
@@ -411,6 +628,7 @@ function renderReadPanel(container, project, fileName) {
       <p>This is a rendered Markdown preview of the file. In later stages, this will use marked.js to render the actual file contents with full Markdown support — headings, tables, code blocks, task lists.</p>
     </div>
   `;
+  container.appendChild(panel);
 }
 
 // --- Tab Management ---
@@ -491,7 +709,6 @@ async function showBrowseModal(startPath, onSelect) {
     const list = overlay.querySelector('#browseList');
     list.innerHTML = '';
 
-    // Parent directory entry
     if (data.parent !== data.current) {
       const parentEl = document.createElement('div');
       parentEl.className = 'browse-item browse-parent';
@@ -533,7 +750,6 @@ async function showBrowseModal(startPath, onSelect) {
 // --- Modals ---
 
 function showModal(title, bodyHtml, onSubmit) {
-  // Remove existing modal
   const existing = document.getElementById('modal');
   if (existing) existing.remove();
 
@@ -566,7 +782,6 @@ function showModal(title, bodyHtml, onSubmit) {
 
   document.body.appendChild(overlay);
 
-  // Focus first input
   const firstInput = overlay.querySelector('input, select');
   if (firstInput) firstInput.focus();
 }
@@ -615,7 +830,6 @@ function showAddProjectModal() {
     await loadProjects();
   });
 
-  // Wire browse button after modal is in the DOM
   document.getElementById('addPathBrowse').addEventListener('click', (e) => {
     e.preventDefault();
     const pathInput = document.getElementById('addPath');
@@ -661,10 +875,18 @@ function showRemoveConfirm(project) {
   showModal('Remove Project', body, async () => {
     await api('DELETE', `/api/projects/${project.id}`);
 
-    // Close any open tabs for this project
     openTabs = openTabs.filter(t => t !== project.id && !t.startsWith(project.id + ':'));
     if (activeTab === project.id || activeTab?.startsWith(project.id + ':')) {
       activeTab = openTabs.length > 0 ? openTabs[openTabs.length - 1] : null;
+    }
+
+    // Clean up terminal instance
+    const instance = terminalInstances.get(project.id);
+    if (instance) {
+      if (instance.ws) instance.ws.close();
+      instance.terminal.dispose();
+      if (instance.container.parentNode) instance.container.remove();
+      terminalInstances.delete(project.id);
     }
 
     await loadProjects();
@@ -699,6 +921,24 @@ function initResize() {
   });
 }
 
+// --- Window Resize ---
+
+function initWindowResize() {
+  window.addEventListener('resize', () => {
+    // Fit the active terminal on window resize
+    if (activeTab && !activeTab.includes(':') && activeTab !== 'settings') {
+      const instance = terminalInstances.get(activeTab);
+      if (instance && instance.container.style.display !== 'none') {
+        try {
+          instance.fitAddon.fit();
+        } catch (e) {
+          // Ignore
+        }
+      }
+    }
+  });
+}
+
 // --- Full Render ---
 
 function render() {
@@ -712,4 +952,5 @@ function render() {
 document.getElementById('settingsEntry').addEventListener('click', openSettings);
 document.getElementById('addProjectBtn').addEventListener('click', showAddProjectModal);
 initResize();
+initWindowResize();
 loadSettings().then(() => loadProjects());

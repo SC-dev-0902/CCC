@@ -459,48 +459,38 @@ html, body {
   overflow: hidden;
 }
 
-/* Terminal placeholder */
+/* Terminal container (xterm.js) */
 
-.terminal-placeholder {
+.terminal-container {
   flex: 1;
   display: flex;
-  flex-direction: column;
   background: var(--bg-terminal);
-  font-family: var(--font-mono);
+  padding: 4px;
+  overflow: hidden;
+}
+
+.terminal-container .xterm {
+  height: 100%;
+  width: 100%;
+}
+
+/* Session restart bar */
+
+.session-restart-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--bg-tab-bar);
+  border-top: 1px solid var(--border);
+  color: var(--text-secondary);
   font-size: 13px;
-  line-height: 1.6;
-  padding: 16px;
-  overflow-y: auto;
-  color: var(--text-primary);
+  flex-shrink: 0;
 }
 
-.terminal-line {
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
-.terminal-line.dim {
-  color: var(--text-muted);
-}
-
-.terminal-line.accent {
-  color: var(--accent);
-}
-
-.terminal-line.green {
-  color: var(--status-completed);
-}
-
-.terminal-line.yellow {
-  color: var(--status-running);
-}
-
-.terminal-line.red {
-  color: var(--status-waiting);
-}
-
-.terminal-line.orange {
-  color: var(--status-error);
+.btn-sm {
+  padding: 4px 12px;
+  font-size: 12px;
 }
 
 /* No session prompt */
