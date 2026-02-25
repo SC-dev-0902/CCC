@@ -339,6 +339,344 @@ app.post('/api/projects/:id/migrate-versions', (req, res) => {
   }
 });
 
+// --- Wizard Templates ---
+
+const WIZARD_TEMPLATES = {
+  'web-app': {
+    name: 'Web App',
+    icon: '\uD83C\uDF10',
+    description: 'Frontend + server project',
+    sections: `
+## Tech Stack
+
+| Concern | Technology |
+|---|---|
+| Frontend | *TBD* |
+| Server | *TBD* |
+| Persistence | *TBD* |
+
+## Behavioural Rules
+
+- *Add project-specific rules here*
+`
+  },
+  'api': {
+    name: 'API',
+    icon: '\u26A1',
+    description: 'Backend API service',
+    sections: `
+## Tech Stack
+
+| Concern | Technology |
+|---|---|
+| Runtime | *TBD* |
+| Framework | *TBD* |
+| Persistence | *TBD* |
+
+## Behavioural Rules
+
+- *Add project-specific rules here*
+`
+  },
+  'script': {
+    name: 'Script',
+    icon: '\uD83D\uDCDC',
+    description: 'CLI tool or automation',
+    sections: `
+## Tech Stack
+
+| Concern | Technology |
+|---|---|
+| Language | *TBD* |
+| Dependencies | *TBD* |
+
+## Behavioural Rules
+
+- *Add project-specific rules here*
+`
+  },
+  'research': {
+    name: 'Research',
+    icon: '\uD83D\uDD2C',
+    description: 'Investigation or analysis',
+    sections: `
+## Scope
+
+- *Define research boundaries here*
+
+## Behavioural Rules
+
+- *Add project-specific rules here*
+`
+  },
+  'blank': {
+    name: 'Blank',
+    icon: '\uD83D\uDCC4',
+    description: 'Empty starter',
+    sections: ''
+  }
+};
+
+function generateClaudeMd(projectName, templateKey) {
+  const template = WIZARD_TEMPLATES[templateKey] || WIZARD_TEMPLATES['blank'];
+  return `# CLAUDE.md — ${projectName}
+*Derived from: docs/v1.0/${projectName}_concept.md*
+
+---
+
+## Prime Directive
+
+> "An assumption is the first step in a major cluster fuck." — Marine Corps
+
+**Never assume. Always ask.** When in doubt about scope, intent, or next action — stop and ask. Do not proceed based on inference.
+
+---
+
+## What ${projectName} Is
+
+*Describe the project here. Read the concept doc for the full specification.*
+
+Read \`docs/v1.0/${projectName}_concept.md\` before starting any task. It is the single source of truth.
+${template.sections}
+---
+
+## Stage Gate Process
+
+Development proceeds in defined stages. See \`docs/v1.0/${projectName}_tasklist.md\` for the full breakdown.
+
+- Each stage has a defined set of tasks
+- Each stage ends with a Go/NoGo decision
+- **Never begin Stage N+1 without an explicit Go**
+`;
+}
+
+function generateConceptMd(projectName) {
+  return `# ${projectName} — Concept Document
+*Version: 1.0*
+
+---
+
+## The Problem
+
+*What problem does this project solve? Why does it need to exist?*
+
+---
+
+## The Vision
+
+*What does "done" look like? What is the end state?*
+
+---
+
+## Core Concepts
+
+*Key architectural ideas, domain model, or design principles.*
+
+---
+
+## Tech Stack
+
+*Technologies, libraries, infrastructure decisions.*
+
+---
+
+## Out of Scope
+
+*What this project explicitly does NOT do.*
+
+---
+
+*End of concept document.*
+`;
+}
+
+function generateTasklistMd(projectName) {
+  return `# ${projectName} — Tasklist
+*Derived from: docs/v1.0/${projectName}_concept.md*
+*Stage gate process: each stage ends with Go/NoGo before next stage begins*
+
+---
+
+## Stage 01 — *[Stage Name]*
+**Focus:** *[What this stage achieves]*
+**Goal:** *[What must be true when this stage is done]*
+
+### Tasks
+- [ ] *Task 1*
+- [ ] *Task 2*
+- [ ] *Task 3*
+
+### Go/NoGo Gate
+> *Gate question — what must be true to proceed?*
+
+**→ GO:** Proceed to Stage 02
+**→ NOGO:** Revise, re-evaluate — do not proceed
+
+---
+
+*"An assumption is the first step in a major cluster fuck." — Keep it sharp.*
+`;
+}
+
+function generateSlashCommand(type) {
+  const commands = {
+    'update-tasklist': `Update the project's tasklist with current progress.
+
+Instructions:
+1. Read the current tasklist file
+2. For each task, check whether it has been completed based on the codebase
+3. Mark completed tasks with [x]
+4. Add any new tasks that have emerged during implementation
+5. Update the stage status if all tasks in a stage are complete
+6. Do NOT remove tasks — only update their status
+7. Present the changes for review before writing`,
+
+    'review-concept': `Review the concept document against the current implementation and flag any drift.
+
+Instructions:
+1. Read the concept document
+2. Compare stated goals, architecture, and scope against what has actually been built
+3. Flag any deviations: features added that aren't in the concept, or concept items that haven't been addressed
+4. Flag any scope creep or missing items
+5. Present findings as a structured summary`,
+
+    'status': `Give a brief project status update.
+
+Instructions:
+1. Read the tasklist to determine the current stage
+2. Count completed vs remaining tasks in the current stage
+3. Note any blockers or open questions
+4. Format as:
+   - **Stage:** [current stage name and number]
+   - **Done:** [count] / [total] tasks
+   - **Remaining:** [list of incomplete tasks]
+   - **Blockers:** [any blockers, or "None"]`
+  };
+  return commands[type] || '';
+}
+
+// Scaffold a new project
+app.post('/api/scaffold-project', (req, res) => {
+  const { name, parentDir, template, group } = req.body;
+
+  // Validate name
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'Project name is required' });
+  }
+  const safeName = name.trim();
+  const unsafeChars = /[\/\\:*?"<>|]/;
+  if (unsafeChars.test(safeName)) {
+    return res.status(400).json({ error: 'Project name contains invalid characters: / \\ : * ? " < > |' });
+  }
+
+  // Validate parentDir
+  if (!parentDir || !parentDir.trim()) {
+    return res.status(400).json({ error: 'Location is required' });
+  }
+  const resolvedParent = path.resolve(parentDir.trim());
+  if (!fs.existsSync(resolvedParent)) {
+    return res.status(400).json({ error: 'Location does not exist: ' + resolvedParent });
+  }
+
+  // Validate template
+  if (!template || !WIZARD_TEMPLATES[template]) {
+    return res.status(400).json({ error: 'Invalid template: ' + template });
+  }
+
+  // Validate group
+  if (!group || !group.trim()) {
+    return res.status(400).json({ error: 'Group is required' });
+  }
+
+  const projectDir = path.join(resolvedParent, safeName);
+
+  // Check if directory already exists
+  if (fs.existsSync(projectDir)) {
+    return res.status(409).json({ error: 'A folder named "' + safeName + '" already exists at this location' });
+  }
+
+  try {
+    // Create directory tree
+    fs.mkdirSync(projectDir, { recursive: true });
+    fs.mkdirSync(path.join(projectDir, 'docs', 'v1.0'), { recursive: true });
+    fs.mkdirSync(path.join(projectDir, '.claude', 'commands'), { recursive: true });
+
+    // Write files
+    const scaffoldedFiles = [];
+
+    // CLAUDE.md
+    const claudePath = path.join(projectDir, 'CLAUDE.md');
+    fs.writeFileSync(claudePath, generateClaudeMd(safeName, template), 'utf8');
+    scaffoldedFiles.push('CLAUDE.md');
+
+    // Concept doc
+    const conceptPath = path.join(projectDir, 'docs', 'v1.0', safeName + '_concept.md');
+    fs.writeFileSync(conceptPath, generateConceptMd(safeName), 'utf8');
+    scaffoldedFiles.push('docs/v1.0/' + safeName + '_concept.md');
+
+    // Tasklist
+    const tasklistPath = path.join(projectDir, 'docs', 'v1.0', safeName + '_tasklist.md');
+    fs.writeFileSync(tasklistPath, generateTasklistMd(safeName), 'utf8');
+    scaffoldedFiles.push('docs/v1.0/' + safeName + '_tasklist.md');
+
+    // Slash commands
+    const slashCommands = ['update-tasklist', 'review-concept', 'status'];
+    for (const cmd of slashCommands) {
+      const cmdPath = path.join(projectDir, '.claude', 'commands', cmd + '.md');
+      fs.writeFileSync(cmdPath, generateSlashCommand(cmd), 'utf8');
+      scaffoldedFiles.push('.claude/commands/' + cmd + '.md');
+    }
+
+    // .ccc-project.json
+    const cccMeta = {
+      createdAt: new Date().toISOString(),
+      template: template,
+      cccVersion: '1.0'
+    };
+    fs.writeFileSync(path.join(projectDir, '.ccc-project.json'), JSON.stringify(cccMeta, null, 2) + '\n', 'utf8');
+    scaffoldedFiles.push('.ccc-project.json');
+
+    // Compute relative path if under projectRoot
+    let projectPath = projectDir;
+    try {
+      const settingsPath = path.join(__dirname, 'data', 'settings.json');
+      const settingsData = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      if (settingsData.projectRoot) {
+        const root = path.resolve(settingsData.projectRoot);
+        if (projectDir.startsWith(root + path.sep) || projectDir === root) {
+          projectPath = path.relative(root, projectDir);
+        }
+      }
+    } catch (e) {
+      // Fall back to absolute path
+    }
+
+    // Register in projects.json
+    const versionFolder = path.join('docs', 'v1.0');
+    const project = projects.addProject({
+      name: safeName,
+      path: projectPath,
+      group: group.trim(),
+      coreFiles: {
+        claude: 'CLAUDE.md',
+        concept: path.join(versionFolder, safeName + '_concept.md'),
+        tasklist: path.join(versionFolder, safeName + '_tasklist.md')
+      }
+    });
+
+    // Set activeVersion
+    projects.updateProject(project.id, { activeVersion: '1.0' });
+
+    res.status(201).json({
+      project,
+      scaffoldedFiles,
+      projectDir
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to scaffold project: ' + err.message });
+  }
+});
+
 // --- Session API ---
 
 // Start a session for a project

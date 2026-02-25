@@ -1187,3 +1187,86 @@ html, body {
   font-size: 12px;
   text-align: center;
 }
+
+/* --- Wizard Modal --- */
+
+.modal-wizard {
+  width: 520px;
+}
+
+.template-cards {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.template-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 8px 8px;
+  width: 88px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-app);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.template-card:hover {
+  border-color: var(--text-muted);
+  background: var(--bg-hover);
+}
+
+.template-card.selected {
+  border-color: var(--accent);
+  background: rgba(88, 166, 255, 0.08);
+}
+
+.template-card input[type="radio"] {
+  display: none;
+}
+
+.template-card-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.template-card-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.template-card-desc {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.2;
+}
+
+.wizard-error {
+  display: none;
+  padding: 8px 12px;
+  margin-top: 12px;
+  background: rgba(248, 81, 73, 0.1);
+  border: 1px solid var(--status-waiting);
+  border-radius: 6px;
+  color: var(--status-waiting);
+  font-size: 12px;
+}
+
+.wizard-error.visible {
+  display: block;
+}
+
+.new-group-input {
+  display: none;
+  margin-top: 6px;
+}
+
+.new-group-input.visible {
+  display: block;
+}

@@ -26,18 +26,6 @@
         "tasklist": "docs/v1.0/CCC_tasklist.md"
       },
       "activeVersion": "1.0"
-    },
-    {
-      "id": "41407945-8a4f-4d2b-ac62-fb105a60ebf4",
-      "name": "Test",
-      "path": "/Users/steinhoferm/SC-Development",
-      "group": "Parked",
-      "order": 0,
-      "coreFiles": {
-        "claude": "CLAUDE.md",
-        "concept": "docs/Test_concept.md",
-        "tasklist": "docs/Test_tasklist.md"
-      }
     }
   ]
 }

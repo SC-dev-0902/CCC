@@ -1190,7 +1190,185 @@ function showModal(title, bodyHtml, onSubmit) {
   if (firstInput) firstInput.focus();
 }
 
-// Add Project
+// New Project Wizard
+
+const WIZARD_TEMPLATE_OPTIONS = [
+  { key: 'web-app', icon: '\uD83C\uDF10', name: 'Web App', desc: 'Frontend + server' },
+  { key: 'api', icon: '\u26A1', name: 'API', desc: 'Backend service' },
+  { key: 'script', icon: '\uD83D\uDCDC', name: 'Script', desc: 'CLI / automation' },
+  { key: 'research', icon: '\uD83D\uDD2C', name: 'Research', desc: 'Investigation' },
+  { key: 'blank', icon: '\uD83D\uDCC4', name: 'Blank', desc: 'Empty starter' }
+];
+
+function showNewProjectWizard() {
+  const existing = document.getElementById('modal');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'modal';
+  overlay.className = 'modal-overlay';
+
+  // Build group options
+  const groupOptions = groups.map(g =>
+    `<option value="${escapeHtml(g.name)}" ${g.name === 'Parked' ? 'selected' : ''}>${escapeHtml(g.name)}</option>`
+  ).join('');
+
+  // Build template cards
+  const templateCardsHtml = WIZARD_TEMPLATE_OPTIONS.map(t =>
+    `<label class="template-card${t.key === 'blank' ? ' selected' : ''}" data-key="${t.key}">
+      <input type="radio" name="wizardTemplate" value="${t.key}" ${t.key === 'blank' ? 'checked' : ''}>
+      <span class="template-card-icon">${t.icon}</span>
+      <span class="template-card-name">${t.name}</span>
+      <span class="template-card-desc">${t.desc}</span>
+    </label>`
+  ).join('');
+
+  overlay.innerHTML = `
+    <div class="modal modal-wizard">
+      <div class="modal-header">
+        <span class="modal-title">New Project</span>
+        <span class="modal-close">&times;</span>
+      </div>
+      <div class="modal-body">
+        <div class="settings-group">
+          <label>Project Name</label>
+          <input type="text" id="wizardName" placeholder="MyProject">
+        </div>
+        <div class="settings-group">
+          <label>Location</label>
+          <div class="input-with-btn" style="max-width:100%;">
+            <input type="text" id="wizardLocation" value="${escapeHtml(settings.projectRoot || '')}" placeholder="/path/to/parent/directory">
+            <button class="btn browse-btn" id="wizardBrowse">Browse</button>
+          </div>
+        </div>
+        <div class="settings-group">
+          <label>Template</label>
+          <div class="template-cards">${templateCardsHtml}</div>
+        </div>
+        <div class="settings-group">
+          <label>Group</label>
+          <select id="wizardGroup">
+            ${groupOptions}
+            <option value="__new__">-- Create New --</option>
+          </select>
+          <div class="new-group-input" id="wizardNewGroupWrap">
+            <input type="text" id="wizardNewGroup" placeholder="New group name">
+          </div>
+        </div>
+        <div class="wizard-error" id="wizardError"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn modal-cancel">Cancel</button>
+        <button class="btn btn-primary" id="wizardCreate">Create</button>
+      </div>
+    </div>
+  `;
+
+  // Close handlers
+  overlay.querySelector('.modal-close').addEventListener('click', () => overlay.remove());
+  overlay.querySelector('.modal-cancel').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+
+  // Template card selection
+  overlay.querySelectorAll('.template-card').forEach(card => {
+    card.addEventListener('click', () => {
+      overlay.querySelectorAll('.template-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      card.querySelector('input[type="radio"]').checked = true;
+    });
+  });
+
+  // Group dropdown — show/hide new group input
+  const groupSelect = overlay.querySelector('#wizardGroup');
+  groupSelect.addEventListener('change', () => {
+    const wrap = overlay.querySelector('#wizardNewGroupWrap');
+    if (groupSelect.value === '__new__') {
+      wrap.classList.add('visible');
+      overlay.querySelector('#wizardNewGroup').focus();
+    } else {
+      wrap.classList.remove('visible');
+    }
+  });
+
+  // Browse button
+  overlay.querySelector('#wizardBrowse').addEventListener('click', (e) => {
+    e.preventDefault();
+    const locInput = overlay.querySelector('#wizardLocation');
+    showBrowseModal(locInput.value || settings.projectRoot || '/', (selected) => {
+      locInput.value = selected;
+    });
+  });
+
+  // Create button
+  overlay.querySelector('#wizardCreate').addEventListener('click', async () => {
+    const errorEl = overlay.querySelector('#wizardError');
+    errorEl.classList.remove('visible');
+    errorEl.textContent = '';
+
+    const nameVal = overlay.querySelector('#wizardName').value.trim();
+    const locationVal = overlay.querySelector('#wizardLocation').value.trim();
+    const templateVal = overlay.querySelector('input[name="wizardTemplate"]:checked')?.value || 'blank';
+
+    let groupVal = groupSelect.value;
+    if (groupVal === '__new__') {
+      groupVal = overlay.querySelector('#wizardNewGroup').value.trim();
+      if (!groupVal) {
+        errorEl.textContent = 'Please enter a name for the new group.';
+        errorEl.classList.add('visible');
+        return;
+      }
+    }
+
+    // Client-side validation
+    if (!nameVal) {
+      errorEl.textContent = 'Project name is required.';
+      errorEl.classList.add('visible');
+      return;
+    }
+    const unsafeChars = /[\/\\:*?"<>|]/;
+    if (unsafeChars.test(nameVal)) {
+      errorEl.textContent = 'Project name contains invalid characters: / \\ : * ? " < > |';
+      errorEl.classList.add('visible');
+      return;
+    }
+    if (!locationVal) {
+      errorEl.textContent = 'Location is required.';
+      errorEl.classList.add('visible');
+      return;
+    }
+
+    // Disable create button during request
+    const createBtn = overlay.querySelector('#wizardCreate');
+    createBtn.disabled = true;
+    createBtn.textContent = 'Creating…';
+
+    const result = await api('POST', '/api/scaffold-project', {
+      name: nameVal,
+      parentDir: locationVal,
+      template: templateVal,
+      group: groupVal
+    });
+
+    if (result.error) {
+      errorEl.textContent = result.error;
+      errorEl.classList.add('visible');
+      createBtn.disabled = false;
+      createBtn.textContent = 'Create';
+      return;
+    }
+
+    overlay.remove();
+    await loadProjects();
+    showToast(`Project "${nameVal}" created with ${result.scaffoldedFiles.length} files.`);
+  });
+
+  document.body.appendChild(overlay);
+  overlay.querySelector('#wizardName').focus();
+}
+
+// Add Project (Import — retained for Stage 08)
 
 function showAddProjectModal() {
   const groupOptions = groups.map(g =>
@@ -1476,7 +1654,7 @@ function render() {
 // --- Init ---
 
 document.getElementById('settingsEntry').addEventListener('click', openSettings);
-document.getElementById('addProjectBtn').addEventListener('click', showAddProjectModal);
+document.getElementById('addProjectBtn').addEventListener('click', showNewProjectWizard);
 initResize();
 initWindowResize();
 loadSettings().then(() => loadProjects());

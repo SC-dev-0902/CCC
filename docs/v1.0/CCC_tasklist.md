@@ -162,19 +162,19 @@
 **Focus:** Scaffold new projects from inside CCC. CCC becomes the starting point of every project.
 
 ### Tasks
-- [ ] Wizard UI: step-by-step flow (Name → Location → Template → Group → Create)
-- [ ] Name input: becomes folder name and file prefix
-- [ ] Location input: browse or type parent directory path
-- [ ] Template selection: Web App / API / Script / Research / Blank (CLAUDE.md starters)
-- [ ] Group selection: existing groups or create new
-- [ ] Create: generate folder structure
-  - [ ] `CLAUDE.md` pre-filled from selected template
-  - [ ] `docs/{NAME}_concept.md` with section headers
-  - [ ] `docs/{NAME}_tasklist.md` with Todo/In Progress/Done skeleton
-  - [ ] `.claude/commands/` with starter slash commands (`/update-tasklist`, `/review-concept`, `/status`)
-  - [ ] `.ccc-project.json` (CCC metadata, gitignored)
-- [ ] New project lands in **Parked** group by default
-- [ ] Project registered in `projects.json`
+- [x] Wizard UI: step-by-step flow (Name → Location → Template → Group → Create)
+- [x] Name input: becomes folder name and file prefix
+- [x] Location input: browse or type parent directory path
+- [x] Template selection: Web App / API / Script / Research / Blank (CLAUDE.md starters)
+- [x] Group selection: existing groups or create new
+- [x] Create: generate folder structure
+  - [x] `CLAUDE.md` pre-filled from selected template
+  - [x] `docs/{NAME}_concept.md` with section headers
+  - [x] `docs/{NAME}_tasklist.md` with Todo/In Progress/Done skeleton
+  - [x] `.claude/commands/` with starter slash commands (`/update-tasklist`, `/review-concept`, `/status`)
+  - [x] `.ccc-project.json` (CCC metadata, gitignored)
+- [x] New project lands in **Parked** group by default
+- [x] Project registered in `projects.json`
 
 ### Go/NoGo Gate
 > Can you create a new project end-to-end in under 60 seconds?
