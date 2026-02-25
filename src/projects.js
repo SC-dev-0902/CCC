@@ -32,6 +32,13 @@ function writeData(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2) + '\n', 'utf8');
 }
 
+const PROTECTED_GROUPS = ['Active', 'Parked'];
+
+function pruneEmptyGroups(data) {
+  const usedGroups = new Set(data.projects.map(p => p.group));
+  data.groups = data.groups.filter(g => PROTECTED_GROUPS.includes(g.name) || usedGroups.has(g.name));
+}
+
 function getAllProjects() {
   return readData();
 }
@@ -81,6 +88,7 @@ function updateProject(id, updates) {
     }
   }
 
+  pruneEmptyGroups(data);
   writeData(data);
   return data.projects[index];
 }
@@ -91,6 +99,7 @@ function removeProject(id) {
   if (index === -1) return false;
 
   data.projects.splice(index, 1);
+  pruneEmptyGroups(data);
   writeData(data);
   return true;
 }
@@ -107,6 +116,7 @@ function reorderProjects(orderedIds) {
     }
   }
 
+  pruneEmptyGroups(data);
   writeData(data);
   return data;
 }

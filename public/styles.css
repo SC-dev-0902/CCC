@@ -1270,3 +1270,29 @@ html, body {
 .new-group-input.visible {
   display: block;
 }
+
+/* --- Loading Overlay --- */
+
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(13, 17, 23, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  z-index: 10;
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

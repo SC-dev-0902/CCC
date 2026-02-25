@@ -65,11 +65,28 @@ app.put('/api/projects/:id', (req, res) => {
 // Remove a project
 app.delete('/api/projects/:id', (req, res) => {
   try {
+    const deleteFiles = req.query.deleteFiles === 'true';
+
+    // Resolve path before removing from registry
+    let absPath = null;
+    if (deleteFiles) {
+      const project = projects.getAllProjects().projects.find(p => p.id === req.params.id);
+      if (project) {
+        absPath = projects.resolveProjectPath(project.path);
+      }
+    }
+
     const removed = projects.removeProject(req.params.id);
     if (!removed) return res.status(404).json({ error: 'Project not found' });
+
+    // Delete from disk if requested
+    if (deleteFiles && absPath && fs.existsSync(absPath)) {
+      fs.rmSync(absPath, { recursive: true, force: true });
+    }
+
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to remove project' });
+    res.status(500).json({ error: 'Failed to remove project: ' + err.message });
   }
 });
 

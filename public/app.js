@@ -30,7 +30,12 @@ async function api(method, url, body) {
   const opts = { method, headers: { 'Content-Type': 'application/json' } };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(url, opts);
-  return res.json();
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    return { error: `Server returned non-JSON (${res.status}): ${text.substring(0, 200)}` };
+  }
 }
 
 let suppressRender = false;
@@ -766,6 +771,22 @@ function renderMigrationHint(container, project) {
 
 // --- Toast Notification ---
 
+function showLoadingOverlay(modalEl) {
+  const loader = document.createElement('div');
+  loader.className = 'loading-overlay';
+  loader.innerHTML = '<div class="loading-spinner"></div>';
+  const modal = modalEl.querySelector('.modal');
+  if (modal) {
+    modal.style.position = 'relative';
+    modal.appendChild(loader);
+  }
+  return loader;
+}
+
+function hideLoadingOverlay(loader) {
+  if (loader && loader.parentNode) loader.remove();
+}
+
 function showToast(message, duration) {
   const existing = document.querySelector('.toast-notification');
   if (existing) existing.remove();
@@ -1339,29 +1360,36 @@ function showNewProjectWizard() {
       return;
     }
 
-    // Disable create button during request
+    // Show loading state
     const createBtn = overlay.querySelector('#wizardCreate');
     createBtn.disabled = true;
-    createBtn.textContent = 'Creating…';
+    const loader = showLoadingOverlay(overlay);
 
-    const result = await api('POST', '/api/scaffold-project', {
-      name: nameVal,
-      parentDir: locationVal,
-      template: templateVal,
-      group: groupVal
-    });
+    try {
+      const result = await api('POST', '/api/scaffold-project', {
+        name: nameVal,
+        parentDir: locationVal,
+        template: templateVal,
+        group: groupVal
+      });
 
-    if (result.error) {
-      errorEl.textContent = result.error;
+      if (result.error) {
+        errorEl.textContent = result.error;
+        errorEl.classList.add('visible');
+        createBtn.disabled = false;
+        hideLoadingOverlay(loader);
+        return;
+      }
+
+      overlay.remove();
+      await loadProjects();
+      showToast(`Project "${nameVal}" created with ${result.scaffoldedFiles.length} files.`);
+    } catch (err) {
+      errorEl.textContent = 'Request failed: ' + (err.message || 'Unknown error');
       errorEl.classList.add('visible');
       createBtn.disabled = false;
-      createBtn.textContent = 'Create';
-      return;
+      hideLoadingOverlay(loader);
     }
-
-    overlay.remove();
-    await loadProjects();
-    showToast(`Project "${nameVal}" created with ${result.scaffoldedFiles.length} files.`);
   });
 
   document.body.appendChild(overlay);
@@ -1452,10 +1480,27 @@ function showEditModal(project) {
 // Remove Project
 
 function showRemoveConfirm(project) {
-  const body = `<p>Remove <strong>${escapeHtml(project.name)}</strong> from CCC? This does not delete any files.</p>`;
+  const body = `
+    <p>Remove <strong>${escapeHtml(project.name)}</strong> from CCC?</p>
+    <label style="display:flex; align-items:center; gap:8px; margin-top:12px; font-size:13px; color:var(--text-secondary); text-transform:none; font-weight:normal; cursor:pointer;">
+      <input type="checkbox" id="removeDeleteFiles">
+      Also delete project folder from disk
+    </label>
+    <p id="removeDeleteWarning" style="display:none; margin-top:8px; font-size:12px; color:var(--status-waiting);">This will permanently delete all files in the project directory. This cannot be undone.</p>
+  `;
 
-  showModal('Remove Project', body, async () => {
-    await api('DELETE', `/api/projects/${project.id}`);
+  showModal('Remove Project', body, async (overlay) => {
+    const deleteFiles = overlay.querySelector('#removeDeleteFiles').checked;
+
+    if (deleteFiles) {
+      const result = await api('DELETE', `/api/projects/${project.id}?deleteFiles=true`);
+      if (result.error) {
+        alert(result.error);
+        return;
+      }
+    } else {
+      await api('DELETE', `/api/projects/${project.id}`);
+    }
 
     openTabs = openTabs.filter(t => t !== project.id && !t.startsWith(project.id + ':'));
     if (activeTab === project.id || activeTab?.startsWith(project.id + ':')) {
@@ -1472,6 +1517,12 @@ function showRemoveConfirm(project) {
     }
 
     await loadProjects();
+  });
+
+  // Toggle warning when checkbox changes
+  const modal = document.getElementById('modal');
+  modal.querySelector('#removeDeleteFiles').addEventListener('change', (e) => {
+    modal.querySelector('#removeDeleteWarning').style.display = e.target.checked ? 'block' : 'none';
   });
 }
 
