@@ -54,6 +54,28 @@
   --font-mono: "SF Mono", "Cascadia Code", "Fira Code", "JetBrains Mono", Menlo, Consolas, monospace;
 }
 
+/* Light theme overrides */
+[data-theme="light"] {
+  --bg-app: #ffffff;
+  --bg-sidebar: #f6f8fa;
+  --bg-main: #ffffff;
+  --bg-tab-bar: #f0f2f5;
+  --bg-tab-active: #ffffff;
+  --bg-tab-hover: #e8eaed;
+  --bg-hover: #eaedf0;
+  --bg-terminal: #ffffff;
+  --bg-input: #f0f2f5;
+
+  --text-primary: #1f2328;
+  --text-secondary: #59636e;
+  --text-muted: #8b949e;
+
+  --border: #d1d9e0;
+  --border-light: #e4e8ec;
+
+  --accent: #0969da;
+}
+
 html, body {
   height: 100%;
   overflow: hidden;
@@ -854,7 +876,7 @@ html, body {
   width: 100%;
   max-width: 400px;
   padding: 8px 12px;
-  background: var(--bg-input);
+  background-color: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text-primary);
@@ -869,8 +891,42 @@ html, body {
 }
 
 .settings-group select {
+  cursor: pointer;
+}
+
+/* Select wrapper — no CSS needed, arrow is a DOM element */
+.select-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+  max-width: 400px;
+}
+
+.select-wrap select {
+  width: 100%;
+  padding-right: 36px;
+  -webkit-appearance: none;
+  -moz-appearance: none;
   appearance: none;
   cursor: pointer;
+}
+
+.select-arrow {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  color: var(--text-secondary);
+  pointer-events: none;
+  line-height: 1;
+}
+
+/* When select-wrap is inside input-with-btn, it should flex */
+.input-with-btn .select-wrap {
+  flex: 1;
+  max-width: none;
 }
 
 .settings-hint {

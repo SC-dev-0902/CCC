@@ -49,7 +49,23 @@ async function loadProjects() {
 
 async function loadSettings() {
   settings = await api('GET', '/api/settings');
+  applyTheme(settings.theme || 'dark');
 }
+
+function applyTheme(theme) {
+  document.documentElement.removeAttribute('data-theme');
+  if (theme === 'system') {
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+  } else {
+    document.documentElement.setAttribute('data-theme', theme);
+  }
+}
+
+// Listen for system theme changes when using 'system' mode
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  if (settings.theme === 'system') applyTheme('system');
+});
 
 // --- Version Loading ---
 
@@ -960,6 +976,24 @@ function renderTabContent() {
 }
 
 function renderSettings(container) {
+  const themeOptions = ['dark', 'light', 'system'].map(t =>
+    `<option value="${t}" ${(settings.theme || 'dark') === t ? 'selected' : ''}>${t.charAt(0).toUpperCase() + t.slice(1)}</option>`
+  ).join('');
+
+  const knownEditors = [
+    { value: 'open', label: 'System Default' },
+    { value: 'CotEditor', label: 'CotEditor' },
+    { value: 'Visual Studio Code', label: 'VS Code' },
+    { value: 'Cursor', label: 'Cursor' },
+    { value: 'Sublime Text', label: 'Sublime Text' },
+    { value: 'TextEdit', label: 'TextEdit' }
+  ];
+  const currentEditor = settings.editor || 'open';
+  const isKnown = knownEditors.some(e => e.value === currentEditor);
+  const editorOptions = knownEditors.map(e =>
+    `<option value="${escapeHtml(e.value)}" ${currentEditor === e.value ? 'selected' : ''}>${escapeHtml(e.label)}</option>`
+  ).join('') + `<option value="__custom__" ${!isKnown ? 'selected' : ''}>-- Custom --</option>`;
+
   const panel = document.createElement('div');
   panel.innerHTML = `
     <div class="settings-panel">
@@ -974,40 +1008,124 @@ function renderSettings(container) {
       </div>
       <div class="settings-group">
         <label>External Editor</label>
-        <input type="text" value="CotEditor" placeholder="e.g. CotEditor, VS Code, Cursor">
+        <div class="input-with-btn">
+          <div class="select-wrap"><select id="settingsEditorSelect">${editorOptions}</select><span class="select-arrow">&#9662;</span></div>
+          <button class="btn browse-btn" id="settingsEditorTest" title="Test editor launch">Test</button>
+        </div>
+        <div class="new-group-input ${!isKnown ? 'visible' : ''}" id="settingsEditorCustomWrap">
+          <input type="text" id="settingsEditorCustom" value="${!isKnown ? escapeHtml(currentEditor) : ''}" placeholder="App name or /path/to/binary">
+        </div>
+        <span class="settings-hint">Used by "Open in Editor" buttons throughout CCC.</span>
       </div>
       <div class="settings-group">
         <label>Default Shell</label>
-        <input type="text" value="/bin/zsh" placeholder="e.g. /bin/zsh, /bin/bash">
+        <input type="text" id="settingsShell" value="${escapeHtml(settings.shell || '')}" placeholder="e.g. /bin/zsh, /bin/bash">
+        <span class="settings-hint">Shell used for new terminal sessions. Defaults to $SHELL if empty.</span>
       </div>
       <div class="settings-group">
         <label>Theme</label>
-        <select>
-          <option>Dark</option>
-          <option>Light</option>
-        </select>
+        <div class="select-wrap"><select id="settingsTheme">${themeOptions}</select><span class="select-arrow">&#9662;</span></div>
       </div>
       <div class="settings-group">
         <label>Concept File Pattern</label>
-        <input type="text" value="docs/{PROJECT}_concept.md" placeholder="docs/{PROJECT}_concept.md">
+        <input type="text" id="settingsConceptPattern" value="${escapeHtml((settings.filePatterns || {}).concept || 'docs/{PROJECT}_concept.md')}" placeholder="docs/{PROJECT}_concept.md">
+        <span class="settings-hint">{PROJECT} is replaced by the project folder name.</span>
       </div>
       <div class="settings-group">
         <label>Tasklist File Pattern</label>
-        <input type="text" value="docs/{PROJECT}_tasklist.md" placeholder="docs/{PROJECT}_tasklist.md">
+        <input type="text" id="settingsTasklistPattern" value="${escapeHtml((settings.filePatterns || {}).tasklist || 'docs/{PROJECT}_tasklist.md')}" placeholder="docs/{PROJECT}_tasklist.md">
       </div>
       <div class="settings-group">
         <label>GitHub Token (optional)</label>
-        <input type="password" value="" placeholder="For auto-issue filing on parser degradation">
+        <input type="password" id="settingsGithubToken" value="${escapeHtml(settings.githubToken || '')}" placeholder="For auto-issue filing on parser degradation">
+        <span class="settings-hint">Personal access token. Used for automatic GitHub issue filing when parser degrades.</span>
+      </div>
+      <div class="settings-actions" style="margin-top:24px; display:flex; gap:8px; align-items:center;">
+        <button class="btn btn-primary" id="settingsSave">Save</button>
+        <span id="settingsSaveStatus" style="font-size:12px; color:var(--status-completed); display:none;">Saved</span>
       </div>
     </div>
   `;
   container.appendChild(panel);
 
+  // Browse button for project root
   panel.querySelector('#settingsRootBrowse').addEventListener('click', () => {
     const input = panel.querySelector('#settingsProjectRoot');
     showBrowseModal(input.value || '/', (selected) => {
       input.value = selected;
     });
+  });
+
+  // Editor dropdown — show/hide custom input
+  const editorSelect = panel.querySelector('#settingsEditorSelect');
+  editorSelect.addEventListener('change', () => {
+    const wrap = panel.querySelector('#settingsEditorCustomWrap');
+    if (editorSelect.value === '__custom__') {
+      wrap.classList.add('visible');
+      panel.querySelector('#settingsEditorCustom').focus();
+    } else {
+      wrap.classList.remove('visible');
+    }
+  });
+
+  // Test button for editor
+  panel.querySelector('#settingsEditorTest').addEventListener('click', async () => {
+    let editorVal = editorSelect.value;
+    if (editorVal === '__custom__') {
+      editorVal = panel.querySelector('#settingsEditorCustom').value.trim();
+    }
+    if (!editorVal) {
+      showToast('No editor configured.');
+      return;
+    }
+    // Save editor temporarily for the test, then open CLAUDE.md
+    await api('PUT', '/api/settings', { editor: editorVal });
+    const result = await api('POST', '/api/open-editor', { filePath: 'CLAUDE.md' });
+    if (result.error) {
+      showToast('Editor test failed: ' + result.error);
+    } else {
+      showToast('Editor launched — check if CLAUDE.md opened.');
+    }
+  });
+
+  // Theme live preview
+  panel.querySelector('#settingsTheme').addEventListener('change', (e) => {
+    applyTheme(e.target.value);
+  });
+
+  // Save button
+  panel.querySelector('#settingsSave').addEventListener('click', async () => {
+    const saveBtn = panel.querySelector('#settingsSave');
+    saveBtn.disabled = true;
+
+    let editorVal = editorSelect.value;
+    if (editorVal === '__custom__') {
+      editorVal = panel.querySelector('#settingsEditorCustom').value.trim();
+    }
+
+    const updated = {
+      projectRoot: panel.querySelector('#settingsProjectRoot').value.trim(),
+      editor: editorVal,
+      shell: panel.querySelector('#settingsShell').value.trim(),
+      theme: panel.querySelector('#settingsTheme').value,
+      filePatterns: {
+        concept: panel.querySelector('#settingsConceptPattern').value.trim(),
+        tasklist: panel.querySelector('#settingsTasklistPattern').value.trim()
+      },
+      githubToken: panel.querySelector('#settingsGithubToken').value
+    };
+
+    const result = await api('PUT', '/api/settings', updated);
+    saveBtn.disabled = false;
+
+    if (result.error) {
+      showToast('Failed to save settings: ' + result.error);
+    } else {
+      settings = result;
+      const status = panel.querySelector('#settingsSaveStatus');
+      status.style.display = 'inline';
+      setTimeout(() => { status.style.display = 'none'; }, 2000);
+    }
   });
 }
 
@@ -1268,10 +1386,10 @@ function showNewProjectWizard() {
         </div>
         <div class="settings-group">
           <label>Group</label>
-          <select id="wizardGroup">
+          <div class="select-wrap"><select id="wizardGroup">
             ${groupOptions}
             <option value="__new__">-- Create New --</option>
-          </select>
+          </select><span class="select-arrow">&#9662;</span></div>
           <div class="new-group-input" id="wizardNewGroupWrap">
             <input type="text" id="wizardNewGroup" placeholder="New group name">
           </div>
@@ -1443,11 +1561,12 @@ function showImportProjectModal(prefillPath) {
       </div>
     `;
 
-    // Close handlers
-    overlay.querySelector('.modal-close').addEventListener('click', () => overlay.remove());
-    overlay.querySelector('.modal-cancel').addEventListener('click', () => overlay.remove());
+    // Close handlers — return to New Project wizard instead of closing
+    const backToWizard = () => { overlay.remove(); showNewProjectWizard(); };
+    overlay.querySelector('.modal-close').addEventListener('click', backToWizard);
+    overlay.querySelector('.modal-cancel').addEventListener('click', backToWizard);
     overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) overlay.remove();
+      if (e.target === overlay) backToWizard();
     });
 
     // Browse
@@ -1525,7 +1644,7 @@ function showImportProjectModal(prefillPath) {
         `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`
       ).join('');
       conceptRow = `<div class="import-file-row"><span class="file-status found">&#10003;</span>
-        Concept: <select id="importConceptSelect" style="margin-left:4px;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text-primary);font-size:12px;padding:2px 6px;">${opts}</select>
+        Concept: <div class="select-wrap" style="display:inline-flex;width:auto;margin-left:4px;"><select id="importConceptSelect" style="background-color:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text-primary);font-size:12px;padding:2px 6px;">${opts}</select><span class="select-arrow">&#9662;</span></div>
       </div>`;
     } else {
       conceptRow = `<div class="import-file-row"><span class="file-status found">&#10003;</span> ${escapeHtml(d.concept.path)}</div>`;
@@ -1539,7 +1658,7 @@ function showImportProjectModal(prefillPath) {
         `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`
       ).join('');
       tasklistRow = `<div class="import-file-row"><span class="file-status found">&#10003;</span>
-        Tasklist: <select id="importTasklistSelect" style="margin-left:4px;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text-primary);font-size:12px;padding:2px 6px;">${opts}</select>
+        Tasklist: <div class="select-wrap" style="display:inline-flex;width:auto;margin-left:4px;"><select id="importTasklistSelect" style="background-color:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text-primary);font-size:12px;padding:2px 6px;">${opts}</select><span class="select-arrow">&#9662;</span></div>
       </div>`;
     } else {
       tasklistRow = `<div class="import-file-row"><span class="file-status found">&#10003;</span> ${escapeHtml(d.tasklist.path)}</div>`;
@@ -1562,9 +1681,13 @@ function showImportProjectModal(prefillPath) {
       : '';
 
     // Group options
-    const groupOptions = groups.map(g =>
-      `<option value="${escapeHtml(g.name)}" ${g.name === 'Parked' ? 'selected' : ''}>${escapeHtml(g.name)}</option>`
-    ).join('');
+    const groupOptions = [
+      `<option value="" disabled selected>-- Select Group --</option>`,
+      ...groups.map(g =>
+        `<option value="${escapeHtml(g.name)}">${escapeHtml(g.name)}</option>`
+      ),
+      `<option value="__new__">-- Create New --</option>`
+    ].join('');
 
     overlay.innerHTML = `
       <div class="modal modal-wizard">
@@ -1588,14 +1711,13 @@ function showImportProjectModal(prefillPath) {
 
           <div class="settings-group">
             <label>Project Name</label>
-            <input type="text" id="importName" value="${escapeHtml(scanResult.folderName)}">
+            <input type="text" id="importName" placeholder="${escapeHtml(scanResult.folderName)}">
           </div>
           <div class="settings-group">
             <label>Group</label>
-            <select id="importGroup">
+            <div class="select-wrap"><select id="importGroup">
               ${groupOptions}
-              <option value="__new__">-- Create New --</option>
-            </select>
+            </select><span class="select-arrow">&#9662;</span></div>
             <div class="new-group-input" id="importNewGroupWrap">
               <input type="text" id="importNewGroup" placeholder="New group name">
             </div>
@@ -1609,10 +1731,11 @@ function showImportProjectModal(prefillPath) {
       </div>
     `;
 
-    // Close handlers
-    overlay.querySelector('.modal-close').addEventListener('click', () => overlay.remove());
+    // Close handlers — return to New Project wizard
+    const backToWizard2 = () => { overlay.remove(); showNewProjectWizard(); };
+    overlay.querySelector('.modal-close').addEventListener('click', backToWizard2);
     overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) overlay.remove();
+      if (e.target === overlay) backToWizard2();
     });
 
     // Back button — return to Phase 1, preserve path
@@ -1647,6 +1770,11 @@ function showImportProjectModal(prefillPath) {
       }
 
       let groupVal = groupSelect.value;
+      if (!groupVal) {
+        errorEl.textContent = 'Please select a group.';
+        errorEl.classList.add('visible');
+        return;
+      }
       if (groupVal === '__new__') {
         groupVal = overlay.querySelector('#importNewGroup').value.trim();
         if (!groupVal) {
@@ -1728,7 +1856,7 @@ function showEditModal(project) {
     </div>
     <div class="settings-group">
       <label>Group</label>
-      <select id="editGroup">${groupOptions}</select>
+      <div class="select-wrap"><select id="editGroup">${groupOptions}</select><span class="select-arrow">&#9662;</span></div>
     </div>
   `;
 

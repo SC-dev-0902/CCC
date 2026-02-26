@@ -213,14 +213,14 @@
 **Focus:** All user-configurable preferences in one clean panel.
 
 ### Tasks
-- [ ] Settings panel opens when clicking ⚙ Settings in tree view
-- [ ] External editor: app name or binary path, with test button
-- [ ] Default shell: path, defaults to `$SHELL`
-- [ ] Theme: Light / Dark / System
-- [ ] File naming pattern: default concept and tasklist name patterns
-- [ ] GitHub token: optional, for auto-issue filing
-- [ ] All settings persist to `settings.json`
-- [ ] Settings panel feels consistent with the rest of the UI
+- [x] Settings panel opens when clicking ⚙ Settings in tree view
+- [x] External editor: app name or binary path, with test button
+- [x] Default shell: path, defaults to `$SHELL`
+- [x] Theme: Light / Dark / System
+- [x] File naming pattern: default concept and tasklist name patterns
+- [x] GitHub token: optional, for auto-issue filing
+- [x] All settings persist to `settings.json`
+- [x] Settings panel feels consistent with the rest of the UI
 
 ### Go/NoGo Gate
 > Can you configure all settings and have them persist across restarts?

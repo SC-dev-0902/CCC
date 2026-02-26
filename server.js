@@ -170,6 +170,26 @@ app.get('/api/settings', (req, res) => {
   }
 });
 
+// Update settings
+app.put('/api/settings', (req, res) => {
+  try {
+    const settingsPath = path.join(__dirname, 'data', 'settings.json');
+    const current = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+
+    const allowed = ['projectRoot', 'editor', 'shell', 'theme', 'filePatterns', 'githubToken'];
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) {
+        current[key] = req.body[key];
+      }
+    }
+
+    fs.writeFileSync(settingsPath, JSON.stringify(current, null, 2) + '\n', 'utf8');
+    res.json(current);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to save settings' });
+  }
+});
+
 // --- File API ---
 
 // Read a project file (for Markdown preview)
