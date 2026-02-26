@@ -478,17 +478,6 @@ function renderTreeView() {
 
       if (project.activeVersion) {
         // --- Versioned project ---
-        // CLAUDE.md always at project level
-        if (project.coreFiles && project.coreFiles.claude) {
-          const claudeEl = document.createElement('div');
-          claudeEl.className = 'tree-file';
-          claudeEl.innerHTML = `<span class="tree-file-icon">&#x1F4C4;</span><span class="tree-file-name">${escapeHtml(project.coreFiles.claude)}</span>`;
-          claudeEl.addEventListener('click', (e) => {
-            e.stopPropagation();
-            openFileTab(project.id, project.name, project.coreFiles.claude);
-          });
-          filesEl.appendChild(claudeEl);
-        }
 
         // Versions header
         const versionsHeaderExpanded = expandedVersionHeaders.has(project.id);
@@ -533,6 +522,30 @@ function renderTreeView() {
         }
 
         filesEl.appendChild(versionsChildren);
+
+        // CLAUDE.md always at project level
+        if (project.coreFiles && project.coreFiles.claude) {
+          const claudeEl = document.createElement('div');
+          claudeEl.className = 'tree-file';
+          claudeEl.innerHTML = `<span class="tree-file-icon">&#x1F4C4;</span><span class="tree-file-name">${escapeHtml(project.coreFiles.claude)}</span>`;
+          claudeEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openFileTab(project.id, project.name, project.coreFiles.claude);
+          });
+          filesEl.appendChild(claudeEl);
+        }
+
+        // SHP file — single file per project: docs/{ProjectName}_shp.md
+        const shpFileName = project.name + '_shp.md';
+        const shpFilePath = 'docs/' + shpFileName;
+        const shpEl = document.createElement('div');
+        shpEl.className = 'tree-file';
+        shpEl.innerHTML = `<span class="tree-file-icon">&#x1F4C4;</span><span class="tree-file-name">${escapeHtml(shpFileName)}</span>`;
+        shpEl.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openFileTab(project.id, project.name, shpFilePath);
+        });
+        filesEl.appendChild(shpEl);
 
       } else {
         // --- Non-versioned project: show flat coreFiles ---

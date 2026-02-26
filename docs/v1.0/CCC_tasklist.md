@@ -232,24 +232,25 @@
 ---
 
 ## Stage 10 — Project Memory (SHP Storage)
-**Focus:** File-based Session Handover Pack storage. CCC gives Claude Code session continuity.
+**Focus:** File-based Session Handover Pack. One file per project. CCC gives Claude Code session continuity.
 
 ### Tasks
-- [ ] Create `docs/shp/` directory structure per project
-- [ ] `/start-project` slash command: reads CLAUDE.md, concept doc, tasklist, asks comprehension questions
-- [ ] `/eod` slash command: Claude Code generates SHP, CCC saves as dated Markdown file in `docs/shp/`
-- [ ] `/continue` slash command: CCC reads most recent SHP from `docs/shp/`, feeds to Claude Code session
-- [ ] SHP file format: standard Markdown, human-readable, Git-friendly
-- [ ] SHP contains: work done, decisions made, open items, next actions, current stage status
-- [ ] Global slash commands installed in `~/.claude/commands/` (not per-project)
-- [ ] CCC UI: SHP history visible per project (list of dated entries in tree view or read panel)
-- [ ] CCC handles missing `docs/shp/` gracefully (first session on a project)
-- [ ] `/continue` handles no existing SHP gracefully (falls back to `/start-project` behaviour)
+- [x] `/start-project` slash command: reads CLAUDE.md, concept doc, tasklist, asks comprehension questions — global command at `~/.claude/commands/`, works without CCC running
+- [x] `/eod` slash command: Claude Code writes complete SHP, CCC overwrites `docs/{ProjectName}_shp.md` — global command at `~/.claude/commands/`
+- [x] `/continue` slash command: CCC reads current SHP, feeds to Claude Code session — global command at `~/.claude/commands/`
+- [x] SHP file format: standard Markdown, human-readable, Git-friendly
+- [x] SHP standard: a fresh session reading it can start work immediately without re-reading source files
+- [x] SHP contains: full timeline, API inventory, state model, parser state machine, path resolution, architecture decisions, dependencies, known gotchas, current stage status
+- [x] One file per project — `docs/{ProjectName}_shp.md` — always overwritten at `/eod`
+- [x] Git captures SHP history — no dated archive folder needed
+- [x] Global slash commands installed in `~/.claude/commands/` (not per-project)
+- [x] CCC UI: current SHP visible per project (Read panel)
+- [x] CCC handles missing SHP gracefully (first session — falls back to `/start-project` behaviour)
 
 ### Go/NoGo Gate
-> Does `/eod` produce a useful, complete SHP?
-> Does `/continue` pick up context seamlessly the next day?
-> Would you trust this to carry your project context overnight?
+> Does `/eod` produce a complete SHP that meets the standard?
+> Does `/continue` pick up context seamlessly without re-reading source files?
+> Would you trust this to carry your project context across sessions?
 
 **→ GO:** Proceed to Stage 11
 **→ NOGO:** Fix SHP generation or retrieval issues, re-evaluate
@@ -266,6 +267,7 @@
 - [ ] App handles invalid project paths gracefully
 - [ ] Session crash recovery: detect exited PTY, offer restart
 - [ ] Port conflict: clear error message if PORT is already in use
+- [ ] **Read panel auto-refresh every 10 minutes** — picks up external edits made in CotEditor without manual reload
 - [ ] **First-run onboarding: run `claude --version` on startup**
   - [ ] SUCCESS → proceed to main UI normally
   - [ ] FAIL → show onboarding screen: *"CCC requires Claude Code. It looks like Claude Code isn't installed or authenticated yet."*
@@ -296,13 +298,59 @@
 - [ ] `v1.0.0` tag created
 - [ ] GitHub repository made public
 - [ ] CCC project imported into CCC (dog food moment)
+- [ ] **Post-ship housekeeping:** restructure to `platform/macos/` folder before v1.1 development begins — not a version bump, just tidying the house
 
 ### Go/NoGo Gate
 > Is this something you would recommend to another developer without hesitation?
 
-**→ GO:** v1.0.0 shipped 🎉
+**→ GO:** v1.0.0 shipped 🎉 → then housekeeping → then v1.1 planning
 **→ NOGO:** What's missing? Fix it first.
 
+---
+
+---
+
+## Stage 13 — User Manual
+**Focus:** Complete user documentation written by Claude Code from inside the running application.
+**Prerequisite:** Stage 12 complete. Post-ship housekeeping (platform/macos/ restructure) complete. CCC is running and fully functional.
+
+### Tasks
+- [ ] Claude Code does a full re-read of all project documents before starting:
+  - [ ] `CLAUDE.md`
+  - [ ] `docs/CCC_concept.md`
+  - [ ] `docs/CCC_tasklist.md`
+  - [ ] `docs/CCC_shp.md` (current state)
+- [ ] Define user manual structure and confirm with Phet before writing
+- [ ] Screenshot every meaningful UI state from the running CCC instance
+- [ ] Write manual sections around screenshots — no placeholder content
+- [ ] Cover: installation, first run, onboarding screen, project groups, tree view
+- [ ] Cover: terminal sessions, status dots, tab colours, switching between projects
+- [ ] Cover: Read panel, Open in Editor, external editor configuration
+- [ ] Cover: New Project Wizard end-to-end
+- [ ] Cover: Import existing project end-to-end
+- [ ] Cover: Settings panel — all configurable options
+- [ ] Cover: Project versioning — creating a new version, active version pointer
+- [ ] Cover: SHP workflow — `/start-project`, `/eod`, `/continue`, `/tested`
+- [ ] Cover: Pre-Go/NoGo test list workflow — how test files are generated, reviewed in CCC, and processed
+- [ ] Cover: global `~/.claude/CLAUDE.md` setup — dedicated section with guided template
+- [ ] Global CLAUDE.md template: placeholders for Git/Forgejo, Dev-Web, Dev-DB, editor, shell, stack decisions
+- [ ] Cover: `.env` configuration and `CLAUDE_REFERRAL_URL`
+- [ ] Cover: parser degradation — what the warning banner means and what to do
+- [ ] Cover: cross-platform note — macOS v1.0, Windows/Linux planned
+- [ ] Human Editorial Pass (HEP) — Phet reviews all text before publish
+- [ ] Save as `docs/USER_MANUAL.md`
+- [ ] **Update global `~/.claude/CLAUDE.md` to v0.3:**
+  - [ ] Replace all "Manfred" references with "Phet"
+  - [ ] Add server start rule: prepare everything, wait for explicit "Yes" before starting
+  - [ ] Add pre-Go/NoGo test list rule: generate `docs/{ProjectName}_test_stageXX.md` before every gate
+  - [ ] Add `/tested` as 4th global slash command
+
+### Go/NoGo Gate
+> Is the manual complete enough that a developer with no prior knowledge of CCC could install, configure, and use it effectively?
+> Is the global CLAUDE.md template clear enough to fill in without assistance?
+
+**→ GO:** User manual published. Hand off to Promotion Tour.
+**→ NOGO:** Fill gaps, re-evaluate.
 ---
 
 *"An assumption is the first step in a major cluster fuck." — Keep it sharp.*
