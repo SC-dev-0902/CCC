@@ -22,6 +22,19 @@
         "tasklist": "docs/v1.0/CCC_tasklist.md"
       },
       "activeVersion": "1.0"
+    },
+    {
+      "id": "329a8f5d-fd8a-42ec-ad03-7400c60dc74b",
+      "name": "PatchPilot",
+      "path": "PatchPilot",
+      "group": "Parked",
+      "order": 0,
+      "coreFiles": {
+        "claude": "CLAUDE.md",
+        "concept": "docs/v1.0/PatchPilot_concept.md",
+        "tasklist": "docs/v1.0/PatchPilot_tasklist.md"
+      },
+      "activeVersion": "1.0"
     }
   ]
 }

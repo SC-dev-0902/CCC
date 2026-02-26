@@ -3,7 +3,7 @@
 ## Project
 **CCC — Claude Command Center**
 **Version:** 1.0
-**Current Stage:** 10 — Project Memory (SHP Storage) — all tasks complete, awaiting Go/NoGo
+**Current Stage:** 12 — Session-Version Binding & Interactive Test Runner — **Go** (Stage 13 next)
 
 ---
 
@@ -15,28 +15,46 @@ A local web application (Node.js + Express + xterm.js) that replaces terminal sp
 
 ## What Was Done This Session
 
-- Implemented Stage 10 — Project Memory (SHP Storage)
-- Initially built a multi-file SHP approach (`docs/shp/` folder, `GET /api/projects/:id/shps` endpoint, expandable SHP section in tree view)
-- After `/reload-docs` revealed concept doc had been updated to single-file model, flagged the drift
-- Refactored to single-file model per concept doc:
-  - Removed `GET /api/projects/:id/shps` endpoint from server.js
-  - Removed `projectSHPs` Map and `expandedSHPHeaders` Set from app.js
-  - Removed `loadProjectSHPs()` function from app.js
-  - Removed expandable SHP folder section from tree view
-  - Removed `.tree-shp-header` and `.tree-shp-children` CSS styles
-  - Added single SHP file entry in tree view (after CLAUDE.md) using existing `.tree-file` class
-  - Updated `/eod` slash command: writes `docs/{ProjectFolderName}_shp.md`, always overwrites
-  - Updated `/continue` slash command: reads `docs/{ProjectFolderName}_shp.md` directly
-  - Updated `/start-project` slash command: added step 5 to read SHP if it exists
-  - Updated `/reload-docs` slash command: fixed step 5 to reference `docs/{ProjectFolderName}_shp.md`
-- Created this SHP file as `docs/CCC_shp.md`
+### Stage 12 — Three waves implemented:
+
+**Wave 1 — Session-Version Binding**
+- Project row click changed from opening tab to expand/collapse only
+- Created `openSessionTab(projectId)` using `projectId::session` tab ID scheme (double colon avoids collision with file tabs using single colon)
+- Active version row click opens session tab; non-active version click sets version active then opens session tab
+- Extracted `renderSessionContent()` helper for session/terminal rendering
+- Session exit now disposes terminal and returns to "no active session" prompt (not restart bar)
+- Status dot moved from project row to active version row
+- Updated `getTabInfo()` and `renderTabContent()` for `::session` tab ID format
+- Updated window resize handler for new tab ID format
+
+**Wave 2 — Test File Relocation**
+- `scanVersionFiles()` now returns `{ files[], testFiles[] }` (separated by `_test_stage\d+\.md` regex)
+- `scanVersions()` renamed top-level `testFiles` to `flatTestFiles` for backward compat
+- Test files render under collapsible "Testing" sub-header inside each version node
+- Added `expandedTestingSections` Set for Testing sub-header expand state
+- Moved `docs/CCC_test_stage11.md` into `docs/v1.0/CCC_test_stage11.md`
+
+**Wave 3 — Interactive Test Runner**
+- `PUT /api/file/:projectId` endpoint with path traversal protection for file write-back
+- `isTestFile()` helper detects `_test_stage\d+\.md` pattern
+- `renderTestRunner()` renders interactive panel: checkboxes, comment textareas, progress counter, Save button
+- `parseTestFile()` parses markdown: headings, checkbox lines (`- [x]`/`- [ ]`), bold labels, `  > ` comment lines
+- `reconstructTestFile()` rebuilds markdown from parsed structure
+- Manual Save button only (auto-save removed per Phet's preference)
+- `DELETE /api/projects/:id/versions/:version` endpoint with active-version protection and FS deletion
+- Remove button on non-active version rows with confirmation modal
+- Sidebar refresh button (↻) that clears `projectVersions` cache and reloads tree
 
 ## Decisions Made
 
-- **Single-file SHP model chosen** — one file per project (`docs/{ProjectName}_shp.md`), overwritten at every `/eod`, Git captures history. Rejected: multi-file dated approach (`docs/shp/YYYY-MM-DD.md`) — adds complexity without benefit since Git already provides history.
-- **SHP is project-level, not per-version** — context accumulates across all versions, more useful for Claude Code memory.
-- **No new API endpoint needed** — existing `GET /api/file/:projectId?filePath=` handles reading the SHP file. Tree view entry just calls `openFileTab()`.
-- **SHP rendered as plain file entry** — not an expandable section. Simple `📄 {ProjectName}_shp.md` in tree view, same as CLAUDE.md. Clicked to open in read panel.
+- **Tab ID scheme**: `projectId::session` (double colon) for session tabs vs `projectId:filePath` (single colon) for file tabs — prevents ambiguity
+- **Session still project-scoped on backend** — one session per project, cwd is project root. Version node is purely a UI entry point.
+- **Session exit shows prompt, not restart bar** — cleaner UX, user explicitly chooses what to start next
+- **Non-active version click sets active + opens tab** — two-step convenience for switching versions
+- **Test file detection by naming convention** (`_test_stage\d+\.md`) — no flag needed
+- **Manual Save only for test runner** — auto-save removed after user feedback; Save button is sufficient
+- **Sidebar refresh button** — clears cached `projectVersions` and re-fetches from disk; not auto-refresh
+- **Version delete includes FS deletion** — `fs.rmSync(absFolder, { recursive: true })` with path-traversal protection; active version cannot be deleted
 
 ---
 
@@ -45,65 +63,45 @@ A local web application (Node.js + Express + xterm.js) that replaces terminal sp
 ### Day 1 — 2026-02-24
 
 **Stages 01 + 02** (commit `09aadcd`)
-- Built the full UI shell and project persistence layer from scratch
-- Split-pane layout: sidebar (tree view with groups) + main panel (tab bar + content)
-- Five status dot colours: red (waiting), yellow (running), green (completed), orange (error), grey (unknown)
-- Express server with full CRUD API for projects and groups
-- `projects.json` + `settings.json` persistence
-- Drag & drop reordering across groups
+- Full UI shell: split-pane layout, sidebar tree view, tab bar, project persistence
+- Express server with CRUD API for projects and groups, drag & drop reordering
 
 ### Day 2 — 2026-02-25
 
 **Stage 03 — Terminal Sessions** (commit `99a8e65`)
-- Integrated node-pty + xterm.js + ws for real PTY sessions
-- Two session types: "Start Claude Code" (runs `claude` CLI) and "Open Shell" (plain zsh)
-- One session per project at a time — starting one replaces the other
-- Sessions persist in background when switching tabs
-- Key fix: `@xterm/addon-fit` UMD export requires `new FitAddon.FitAddon()` not `new FitAddon()`
-- Key fix: `node-pty@1.2.0-beta.11` required for Node.js v25
+- node-pty + xterm.js + ws integration, two session types (claude / shell)
 
 **Stage 04 — Status Detection Parser** (commit `d7c74f1`)
-- `src/parser.js` — isolated state machine, single responsibility
-- Detects five states from raw PTY output via pattern matching
-- Degraded mode after 60s unrecognised output: all dots grey, warning banner
-- Optional auto-issue filing to Forgejo when degraded (requires GitHub token)
+- Isolated `src/parser.js` state machine, five states, degraded mode
 
 **Stage 05 — Read Panel** (bundled with Stage 06)
-- Clicking core files opens rendered Markdown preview via `marked.js`
-- "Open in Editor" launches configured external editor
-- Read panel is read-only, coexists with terminal per tab
+- Markdown preview via marked.js, "Open in Editor" button
 
 **Stage 06 — Project Versioning** (commit `fa14b5f`)
-- `activeVersion` field in `projects.json`
-- Versioned folder structure: `docs/vX.Y/` with concept + tasklist
-- Patch versions nest inside parent: `docs/vX.Y/vX.Y.Z/`
-- Tree view: expandable Versions section with active version indicator
-- Migration from flat `docs/` to versioned structure
+- `docs/vX.Y/` folder structure, patch nesting, migration from flat docs
 
 **Stage 07 — New Project Wizard** (commit `a0beeef`)
-- Modal: Name → Location → Template → Group → Create
-- Five templates: Web App, API, Script, Research, Blank
-- Scaffolds: CLAUDE.md, concept doc, tasklist, slash commands, `.ccc-project.json`
+- Modal wizard: Name → Location → Template → Group → Create, five templates
 
 **Post-Stage-07 fixes** (commit `40c1ce9`)
-- API hardening, loading overlay, group pruning, disk delete option on project removal
+- API hardening, loading overlay, group pruning, disk delete option
 
 ### Day 3 — 2026-02-26
 
 **Stage 08 — Import Existing Projects** (commit `581d9b5`)
-- Two-phase import modal: scan directory → confirm detected files
-- Hard gate: blocks import if `*_concept.md` is absent
-- Non-destructive: no filesystem writes to imported project
+- Two-phase import: scan directory → confirm detected files, hard gate on missing concept doc
 
 **Stage 09 — Settings Panel** (commit `774d9f3`)
-- External editor, shell, theme (light/dark/system), file patterns, GitHub token
-- All settings persist to `settings.json`, theme switching immediate
+- Editor, shell, theme, file patterns, GitHub token — all persisted to `settings.json`
 
-**Stage 10 — Project Memory (SHP Storage)** (current session, not yet committed)
-- Single SHP file per project: `docs/{ProjectName}_shp.md`
-- SHP file entry in tree view (clickable, opens in read panel)
-- Global slash commands `/start-project`, `/continue`, `/eod` updated for single-file model
-- No new API endpoint — uses existing file read endpoint
+**Stage 10 — Project Memory** (commit `1176bd0`)
+- Single-file SHP: `docs/{ProjectName}_shp.md`, global slash commands
+
+**Stage 11 — Resilience & Polish** (commit `3dcecdd`)
+- First-run onboarding, port conflict handling, invalid path protection, session crash recovery, read panel auto-refresh, README, `.env.example`
+
+**Stage 12 — Session-Version Binding & Interactive Test Runner** (this session, not yet committed)
+- Session entry point moved to version node, test files relocated into version folders, interactive test runner with checkboxes and comments, version delete, sidebar refresh
 
 ---
 
@@ -112,27 +110,26 @@ A local web application (Node.js + Express + xterm.js) that replaces terminal sp
 ```
 CCC/
 ├── CLAUDE.md                  ← project contract (derived from active version's concept doc)
-├── server.js                  ← Express entry point, all HTTP + WebSocket routes
+├── server.js                  ← Express entry point, all HTTP + WebSocket routes (1073 lines)
 ├── src/
-│   ├── parser.js              ← SACRED: all Claude Code output parsing lives here only
-│   ├── sessions.js            ← PTY lifecycle, WebSocket client management, parser integration
-│   ├── projects.js            ← projects.json CRUD, path resolution, group management
-│   └── versions.js            ← version scanning, creation, migration, git tagging
+│   ├── parser.js              ← SACRED: all Claude Code output parsing (342 lines)
+│   ├── sessions.js            ← PTY lifecycle, WebSocket clients, parser integration (314 lines)
+│   ├── projects.js            ← projects.json CRUD, path resolution, group management (173 lines)
+│   └── versions.js            ← version scanning, creation, migration, git tagging (255 lines)
 ├── public/
-│   ├── index.html             ← Minimal skeleton: sidebar, resize handle, main panel
-│   ├── app.js                 ← ~2200 lines vanilla JS: all state, rendering, modals, terminals
-│   └── styles.css             ← CSS custom properties, dark/light themes, all component styles
+│   ├── index.html             ← Minimal skeleton: sidebar, resize handle, main panel (53 lines)
+│   ├── app.js                 ← All state, rendering, modals, terminals, test runner (2639 lines)
+│   └── styles.css             ← CSS custom properties, dark/light themes (1724 lines)
 ├── data/
 │   ├── projects.json          ← Project registry (committed)
 │   └── settings.json          ← User settings (gitignored)
 ├── docs/
-│   ├── CCC_shp.md             ← Session Handover Pack (this file, single file, Git is history)
-│   ├── v1.0/
-│   │   ├── CCC_concept.md     ← v1.0 concept
-│   │   └── CCC_tasklist.md    ← v1.0 tasklist
-│   └── v1.1/
-│       ├── CCC_concept.md     ← v1.1 concept (if exists)
-│       └── CCC_tasklist.md    ← v1.1 tasklist (if exists)
+│   ├── CCC_shp.md             ← Session Handover Pack (this file)
+│   ├── CCC_Roadmap.md         ← Roadmap (if exists)
+│   └── v1.0/
+│       ├── CCC_concept.md
+│       ├── CCC_tasklist.md
+│       └── CCC_test_stage11.md  ← Test files now live inside version folders
 ├── .env                       ← Local only (PORT, CLAUDE_REFERRAL_URL)
 └── .env.example               ← Committed template
 ```
@@ -160,15 +157,17 @@ CCC/
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/file/:projectId?filePath=` | Read file content (path-traversal protected) |
+| PUT | `/api/file/:projectId` | Write file content `{ filePath, content }` (path-traversal protected) — used by test runner |
 | POST | `/api/open-editor` | Launch external editor with file path |
 | GET | `/api/browse?path=` | List subdirectories for browser modal |
 
 ### Versions
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/api/projects/:id/versions` | Scan version structure |
+| GET | `/api/projects/:id/versions` | Scan version structure (includes `testFiles[]` per version) |
 | POST | `/api/projects/:id/versions` | Create new version (scaffolds folder + docs) |
 | PUT | `/api/projects/:id/active-version` | Set active version |
+| DELETE | `/api/projects/:id/versions/:version` | Delete version (FS + prevents active version delete) |
 | POST | `/api/projects/:id/versions/:version/complete` | Git tag |
 | POST | `/api/projects/:id/migrate-versions` | Migrate flat docs to versioned |
 
@@ -178,6 +177,7 @@ CCC/
 | GET | `/api/settings` | Read settings |
 | PUT | `/api/settings` | Update settings (whitelisted keys only) |
 | GET | `/api/version` | App version + build number |
+| GET | `/api/preflight` | Check if `claude` CLI is installed |
 | POST | `/api/scaffold-project` | New project wizard backend |
 | POST | `/api/scan-project` | Import scan backend |
 
@@ -197,28 +197,38 @@ CCC/
 ## Frontend State Model (app.js)
 
 ```
-groups[]                    — group objects {name, order}
-projectsList[]              — project objects from API
-openTabs[]                  — tab IDs: projectId | "projectId:filePath" | "settings"
-activeTab                   — currently displayed tab ID
-expandedProjects (Set)      — which projects are expanded in tree
-collapsedGroups (Set)       — which groups are collapsed
-settings {}                 — loaded from /api/settings
-suppressRender              — flag to prevent render() during batch operations
+groups[]                       — group objects {name, order}
+projectsList[]                 — project objects from API
+openTabs[]                     — tab IDs: "projectId::session" | "projectId:filePath" | "settings"
+activeTab                      — currently displayed tab ID
+expandedProjects (Set)         — which projects are expanded in tree
+collapsedGroups (Set)          — which groups are collapsed
+settings {}                    — loaded from /api/settings
+suppressRender                 — flag to prevent render() during batch operations
+dragState                      — {projectId} during drag operations
 
-terminalInstances (Map)     — projectId → {terminal, fitAddon, ws, container, state, claudeStatus, degraded}
-projectVersions (Map)       — projectId → {activeVersion, versions[], hasFlatDocs}
-expandedVersionHeaders (Set)— which projects have Versions section expanded
-expandedVersions (Set)      — "projectId:version" strings for expanded version rows
+terminalInstances (Map)        — projectId → {terminal, fitAddon, ws, container, state, claudeStatus, degraded}
+projectVersions (Map)          — projectId → {activeVersion, versions[], hasFlatDocs, flatTestFiles[]}
+expandedVersionHeaders (Set)   — which projects have Versions section expanded
+expandedVersions (Set)         — "projectId:version" strings for expanded version rows
+expandedTestingSections (Set)  — "projectId:version" strings for expanded Testing sub-headers
+readPanelTimers (Map)          — tabId → intervalId for auto-refresh
 ```
+
+**Tab ID scheme:**
+- `"projectId::session"` — session/terminal tab (double colon)
+- `"projectId:filePath"` — file read panel or test runner tab (single colon)
+- `"settings"` — settings panel
 
 **Rendering pipeline:** `render()` → `renderTreeView()` + `renderTabBar()` + `renderTabContent()`
 
 **Terminal lifecycle:** `startSession()` → `createTerminal()` → `connectTerminal()` (WebSocket) → `showTerminal()`
 
-**Modal pattern:** `showModal(title, bodyHtml, onSubmit)` — one modal at a time, overlay click dismisses
+**Session exit lifecycle:** WebSocket `exit` message → `instance.state = 'exited'` → `renderTabContent()` → `renderSessionContent()` disposes terminal → shows "no active session" prompt
 
-**SHP in tree view:** Rendered at app.js lines 538-548 as a static `.tree-file` entry after CLAUDE.md. Calls `openFileTab(project.id, project.name, 'docs/' + project.name + '_shp.md')` on click.
+**Test runner pipeline:** `isTestFile()` check → `renderTestRunner()` → `parseTestFile()` → `renderTestItems()` → on Save: `reconstructTestFile()` → `PUT /api/file/:projectId`
+
+**Modal pattern:** `showModal(title, bodyHtml, onSubmit)` — one modal at a time, overlay click dismisses
 
 ---
 
@@ -231,9 +241,9 @@ Detection priority (checked in order):
 4. **ERROR** — error patterns (`Error:`, `Permission denied`, `rate limit`) only when NOT currently RUNNING
 5. **UNKNOWN** — no session or unrecognised
 
-**Degradation:** 60s unrecognised output → `onDegraded` callback → all dots grey + warning banner. Terminal still works — only colours affected.
+**Degradation:** 60s unrecognised output → `onDegraded` callback → all dots grey + warning banner. Terminal still works.
 
-**Running state debounce:** Persists for 2 seconds after last indicator (prevents flicker).
+**Running state debounce:** Persists for 2 seconds after last indicator.
 
 ---
 
@@ -250,11 +260,31 @@ Current: `projectRoot = "/Users/steinhoferm/SC-Development"`, CCC path = `"CCC"`
 
 ## Version Model
 
-- **Major/Minor** (X.Y): Own folder `docs/vX.Y/` with concept + tasklist
-- **Patch** (X.Y.Z): Nested in parent `docs/vX.Y/vX.Y.Z/`, inherits concept, gets own tasklist
+- **Major/Minor** (X.Y): Own folder `docs/vX.Y/` with concept + tasklist + test files
+- **Patch** (X.Y.Z): Nested in parent `docs/vX.Y/vX.Y.Z/`, inherits concept, gets own tasklist + test files
 - Active version tracked in `projects.json` `activeVersion` field, not filesystem
 - Version completion → Git tag prompt
+- Version deletion: `DELETE /api/projects/:id/versions/:version` — removes folder from FS, prevents deleting active version
 - Migration: moves flat `docs/` files into `docs/vX.Y/` structure
+- Test files: `{ProjectName}_test_stageXX.md` now live inside version folders (not flat `docs/`)
+- `scanVersionFiles()` returns `{ files[], testFiles[] }` — test files separated by regex
+
+---
+
+## Test Runner Model
+
+**Detection:** `isTestFile(fileName)` matches `/_test_stage\d+\.md$/`
+
+**Parse structure:** `parseTestFile(lines)` produces `{ items: [...] }` where each item is:
+- `{ type: 'heading', level, text }` — `#` through `######`
+- `{ type: 'checkbox', text, checked, comment, boldLabel, indent }` — `- [x]` or `- [ ]` lines
+- `{ type: 'line', text }` — everything else
+
+**Comment format:** Inline after checkbox as `  > comment text` — human-readable, Git-friendly.
+
+**Reconstruct:** `reconstructTestFile(parsed)` rebuilds full markdown. Checkboxes get `  > ` comment lines appended when comment is non-empty.
+
+**Save:** Manual only via Save button → `PUT /api/file/:projectId` with `{ filePath, content }`.
 
 ---
 
@@ -262,13 +292,16 @@ Current: `projectRoot = "/Users/steinhoferm/SC-Development"`, CCC path = `"CCC"`
 
 - **Parser is sacred** — only `src/parser.js` touches raw output interpretation
 - **Never hardcode port** — always `process.env.PORT`
-- **Never modify imported project files** — CCC is read-only on filesystem except its own data files
+- **Never modify imported project files** — CCC is read-only on filesystem except its own data files and test file write-back
 - **No platform-specific paths** — `path.join()` everywhere, no hardcoded `/Users/`
 - **Single-file SHP** — `docs/{ProjectName}_shp.md`, always overwritten at `/eod`, Git is the history
 - **SHP is project-level, not per-version** — context accumulates across all versions
 - **Protected groups** — "Active" and "Parked" never auto-pruned
 - **One session per project** — starting Claude Code replaces open shell and vice versa
 - **CLAUDECODE env var removed** from child process env to allow nested Claude Code sessions
+- **Session entry via version node** — project row is expand/collapse only; active version row opens session tab
+- **Test files in version folders** — `docs/vX.Y/{ProjectName}_test_stageXX.md` (not flat `docs/`)
+- **Manual save for test runner** — no auto-save; explicit Save button
 
 ---
 
@@ -292,10 +325,13 @@ Current: `projectRoot = "/Users/steinhoferm/SC-Development"`, CCC path = `"CCC"`
 1. `node-pty@1.2.0-beta.11` — stable 1.0.0 doesn't compile on Node.js v25
 2. `FitAddon` UMD export — constructor is `new FitAddon.FitAddon()`, not `new FitAddon()`
 3. Server must be restarted for code changes — no hot-reload
-4. Build number (`git rev-list --count HEAD`) only updates on server restart
+4. Build number extracted from `git log --grep=^Stage` at startup — only updates on restart
 5. File API has path traversal protection — resolved path must start with project directory
 6. `open -a "EditorName"` is macOS-specific (future cross-platform consideration)
 7. Settings update whitelists keys: `['projectRoot', 'editor', 'shell', 'theme', 'filePatterns', 'githubToken']`
+8. `scanVersionFiles()` field rename: top-level is `flatTestFiles` (not `testFiles`) — per-version data uses `testFiles`
+9. Tab ID scheme: `::session` (double colon) vs `:filePath` (single colon) — must not confuse the two
+10. `renderTestRunner` references `scheduleAutoSave` in `renderTestItems()` call but auto-save was removed — the parameter is ignored (dead reference, harmless)
 
 ---
 
@@ -308,20 +344,20 @@ Four global commands at `~/.claude/commands/`:
 | `/continue` | `continue.md` | Reads `docs/{ProjectFolderName}_shp.md`, restores context |
 | `/eod` | `eod.md` | Writes complete SHP to `docs/{ProjectFolderName}_shp.md`, always overwrites |
 | `/reload-docs` | `reload-docs.md` | Re-reads all project docs after external changes |
+| `/tested` | `tested.md` | Processes test file comments, presents Go/NoGo gate |
 
 ---
 
 ## Git Remote
 - Forgejo: `http://mcs-git.mcsfam.local:3000/Phet/CCC`
 - Push after every stage Go decision
-- Current: 8 local commits, last push was Stage 09
+- Last push: Stage 11 (commit `3dcecdd`)
 
 ---
 
 ## Open Items
-- Stage 10 Go/NoGo gate pending
+- None — Stage 12 Go received, ready to commit and push
 
 ## Next Actions
-1. Stage 10 Go/NoGo decision from Phet
-2. If Go → commit + push to Forgejo
-3. Proceed to Stage 11 — Resilience & Polish (edge cases, error states, first-run onboarding, README, read panel auto-refresh)
+1. Commit Stage 12 and push to Forgejo
+2. Begin Stage 13 planning (next session)

@@ -23,6 +23,8 @@ const projectVersions = new Map();
 const expandedVersions = new Set();
 // "projectId" strings for expanded Versions header
 const expandedVersionHeaders = new Set();
+// "projectId:version" strings for expanded Testing sub-header
+const expandedTestingSections = new Set();
 
 // Read panel auto-refresh timers: tabId -> intervalId
 const readPanelTimers = new Map();
@@ -401,11 +403,13 @@ function renderTreeView() {
 
       // Project row
       const row = document.createElement('div');
-      row.className = 'tree-project-row' + (activeTab === project.id ? ' active' : '');
+      const sessionTabId = project.id + '::session';
+      row.className = 'tree-project-row' + (activeTab === sessionTabId ? ' active' : '');
       row.draggable = true;
 
-      // Get status for dot colour
+      // Status dot: show on project row only for non-versioned projects
       const status = getProjectStatus(project.id);
+      const showProjectDot = !project.activeVersion;
 
       row.innerHTML = `
         <span class="tree-project-chevron">&#x25B8;</span>
@@ -414,7 +418,7 @@ function renderTreeView() {
           <span class="action-btn edit-btn" title="Edit project">&#x270E;</span>
           <span class="action-btn remove-btn" title="Remove project">&times;</span>
         </span>
-        <span class="status-dot ${status}"></span>
+        ${showProjectDot ? `<span class="status-dot ${status}"></span>` : ''}
       `;
 
       // Chevron: toggle expand
@@ -429,10 +433,16 @@ function renderTreeView() {
         projectEl.classList.toggle('expanded');
       });
 
-      // Row click: open tab
+      // Row click: expand/collapse
       row.addEventListener('click', (e) => {
         if (e.target.closest('.action-btn')) return;
-        openTab(project.id);
+        if (e.target.closest('.tree-project-chevron')) return; // chevron has its own handler
+        if (expandedProjects.has(project.id)) {
+          expandedProjects.delete(project.id);
+        } else {
+          expandedProjects.add(project.id);
+        }
+        renderTreeView();
       });
 
       // Edit button
@@ -557,10 +567,10 @@ function renderTreeView() {
         });
         filesEl.appendChild(shpEl);
 
-        // Test files — docs/{ProjectName}_test_stageXX.md
+        // Flat test files (legacy — not inside version folders)
         const vData2 = projectVersions.get(project.id);
-        if (vData2 && vData2.testFiles) {
-          for (const testFileName of vData2.testFiles) {
+        if (vData2 && vData2.flatTestFiles) {
+          for (const testFileName of vData2.flatTestFiles) {
             const testFilePath = 'docs/' + testFileName;
             const testEl = document.createElement('div');
             testEl.className = 'tree-file';
@@ -626,7 +636,9 @@ function renderVersionRow(container, project, ver, activeVersion) {
   const row = document.createElement('div');
   row.className = 'tree-version-row' + (isActive ? ' active-version' : '') + (isExpanded ? ' expanded' : '');
 
-  const hasChildren = ver.files.length > 0 || ver.patches.length > 0;
+  const hasChildren = ver.files.length > 0 || (ver.testFiles && ver.testFiles.length > 0) || ver.patches.length > 0;
+
+  const versionStatus = isActive ? getProjectStatus(project.id) : null;
 
   row.innerHTML = `
     ${hasChildren ? '<span class="tree-version-chevron">&#x25B8;</span>' : '<span class="tree-version-chevron" style="visibility:hidden">&#x25B8;</span>'}
@@ -635,8 +647,19 @@ function renderVersionRow(container, project, ver, activeVersion) {
     <span class="tree-version-actions">
       ${isActive ? '<span class="action-btn mark-complete-btn" title="Mark complete (git tag)">&#x2713;</span>' : ''}
       ${!isActive ? '<span class="action-btn set-active-btn" title="Set as active version">&#x25C9;</span>' : ''}
+      ${!isActive ? '<span class="action-btn remove-btn remove-version-btn" title="Remove version">&times;</span>' : ''}
     </span>
+    ${isActive ? `<span class="status-dot version-status-dot ${versionStatus}"></span>` : ''}
   `;
+
+  // Remove version button
+  const removeVerBtn = row.querySelector('.remove-version-btn');
+  if (removeVerBtn) {
+    removeVerBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showRemoveVersionConfirm(project, ver.version);
+    });
+  }
 
   // Chevron: toggle expand
   if (hasChildren) {
@@ -667,23 +690,16 @@ function renderVersionRow(container, project, ver, activeVersion) {
     }
     e.stopPropagation();
     if (isActive) {
-      // Already active — toggle expand
-      if (hasChildren) {
-        if (expandedVersions.has(expandKey)) {
-          expandedVersions.delete(expandKey);
-        } else {
-          expandedVersions.add(expandKey);
-        }
-        renderTreeView();
-      }
+      // Active version — open session tab
+      openSessionTab(project.id);
     } else {
-      // Not active — set as active
+      // Not active — set as active and open session tab
       await api('PUT', `/api/projects/${project.id}/active-version`, { version: ver.version });
       suppressRender = true;
       await loadProjects();
       suppressRender = false;
       await loadProjectVersions(project.id);
-      render();
+      openSessionTab(project.id);
       showToast('Active version changed to v' + ver.version + '. Remember to update CLAUDE.md to reflect the new active version.');
     }
   });
@@ -718,6 +734,47 @@ function renderVersionRow(container, project, ver, activeVersion) {
 
     container.appendChild(versionFiles);
 
+    // Testing sub-header (collapsible, nested under version)
+    if (ver.testFiles && ver.testFiles.length > 0) {
+      const testingKey = project.id + ':' + ver.version;
+      const testingExpanded = expandedTestingSections.has(testingKey);
+
+      const testingHeader = document.createElement('div');
+      testingHeader.className = 'tree-testing-header' + (testingExpanded ? ' expanded' : '');
+      testingHeader.innerHTML = `
+        <span class="tree-testing-chevron">&#x25B8;</span>
+        <span>Testing</span>
+        <span class="tree-testing-count">${ver.testFiles.length}</span>
+      `;
+      testingHeader.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (expandedTestingSections.has(testingKey)) {
+          expandedTestingSections.delete(testingKey);
+        } else {
+          expandedTestingSections.add(testingKey);
+        }
+        renderTreeView();
+      });
+      container.appendChild(testingHeader);
+
+      if (testingExpanded) {
+        const testingFiles = document.createElement('div');
+        testingFiles.className = 'tree-testing-files';
+        for (const testFileName of ver.testFiles) {
+          const testFilePath = ver.folder + '/' + testFileName;
+          const testEl = document.createElement('div');
+          testEl.className = 'tree-file tree-testing-file';
+          testEl.innerHTML = `<span class="tree-file-icon">&#x1F4CB;</span><span class="tree-file-name">${escapeHtml(testFileName)}</span>`;
+          testEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openFileTab(project.id, project.name, testFilePath);
+          });
+          testingFiles.appendChild(testEl);
+        }
+        container.appendChild(testingFiles);
+      }
+    }
+
     // Render patch versions nested under this version
     for (const patch of ver.patches) {
       renderPatchRow(container, project, patch, activeVersion);
@@ -733,7 +790,8 @@ function renderPatchRow(container, project, patch, activeVersion) {
   const row = document.createElement('div');
   row.className = 'tree-version-row tree-patch-row' + (isActive ? ' active-version' : '') + (isExpanded ? ' expanded' : '');
 
-  const hasFiles = patch.files.length > 0;
+  const hasFiles = patch.files.length > 0 || (patch.testFiles && patch.testFiles.length > 0);
+  const patchStatus = isActive ? getProjectStatus(project.id) : null;
 
   row.innerHTML = `
     ${hasFiles ? '<span class="tree-version-chevron">&#x25B8;</span>' : '<span class="tree-version-chevron" style="visibility:hidden">&#x25B8;</span>'}
@@ -742,7 +800,9 @@ function renderPatchRow(container, project, patch, activeVersion) {
     <span class="tree-version-actions">
       ${isActive ? '<span class="action-btn mark-complete-btn" title="Mark complete (git tag)">&#x2713;</span>' : ''}
       ${!isActive ? '<span class="action-btn set-active-btn" title="Set as active version">&#x25C9;</span>' : ''}
+      ${!isActive ? '<span class="action-btn remove-btn remove-version-btn" title="Remove version">&times;</span>' : ''}
     </span>
+    ${isActive ? `<span class="status-dot version-status-dot ${patchStatus}"></span>` : ''}
   `;
 
   // Mark complete button
@@ -751,6 +811,15 @@ function renderPatchRow(container, project, patch, activeVersion) {
     markCompleteBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       showMarkCompleteModal(project, patch.version);
+    });
+  }
+
+  // Remove version button
+  const removePatchBtn = row.querySelector('.remove-version-btn');
+  if (removePatchBtn) {
+    removePatchBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showRemoveVersionConfirm(project, patch.version);
     });
   }
 
@@ -769,21 +838,15 @@ function renderPatchRow(container, project, patch, activeVersion) {
     }
     e.stopPropagation();
     if (isActive) {
-      if (hasFiles) {
-        if (expandedVersions.has(expandKey)) {
-          expandedVersions.delete(expandKey);
-        } else {
-          expandedVersions.add(expandKey);
-        }
-        renderTreeView();
-      }
+      // Active patch version — open session tab
+      openSessionTab(project.id);
     } else {
       await api('PUT', `/api/projects/${project.id}/active-version`, { version: patch.version });
       suppressRender = true;
       await loadProjects();
       suppressRender = false;
       await loadProjectVersions(project.id);
-      render();
+      openSessionTab(project.id);
       showToast('Active version changed to v' + patch.version + '. Remember to update CLAUDE.md to reflect the new active version.');
     }
   });
@@ -807,6 +870,47 @@ function renderPatchRow(container, project, patch, activeVersion) {
     }
 
     container.appendChild(patchFiles);
+
+    // Testing sub-header for patch
+    if (patch.testFiles && patch.testFiles.length > 0) {
+      const testingKey = project.id + ':' + patch.version;
+      const testingExpanded = expandedTestingSections.has(testingKey);
+
+      const testingHeader = document.createElement('div');
+      testingHeader.className = 'tree-testing-header tree-testing-header-patch' + (testingExpanded ? ' expanded' : '');
+      testingHeader.innerHTML = `
+        <span class="tree-testing-chevron">&#x25B8;</span>
+        <span>Testing</span>
+        <span class="tree-testing-count">${patch.testFiles.length}</span>
+      `;
+      testingHeader.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (expandedTestingSections.has(testingKey)) {
+          expandedTestingSections.delete(testingKey);
+        } else {
+          expandedTestingSections.add(testingKey);
+        }
+        renderTreeView();
+      });
+      container.appendChild(testingHeader);
+
+      if (testingExpanded) {
+        const testingFiles = document.createElement('div');
+        testingFiles.className = 'tree-testing-files tree-testing-files-patch';
+        for (const testFileName of patch.testFiles) {
+          const testFilePath = patch.folder + '/' + testFileName;
+          const testEl = document.createElement('div');
+          testEl.className = 'tree-file tree-testing-file-patch';
+          testEl.innerHTML = `<span class="tree-file-icon">&#x1F4CB;</span><span class="tree-file-name">${escapeHtml(testFileName)}</span>`;
+          testEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openFileTab(project.id, project.name, testFilePath);
+          });
+          testingFiles.appendChild(testEl);
+        }
+        container.appendChild(testingFiles);
+      }
+    }
   }
 }
 
@@ -928,18 +1032,64 @@ function getTabInfo(tabId) {
   if (tabId === 'settings') {
     return { name: 'Settings', status: 'unknown' };
   }
+  // Session tab: "projectId::session"
+  if (tabId.endsWith('::session')) {
+    const projectId = tabId.replace('::session', '');
+    const project = findProject(projectId);
+    if (!project) return null;
+    return { name: project.name, status: getProjectStatus(projectId) };
+  }
+  // File tab: "projectId:filePath"
   if (tabId.includes(':')) {
     const [projectId, ...rest] = tabId.split(':');
     const filePath = rest.join(':');
     const project = findProject(projectId);
-    // Show just the filename in the tab, not the full path
     const displayName = filePath.split('/').pop() || filePath;
     return project ? { name: displayName, status: 'unknown' } : null;
   }
+  // Legacy bare projectId tab — shouldn't happen after migration
   const project = findProject(tabId);
   if (!project) return null;
-
   return { name: project.name, status: getProjectStatus(tabId) };
+}
+
+// --- Test File Detection ---
+
+function isTestFile(fileName) {
+  return /_test_stage\d+\.md$/.test(fileName);
+}
+
+// --- Session Content Helper ---
+
+function renderSessionContent(container, project, projectId) {
+  const instance = terminalInstances.get(projectId);
+
+  if (instance && instance.state === 'active') {
+    // Show the active terminal
+    showTerminal(projectId);
+  } else {
+    // Exited or no session — clean up old terminal and show start prompt
+    if (instance && instance.state === 'exited') {
+      if (instance.ws) instance.ws.close();
+      instance.terminal.dispose();
+      if (instance.container.parentNode) instance.container.remove();
+      terminalInstances.delete(projectId);
+    }
+
+    const prompt = document.createElement('div');
+    prompt.className = 'no-session';
+    prompt.innerHTML = `
+      <span class="no-session-text">No active session. Start Claude Code in this project?</span>
+      <div class="no-session-actions">
+        <button class="btn btn-primary" title="Launch Claude Code in this project directory">Start Claude Code</button>
+        <button class="btn" title="Open a plain shell in this project directory">Open Shell</button>
+      </div>
+      <div class="no-session-path">${escapeHtml(project.path)}</div>
+    `;
+    prompt.querySelector('.btn-primary').addEventListener('click', () => startSession(projectId, 'claude'));
+    prompt.querySelector('.btn:not(.btn-primary)').addEventListener('click', () => startSession(projectId, 'shell'));
+    container.appendChild(prompt);
+  }
 }
 
 // --- Tab Content ---
@@ -977,71 +1127,38 @@ function renderTabContent() {
     return;
   }
 
+  // Session tab: "projectId::session"
+  if (activeTab.endsWith('::session')) {
+    const projectId = activeTab.replace('::session', '');
+    const project = findProject(projectId);
+    if (!project) {
+      container.innerHTML = '<div class="no-session"><span class="no-session-text">Project not found</span></div>';
+      return;
+    }
+    renderSessionContent(container, project, projectId);
+    return;
+  }
+
+  // File tab: "projectId:filePath"
   if (activeTab.includes(':')) {
     const [projectId, ...rest] = activeTab.split(':');
     const fileName = rest.join(':');
     const project = findProject(projectId);
-    renderReadPanel(container, project, fileName);
+    if (isTestFile(fileName)) {
+      renderTestRunner(container, project, fileName);
+    } else {
+      renderReadPanel(container, project, fileName);
+    }
     return;
   }
 
+  // Legacy bare projectId tab — delegate to session renderer
   const project = findProject(activeTab);
   if (!project) {
     container.innerHTML = '<div class="no-session"><span class="no-session-text">Project not found</span></div>';
     return;
   }
-
-  const instance = terminalInstances.get(activeTab);
-
-  if (instance && (instance.state === 'active' || instance.state === 'exited')) {
-    // Show the terminal (active or exited — keep scroll history visible)
-    showTerminal(activeTab);
-
-    // If exited, overlay a restart bar at the bottom
-    if (instance.state === 'exited') {
-      const restartBar = document.createElement('div');
-      restartBar.className = 'session-restart-bar';
-      restartBar.innerHTML = `
-        <span>Session ended.</span>
-        <button class="btn btn-primary btn-sm">Restart Claude Code</button>
-        <button class="btn btn-sm">Open Shell</button>
-      `;
-      const restartClaude = restartBar.querySelector('.btn-primary');
-      const restartShell = restartBar.querySelector('.btn:not(.btn-primary)');
-      const projectId = activeTab;
-      restartClaude.addEventListener('click', () => {
-        // Dispose old terminal and start fresh
-        if (instance.ws) instance.ws.close();
-        instance.terminal.dispose();
-        if (instance.container.parentNode) instance.container.remove();
-        terminalInstances.delete(projectId);
-        startSession(projectId, 'claude');
-      });
-      restartShell.addEventListener('click', () => {
-        if (instance.ws) instance.ws.close();
-        instance.terminal.dispose();
-        if (instance.container.parentNode) instance.container.remove();
-        terminalInstances.delete(projectId);
-        startSession(projectId, 'shell');
-      });
-      container.appendChild(restartBar);
-    }
-  } else {
-    // No session — show start prompt
-    const prompt = document.createElement('div');
-    prompt.className = 'no-session';
-    prompt.innerHTML = `
-      <span class="no-session-text">No active session. Start Claude Code in this project?</span>
-      <div class="no-session-actions">
-        <button class="btn btn-primary" title="Launch Claude Code in this project directory">Start Claude Code</button>
-        <button class="btn" title="Open a plain shell in this project directory">Open Shell</button>
-      </div>
-      <div class="no-session-path">${escapeHtml(project.path)}</div>
-    `;
-    prompt.querySelector('.btn-primary').addEventListener('click', () => startSession(activeTab, 'claude'));
-    prompt.querySelector('.btn:not(.btn-primary)').addEventListener('click', () => startSession(activeTab, 'shell'));
-    container.appendChild(prompt);
-  }
+  renderSessionContent(container, project, activeTab);
 }
 
 function renderSettings(container) {
@@ -1261,13 +1378,260 @@ async function renderReadPanel(container, project, fileName) {
   }
 }
 
+// --- Interactive Test Runner ---
+
+async function renderTestRunner(container, project, fileName) {
+  const panel = document.createElement('div');
+  panel.className = 'test-runner';
+
+  panel.innerHTML = `
+    <div class="test-runner-header">
+      <div class="test-runner-title">
+        <h1>${escapeHtml(fileName.split('/').pop())}</h1>
+        <span class="test-runner-project">${escapeHtml(project.name)}</span>
+      </div>
+      <div class="test-runner-actions">
+        <span class="test-runner-progress"></span>
+        <button class="btn test-runner-save" disabled>Save</button>
+        <button class="btn open-editor-btn" title="Open in external editor">Open in Editor</button>
+      </div>
+    </div>
+    <div class="test-runner-content">
+      <div class="read-panel-loading">Loading...</div>
+    </div>
+  `;
+  container.appendChild(panel);
+
+  // Load file
+  let data;
+  try {
+    data = await api('GET', `/api/file/${project.id}?filePath=${encodeURIComponent(fileName)}`);
+  } catch (err) {
+    panel.querySelector('.test-runner-content').innerHTML = `<div class="read-panel-error">Failed to load file</div>`;
+    return;
+  }
+
+  if (data.error) {
+    panel.querySelector('.test-runner-content').innerHTML = `<div class="read-panel-error">${escapeHtml(data.error)}</div>`;
+    return;
+  }
+
+  // Wire "Open in Editor" button
+  panel.querySelector('.open-editor-btn').addEventListener('click', async () => {
+    await api('POST', '/api/open-editor', { filePath: data.fullPath });
+  });
+
+  // Parse markdown into structured items
+  const lines = data.content.split('\n');
+  const parsed = parseTestFile(lines);
+
+  // State tracking
+  let dirty = false;
+  const saveBtn = panel.querySelector('.test-runner-save');
+
+  function markDirty() {
+    dirty = true;
+    saveBtn.disabled = false;
+    saveBtn.classList.add('test-runner-dirty');
+  }
+
+  function markClean() {
+    dirty = false;
+    saveBtn.disabled = true;
+    saveBtn.classList.remove('test-runner-dirty');
+  }
+
+  function updateProgress() {
+    const total = parsed.items.filter(i => i.type === 'checkbox').length;
+    const checked = parsed.items.filter(i => i.type === 'checkbox' && i.checked).length;
+    panel.querySelector('.test-runner-progress').textContent = `${checked}/${total} passed`;
+  }
+
+  async function doSave() {
+    const content = reconstructTestFile(parsed);
+    const result = await api('PUT', `/api/file/${project.id}`, { filePath: fileName, content });
+    if (result.error) {
+      showToast('Save failed: ' + result.error);
+    } else {
+      markClean();
+    }
+  }
+
+  saveBtn.addEventListener('click', () => doSave());
+
+  // Render the content
+  const contentEl = panel.querySelector('.test-runner-content');
+  contentEl.innerHTML = '';
+  renderTestItems(contentEl, parsed, markDirty, scheduleAutoSave, updateProgress);
+  updateProgress();
+}
+
+/**
+ * Parse a test file into structured items.
+ * Each item is one of: { type: 'line', text } | { type: 'heading', text, level } |
+ * { type: 'checkbox', text, checked, comment, boldLabel }
+ */
+function parseTestFile(lines) {
+  const items = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Checkbox line: - [ ] or - [x]
+    const cbMatch = line.match(/^(\s*)-\s*\[([ xX])\]\s*(.*)/);
+    if (cbMatch) {
+      const checked = cbMatch[2].toLowerCase() === 'x';
+      const text = cbMatch[3];
+
+      // Check for bold label: **Label** rest
+      let boldLabel = null;
+      let afterLabel = text;
+      const boldMatch = text.match(/^\*\*(.+?)\*\*\s*(.*)/);
+      if (boldMatch) {
+        boldLabel = boldMatch[1];
+        afterLabel = boldMatch[2];
+      }
+
+      // Look ahead for comment lines: next lines starting with "  > "
+      let comment = '';
+      while (i + 1 < lines.length && lines[i + 1].match(/^\s*>\s/)) {
+        i++;
+        comment += (comment ? '\n' : '') + lines[i].replace(/^\s*>\s?/, '');
+      }
+
+      items.push({ type: 'checkbox', text: afterLabel, checked, comment, boldLabel, indent: cbMatch[1] });
+      i++;
+      continue;
+    }
+
+    // Heading
+    const headingMatch = line.match(/^(#{1,6})\s+(.*)/);
+    if (headingMatch) {
+      items.push({ type: 'heading', level: headingMatch[1].length, text: headingMatch[2] });
+      i++;
+      continue;
+    }
+
+    // Everything else
+    items.push({ type: 'line', text: line });
+    i++;
+  }
+  return { items };
+}
+
+/**
+ * Reconstruct the test file from parsed items back to markdown.
+ */
+function reconstructTestFile(parsed) {
+  const lines = [];
+  for (const item of parsed.items) {
+    if (item.type === 'heading') {
+      lines.push('#'.repeat(item.level) + ' ' + item.text);
+    } else if (item.type === 'checkbox') {
+      const mark = item.checked ? 'x' : ' ';
+      const indent = item.indent || '';
+      const label = item.boldLabel ? `**${item.boldLabel}** ` : '';
+      lines.push(`${indent}- [${mark}] ${label}${item.text}`);
+      if (item.comment.trim()) {
+        for (const commentLine of item.comment.split('\n')) {
+          lines.push(`  > ${commentLine}`);
+        }
+      }
+    } else {
+      lines.push(item.text);
+    }
+  }
+  return lines.join('\n');
+}
+
+/**
+ * Render parsed test items into the container DOM.
+ */
+function renderTestItems(contentEl, parsed, markDirty, scheduleAutoSave, updateProgress) {
+  for (let idx = 0; idx < parsed.items.length; idx++) {
+    const item = parsed.items[idx];
+
+    if (item.type === 'heading') {
+      const el = document.createElement('div');
+      el.className = 'test-section-heading test-section-h' + item.level;
+      el.textContent = item.text;
+      contentEl.appendChild(el);
+      continue;
+    }
+
+    if (item.type === 'checkbox') {
+      const row = document.createElement('div');
+      row.className = 'test-item' + (item.checked ? ' test-item-checked' : '');
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.className = 'test-checkbox';
+      checkbox.checked = item.checked;
+
+      const labelEl = document.createElement('div');
+      labelEl.className = 'test-item-label';
+      if (item.boldLabel) {
+        labelEl.innerHTML = `<strong>${escapeHtml(item.boldLabel)}</strong> ${escapeHtml(item.text)}`;
+      } else {
+        labelEl.textContent = item.text;
+      }
+
+      const commentInput = document.createElement('textarea');
+      commentInput.className = 'test-comment';
+      commentInput.placeholder = 'Add a comment...';
+      commentInput.value = item.comment;
+      commentInput.rows = 1;
+
+      // Auto-resize textarea
+      function autoResize() {
+        commentInput.style.height = 'auto';
+        commentInput.style.height = Math.max(commentInput.scrollHeight, 28) + 'px';
+      }
+
+      // Capture item reference for closures
+      const capturedItem = item;
+
+      checkbox.addEventListener('change', () => {
+        capturedItem.checked = checkbox.checked;
+        row.classList.toggle('test-item-checked', checkbox.checked);
+        markDirty();
+        updateProgress();
+      });
+
+      commentInput.addEventListener('input', () => {
+        capturedItem.comment = commentInput.value;
+        markDirty();
+        autoResize();
+      });
+
+      row.appendChild(checkbox);
+      row.appendChild(labelEl);
+      row.appendChild(commentInput);
+      contentEl.appendChild(row);
+
+      // Initial auto-resize after DOM insertion
+      requestAnimationFrame(autoResize);
+      continue;
+    }
+
+    // Plain line — render as paragraph if non-empty
+    if (item.text.trim()) {
+      const el = document.createElement('div');
+      el.className = 'test-line';
+      el.innerHTML = marked.parse(item.text, { gfm: true, breaks: false });
+      contentEl.appendChild(el);
+    }
+  }
+}
+
 // --- Tab Management ---
 
-function openTab(projectId) {
-  if (!openTabs.includes(projectId)) {
-    openTabs.push(projectId);
+function openSessionTab(projectId) {
+  const tabId = projectId + '::session';
+  if (!openTabs.includes(tabId)) {
+    openTabs.push(tabId);
   }
-  activeTab = projectId;
+  activeTab = tabId;
   render();
 }
 
@@ -1982,8 +2346,8 @@ function showRemoveConfirm(project) {
       await api('DELETE', `/api/projects/${project.id}`);
     }
 
-    openTabs = openTabs.filter(t => t !== project.id && !t.startsWith(project.id + ':'));
-    if (activeTab === project.id || activeTab?.startsWith(project.id + ':')) {
+    openTabs = openTabs.filter(t => t !== project.id + '::session' && !t.startsWith(project.id + ':'));
+    if (activeTab === project.id + '::session' || activeTab?.startsWith(project.id + ':')) {
       activeTab = openTabs.length > 0 ? openTabs[openTabs.length - 1] : null;
     }
 
@@ -2099,6 +2463,25 @@ function showMarkCompleteModal(project, version) {
   });
 }
 
+function showRemoveVersionConfirm(project, version) {
+  const body = `
+    <p>Delete version <strong>v${escapeHtml(version)}</strong> and all its files?</p>
+    <p style="margin-top:8px; font-size:12px; color:var(--status-waiting);">This will permanently delete the version folder from disk. This cannot be undone.</p>
+  `;
+
+  showModal('Remove Version', body, async (overlay) => {
+    const result = await api('DELETE', `/api/projects/${project.id}/versions/${version}`);
+    if (result.error) {
+      showToast(result.error);
+      return;
+    }
+
+    await loadProjectVersions(project.id);
+    renderTreeView();
+    showToast('Version v' + version + ' deleted.');
+  });
+}
+
 function showMigrationPrompt(project) {
   const body = `
     <p>This project has concept/tasklist files directly in <code>docs/</code>. Migrate them into a versioned folder structure?</p>
@@ -2161,8 +2544,9 @@ function initResize() {
 function initWindowResize() {
   window.addEventListener('resize', () => {
     // Fit the active terminal on window resize
-    if (activeTab && !activeTab.includes(':') && activeTab !== 'settings') {
-      const instance = terminalInstances.get(activeTab);
+    if (activeTab && activeTab.endsWith('::session')) {
+      const projectId = activeTab.replace('::session', '');
+      const instance = terminalInstances.get(projectId);
       if (instance && instance.container.style.display !== 'none') {
         try {
           instance.fitAddon.fit();
@@ -2234,6 +2618,12 @@ async function initApp() {
 
 document.getElementById('settingsEntry').addEventListener('click', openSettings);
 document.getElementById('addProjectBtn').addEventListener('click', showNewProjectWizard);
+document.getElementById('refreshBtn').addEventListener('click', async () => {
+  // Clear cached version data so it re-scans from disk
+  projectVersions.clear();
+  await loadProjects();
+  showToast('Tree refreshed.');
+});
 initResize();
 initWindowResize();
 initApp();

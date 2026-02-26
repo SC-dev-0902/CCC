@@ -51,17 +51,18 @@ function scanVersions(projectAbsPath, projectName) {
   const result = {
     versions: [],
     hasFlatDocs: detectFlatDocs(projectAbsPath, projectName),
-    testFiles: []
+    flatTestFiles: []  // Legacy: test files in flat docs/ (not inside version folders)
   };
 
   if (!fs.existsSync(docsDir)) return result;
 
-  // Scan for test files: {projectName}_test_stage*.md in docs/
+  // Scan for flat test files in docs/ (legacy backward compat)
   const allDocsFiles = fs.readdirSync(docsDir);
-  const testPattern = new RegExp(`^${projectName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}_test_stage\\d+\\.md$`);
+  const escapedName = projectName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const testPattern = new RegExp(`^${escapedName}_test_stage\\d+\\.md$`);
   for (const f of allDocsFiles) {
     if (testPattern.test(f) && fs.statSync(path.join(docsDir, f)).isFile()) {
-      result.testFiles.push(f);
+      result.flatTestFiles.push(f);
     }
   }
 
@@ -76,11 +77,14 @@ function scanVersions(projectAbsPath, projectName) {
     const versionDir = path.join(docsDir, entry.name);
     const parsed = parseVersionString(version);
 
+    const scanned = scanVersionFiles(versionDir, projectName);
+
     const versionInfo = {
       version,
       type: parsed.minor === 0 ? 'major' : 'minor',
       folder: path.join('docs', entry.name),
-      files: scanVersionFiles(versionDir, projectName),
+      files: scanned.files,
+      testFiles: scanned.testFiles,
       patches: []
     };
 
@@ -93,12 +97,14 @@ function scanVersions(projectAbsPath, projectName) {
 
       const patchVersion = patchMatch[1];
       const patchDir = path.join(versionDir, sub.name);
+      const patchScanned = scanVersionFiles(patchDir, projectName);
 
       versionInfo.patches.push({
         version: patchVersion,
         type: 'patch',
         folder: path.join('docs', entry.name, sub.name),
-        files: scanVersionFiles(patchDir, projectName)
+        files: patchScanned.files,
+        testFiles: patchScanned.testFiles
       });
     }
 
@@ -115,20 +121,29 @@ function scanVersions(projectAbsPath, projectName) {
 }
 
 /**
- * Scan a version directory for core files.
+ * Scan a version directory for core files and test files.
+ * Returns { files: string[], testFiles: string[] }
+ * Test files match {projectName}_test_stage\d+\.md
  */
 function scanVersionFiles(dirPath, projectName) {
-  const files = [];
-  if (!fs.existsSync(dirPath)) return files;
+  const result = { files: [], testFiles: [] };
+  if (!fs.existsSync(dirPath)) return result;
+
+  const escapedName = projectName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const testPattern = new RegExp(`^${escapedName}_test_stage\\d+\\.md$`);
 
   const entries = fs.readdirSync(dirPath);
   for (const name of entries) {
     const fullPath = path.join(dirPath, name);
     if (fs.statSync(fullPath).isFile() && name.endsWith('.md')) {
-      files.push(name);
+      if (testPattern.test(name)) {
+        result.testFiles.push(name);
+      } else {
+        result.files.push(name);
+      }
     }
   }
-  return files;
+  return result;
 }
 
 /**

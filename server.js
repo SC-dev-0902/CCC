@@ -252,6 +252,40 @@ app.get('/api/file/:projectId', (req, res) => {
   }
 });
 
+// Write a project file (for test runner save-back)
+app.put('/api/file/:projectId', (req, res) => {
+  const { projectId } = req.params;
+  const { filePath, content } = req.body;
+
+  if (!filePath) return res.status(400).json({ error: 'filePath is required' });
+  if (content === undefined) return res.status(400).json({ error: 'content is required' });
+
+  const project = projects.getAllProjects().projects.find(p => p.id === projectId);
+  if (!project) return res.status(404).json({ error: 'Project not found' });
+
+  const projectPath = projects.resolveProjectPath(project.path);
+
+  if (!fs.existsSync(projectPath)) {
+    return res.status(400).json({ error: 'Project directory does not exist: ' + project.path });
+  }
+
+  const fullPath = path.join(projectPath, filePath);
+
+  // Security: ensure the resolved path is within the project directory
+  const resolvedProject = path.resolve(projectPath);
+  const resolvedFile = path.resolve(fullPath);
+  if (!resolvedFile.startsWith(resolvedProject)) {
+    return res.status(403).json({ error: 'Access denied: path outside project directory' });
+  }
+
+  try {
+    fs.writeFileSync(fullPath, content, 'utf8');
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to write file: ' + err.message });
+  }
+});
+
 // Open a file in the configured external editor
 app.post('/api/open-editor', (req, res) => {
   const { filePath } = req.body;
@@ -357,6 +391,38 @@ app.put('/api/projects/:id/active-version', (req, res) => {
     res.json({ ok: true, activeVersion: version });
   } catch (err) {
     res.status(500).json({ error: 'Failed to set active version: ' + err.message });
+  }
+});
+
+// Delete a version
+app.delete('/api/projects/:id/versions/:version', (req, res) => {
+  try {
+    const found = findProjectWithPath(req.params.id);
+    if (!found) return res.status(404).json({ error: 'Project not found' });
+
+    // Prevent deleting the active version
+    if (found.project.activeVersion === req.params.version) {
+      return res.status(400).json({ error: 'Cannot delete the active version. Switch to a different version first.' });
+    }
+
+    const folder = versions.getVersionFolder(req.params.version);
+    const absFolder = path.join(found.absPath, folder);
+
+    if (!fs.existsSync(absFolder)) {
+      return res.status(404).json({ error: 'Version folder not found: ' + folder });
+    }
+
+    // Security: ensure path is within project
+    const resolvedProject = path.resolve(found.absPath);
+    const resolvedFolder = path.resolve(absFolder);
+    if (!resolvedFolder.startsWith(resolvedProject)) {
+      return res.status(403).json({ error: 'Access denied: path outside project directory' });
+    }
+
+    fs.rmSync(absFolder, { recursive: true, force: true });
+    res.json({ ok: true, deleted: folder });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete version: ' + err.message });
   }
 });
 
