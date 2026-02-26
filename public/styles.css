@@ -577,6 +577,13 @@ html, body {
   font-size: 15px;
 }
 
+.version-label {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
 /* --- Resize Handle --- */
 
 .resize-handle {
@@ -1269,6 +1276,76 @@ html, body {
 
 .new-group-input.visible {
   display: block;
+}
+
+/* --- Import Project --- */
+
+.wizard-import-link {
+  text-align: center;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.wizard-import-link a {
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.wizard-import-link a:hover {
+  text-decoration: underline;
+}
+
+.import-detected-files {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-app);
+  padding: 8px 0;
+  margin-bottom: 12px;
+}
+
+.import-file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+
+.import-file-row .file-status {
+  flex-shrink: 0;
+  font-size: 13px;
+}
+
+.import-file-row .file-status.found {
+  color: var(--status-completed);
+}
+
+.import-file-row .file-status.missing {
+  color: var(--status-waiting);
+}
+
+.import-info-panel {
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  background: rgba(88, 166, 255, 0.06);
+  border: 1px solid rgba(88, 166, 255, 0.2);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.import-info-panel p {
+  margin: 0 0 4px 0;
+  line-height: 1.5;
+}
+
+.import-info-panel p:last-child {
+  margin-bottom: 0;
 }
 
 /* --- Loading Overlay --- */

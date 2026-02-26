@@ -694,6 +694,162 @@ app.post('/api/scaffold-project', (req, res) => {
   }
 });
 
+// --- Version / Build Info ---
+
+const APP_VERSION = require('./package.json').version;
+let appBuild = null;
+
+// Get git commit count at startup (non-blocking)
+const { execFile: execFileCb } = require('child_process');
+execFileCb('git', ['rev-list', '--count', 'HEAD'], { cwd: __dirname }, (err, stdout) => {
+  if (!err && stdout) appBuild = stdout.trim();
+});
+
+app.get('/api/version', (req, res) => {
+  res.json({ version: APP_VERSION, build: appBuild });
+});
+
+// --- Scan / Import API ---
+
+// Scan an existing project directory for core files
+app.post('/api/scan-project', (req, res) => {
+  const { dirPath } = req.body;
+  if (!dirPath || !dirPath.trim()) {
+    return res.status(400).json({ error: 'dirPath is required' });
+  }
+
+  try {
+    const absPath = path.resolve(dirPath.trim());
+
+    if (!fs.existsSync(absPath)) {
+      return res.status(400).json({ valid: false, reason: 'not_found', message: 'Directory does not exist.' });
+    }
+    const stat = fs.statSync(absPath);
+    if (!stat.isDirectory()) {
+      return res.status(400).json({ valid: false, reason: 'not_directory', message: 'Path is not a directory.' });
+    }
+
+    const folderName = path.basename(absPath);
+
+    // 1. Check CLAUDE.md
+    const claudePath = path.join(absPath, 'CLAUDE.md');
+    const claudeFound = fs.existsSync(claudePath);
+
+    // 2. Search for *_concept.md
+    const conceptMatches = [];
+    const searchDirs = [];
+
+    // Versioned dirs: docs/vX.Y/
+    const docsDir = path.join(absPath, 'docs');
+    if (fs.existsSync(docsDir) && fs.statSync(docsDir).isDirectory()) {
+      const docsEntries = fs.readdirSync(docsDir, { withFileTypes: true });
+      for (const entry of docsEntries) {
+        if (entry.isDirectory() && /^v\d+\.\d+$/.test(entry.name)) {
+          searchDirs.push({ dir: path.join(docsDir, entry.name), rel: path.join('docs', entry.name) });
+        }
+      }
+      // Also search docs/ itself (flat structure)
+      searchDirs.push({ dir: docsDir, rel: 'docs' });
+    }
+    // Also search project root
+    searchDirs.push({ dir: absPath, rel: '' });
+
+    for (const { dir, rel } of searchDirs) {
+      if (!fs.existsSync(dir)) continue;
+      const files = fs.readdirSync(dir);
+      for (const file of files) {
+        if (file.endsWith('_concept.md')) {
+          const fullFile = path.join(dir, file);
+          if (fs.statSync(fullFile).isFile()) {
+            conceptMatches.push(rel ? path.join(rel, file) : file);
+          }
+        }
+      }
+    }
+
+    // Hard gate: no concept doc
+    if (conceptMatches.length === 0) {
+      return res.json({
+        valid: false,
+        reason: 'no_concept_doc',
+        message: 'No concept document found. CCC requires a concept doc before importing. Use Claude.ai to create one from your project idea, then try again.'
+      });
+    }
+
+    // 3. Search for *_tasklist.md in same locations
+    const tasklistMatches = [];
+    for (const { dir, rel } of searchDirs) {
+      if (!fs.existsSync(dir)) continue;
+      const files = fs.readdirSync(dir);
+      for (const file of files) {
+        if (file.endsWith('_tasklist.md')) {
+          const fullFile = path.join(dir, file);
+          if (fs.statSync(fullFile).isFile()) {
+            tasklistMatches.push(rel ? path.join(rel, file) : file);
+          }
+        }
+      }
+    }
+
+    // 4. Version structure detection via scanVersions
+    const versionData = versions.scanVersions(absPath, folderName);
+
+    // 5. Compute registrationPath (relative to projectRoot if applicable)
+    let registrationPath = absPath;
+    try {
+      const settingsPath = path.join(__dirname, 'data', 'settings.json');
+      const settingsData = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      if (settingsData.projectRoot) {
+        const root = path.resolve(settingsData.projectRoot);
+        if (absPath.startsWith(root + path.sep) || absPath === root) {
+          registrationPath = path.relative(root, absPath);
+        }
+      }
+    } catch (e) {
+      // Fall back to absolute path
+    }
+
+    // Pick best concept match (prefer versioned over flat over root)
+    const bestConcept = conceptMatches[0];
+    const bestTasklist = tasklistMatches.length > 0 ? tasklistMatches[0] : null;
+
+    // Determine suggested active version from versioned docs
+    let suggestedActiveVersion = null;
+    if (versionData.versions.length > 0) {
+      suggestedActiveVersion = versionData.versions[versionData.versions.length - 1].version;
+    }
+
+    res.json({
+      valid: true,
+      absPath,
+      registrationPath,
+      folderName,
+      detected: {
+        claude: { found: claudeFound, path: claudeFound ? 'CLAUDE.md' : null },
+        concept: {
+          found: true,
+          path: bestConcept,
+          ambiguous: conceptMatches.length > 1,
+          allMatches: conceptMatches
+        },
+        tasklist: {
+          found: tasklistMatches.length > 0,
+          path: bestTasklist,
+          ambiguous: tasklistMatches.length > 1,
+          allMatches: tasklistMatches
+        }
+      },
+      versioning: {
+        hasVersionedDocs: versionData.versions.length > 0,
+        hasFlatDocs: versionData.hasFlatDocs,
+        suggestedActiveVersion
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to scan project: ' + err.message });
+  }
+});
+
 // --- Session API ---
 
 // Start a session for a project

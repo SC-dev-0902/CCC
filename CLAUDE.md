@@ -22,6 +22,7 @@ Read `docs/CCC_concept.md` before starting any task. It is the single source of 
 ## Behavioural Rules
 
 - **Never hardcode the port.** Always read from `process.env.PORT`. Default is 3000, defined in `.env`.
+- **Never hardcode the referral URL.** Always read from `process.env.CLAUDE_REFERRAL_URL`. Falls back to `https://claude.ai` if not set.
 - **Never commit `.env`.** It is in `.gitignore`. The repo ships with `.env.example`.
 - **Never begin the next stage without an explicit Go from the developer.**
 - **Never modify files in an imported project directory.** CCC is read-only on the filesystem except for its own `projects.json` and `settings.json`.

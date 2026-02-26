@@ -190,14 +190,14 @@
 **Focus:** Bring existing projects under CCC management. Non-destructive, filesystem read-only.
 
 ### Tasks
-- [ ] Import UI: point at existing directory
-- [ ] Hard gate: block import if `*_concept.md` is absent, explain why
-- [ ] Auto-detect core filenames (concept, tasklist, CLAUDE.md)
-- [ ] Ambiguous detection: ask user to confirm mappings
-- [ ] Missing CLAUDE.md: offer to generate from concept doc (via Claude.ai redirect or API if configured)
-- [ ] Missing tasklist: offer to generate from concept doc
-- [ ] Group assignment: existing or new
-- [ ] Register in `projects.json` — no filesystem writes to imported project
+- [x] Import UI: point at existing directory
+- [x] Hard gate: block import if `*_concept.md` is absent, explain why
+- [x] Auto-detect core filenames (concept, tasklist, CLAUDE.md)
+- [x] Ambiguous detection: ask user to confirm mappings
+- [x] ~~Missing CLAUDE.md: offer to generate from concept doc~~ — Skipped: info notice only, user creates docs via Claude.ai before import
+- [x] ~~Missing tasklist: offer to generate from concept doc~~ — Skipped: info notice only, user creates docs via Claude.ai before import
+- [x] Group assignment: existing or new
+- [x] Register in `projects.json` — no filesystem writes to imported project
 
 ### Go/NoGo Gate
 > Does import work cleanly for projects that follow the naming convention?
@@ -266,6 +266,13 @@
 - [ ] App handles invalid project paths gracefully
 - [ ] Session crash recovery: detect exited PTY, offer restart
 - [ ] Port conflict: clear error message if PORT is already in use
+- [ ] **First-run onboarding: run `claude --version` on startup**
+  - [ ] SUCCESS → proceed to main UI normally
+  - [ ] FAIL → show onboarding screen: *"CCC requires Claude Code. It looks like Claude Code isn't installed or authenticated yet."*
+  - [ ] Onboarding screen shows "Get Claude Code →" button linking to `CLAUDE_REFERRAL_URL` from `.env` (falls back to `https://claude.ai` if not set)
+  - [ ] Onboarding screen shows instructions for users who have Claude Code but haven't authenticated
+  - [ ] Check runs silently on every subsequent launch — onboarding only reappears if `claude` is no longer detected
+  - [ ] Add `CLAUDE_REFERRAL_URL` to `.env.example` with comment explaining its purpose
 - [ ] `README.md` written: install, configure, run (includes macOS target note)
 - [ ] `.env.example` complete and documented
 - [ ] All console errors resolved

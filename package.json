@@ -1,6 +1,6 @@
 {
   "name": "ccc",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Claude Command Center — unified dashboard for managing multiple Claude Code sessions",
   "main": "server.js",
   "scripts": {

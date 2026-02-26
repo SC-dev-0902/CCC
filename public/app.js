@@ -1277,6 +1277,7 @@ function showNewProjectWizard() {
           </div>
         </div>
         <div class="wizard-error" id="wizardError"></div>
+        <div class="wizard-import-link">or <a id="wizardImportLink">Import Existing Project</a></div>
       </div>
       <div class="modal-footer">
         <button class="btn modal-cancel">Cancel</button>
@@ -1320,6 +1321,12 @@ function showNewProjectWizard() {
     showBrowseModal(locInput.value || settings.projectRoot || '/', (selected) => {
       locInput.value = selected;
     });
+  });
+
+  // Import link
+  overlay.querySelector('#wizardImportLink').addEventListener('click', () => {
+    overlay.remove();
+    showImportProjectModal();
   });
 
   // Create button
@@ -1396,57 +1403,315 @@ function showNewProjectWizard() {
   overlay.querySelector('#wizardName').focus();
 }
 
-// Add Project (Import — retained for Stage 08)
+// Import Existing Project (two-phase modal)
 
-function showAddProjectModal() {
-  const groupOptions = groups.map(g =>
-    `<option value="${escapeHtml(g.name)}">${escapeHtml(g.name)}</option>`
-  ).join('');
+function showImportProjectModal(prefillPath) {
+  const existing = document.getElementById('modal');
+  if (existing) existing.remove();
+  const existingImport = document.getElementById('importModal');
+  if (existingImport) existingImport.remove();
 
-  const body = `
-    <div class="settings-group">
-      <label>Project Name</label>
-      <input type="text" id="addName" placeholder="My Project">
-    </div>
-    <div class="settings-group">
-      <label>Path</label>
-      <div class="input-with-btn">
-        <input type="text" id="addPath" value="${escapeHtml(settings.projectRoot || '')}" placeholder="/path/to/project">
-        <button class="btn browse-btn" id="addPathBrowse" title="Browse filesystem to select project path">Browse</button>
+  const overlay = document.createElement('div');
+  overlay.id = 'importModal';
+  overlay.className = 'modal-overlay';
+
+  // State across phases
+  let scanResult = null;
+
+  // --- Phase 1: Directory + Scan ---
+  function renderPhase1() {
+    overlay.innerHTML = `
+      <div class="modal modal-wizard">
+        <div class="modal-header">
+          <span class="modal-title">Import Existing Project</span>
+          <span class="modal-close">&times;</span>
+        </div>
+        <div class="modal-body">
+          <div class="settings-group">
+            <label>Directory</label>
+            <div class="input-with-btn" style="max-width:100%;">
+              <input type="text" id="importPath" value="${escapeHtml(prefillPath || settings.projectRoot || '')}" placeholder="/path/to/project">
+              <button class="btn browse-btn" id="importBrowse">Browse</button>
+            </div>
+          </div>
+          <div class="wizard-error" id="importError"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn modal-cancel">Cancel</button>
+          <button class="btn btn-primary" id="importScan">Scan</button>
+        </div>
       </div>
-    </div>
-    <div class="settings-group">
-      <label>Group</label>
-      <select id="addGroup">${groupOptions}</select>
-    </div>
-  `;
+    `;
 
-  showModal('Add Project', body, async (overlay) => {
-    const name = overlay.querySelector('#addName').value.trim();
-    const path = overlay.querySelector('#addPath').value.trim();
-    const group = overlay.querySelector('#addGroup').value;
-    if (!name || !path) return;
+    // Close handlers
+    overlay.querySelector('.modal-close').addEventListener('click', () => overlay.remove());
+    overlay.querySelector('.modal-cancel').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) overlay.remove();
+    });
 
-    await api('POST', '/api/projects', {
-      name,
-      path,
-      group,
-      coreFiles: {
-        claude: 'CLAUDE.md',
-        concept: `docs/${name}_concept.md`,
-        tasklist: `docs/${name}_tasklist.md`
+    // Browse
+    overlay.querySelector('#importBrowse').addEventListener('click', (e) => {
+      e.preventDefault();
+      const pathInput = overlay.querySelector('#importPath');
+      showBrowseModal(pathInput.value || settings.projectRoot || '/', (selected) => {
+        pathInput.value = selected;
+      });
+    });
+
+    // Scan
+    overlay.querySelector('#importScan').addEventListener('click', async () => {
+      const errorEl = overlay.querySelector('#importError');
+      errorEl.classList.remove('visible');
+      errorEl.textContent = '';
+
+      const dirVal = overlay.querySelector('#importPath').value.trim();
+      if (!dirVal) {
+        errorEl.textContent = 'Directory path is required.';
+        errorEl.classList.add('visible');
+        return;
+      }
+
+      const scanBtn = overlay.querySelector('#importScan');
+      scanBtn.disabled = true;
+      const loader = showLoadingOverlay(overlay);
+
+      try {
+        const result = await api('POST', '/api/scan-project', { dirPath: dirVal });
+
+        if (result.error) {
+          errorEl.textContent = result.error;
+          errorEl.classList.add('visible');
+          scanBtn.disabled = false;
+          hideLoadingOverlay(loader);
+          return;
+        }
+
+        if (!result.valid) {
+          errorEl.textContent = result.message || 'Scan failed.';
+          errorEl.classList.add('visible');
+          scanBtn.disabled = false;
+          hideLoadingOverlay(loader);
+          return;
+        }
+
+        // Success — move to Phase 2
+        scanResult = result;
+        hideLoadingOverlay(loader);
+        renderPhase2();
+      } catch (err) {
+        errorEl.textContent = 'Request failed: ' + (err.message || 'Unknown error');
+        errorEl.classList.add('visible');
+        scanBtn.disabled = false;
+        hideLoadingOverlay(loader);
       }
     });
-    await loadProjects();
-  });
 
-  document.getElementById('addPathBrowse').addEventListener('click', (e) => {
-    e.preventDefault();
-    const pathInput = document.getElementById('addPath');
-    showBrowseModal(pathInput.value || settings.projectRoot || '/', (selected) => {
-      pathInput.value = selected;
+    overlay.querySelector('#importPath').focus();
+  }
+
+  // --- Phase 2: Confirm & Import ---
+  function renderPhase2() {
+    const d = scanResult.detected;
+
+    // Build detected files panel
+    const claudeRow = d.claude.found
+      ? `<div class="import-file-row"><span class="file-status found">&#10003;</span> CLAUDE.md</div>`
+      : `<div class="import-file-row"><span class="file-status missing">&#10007;</span> CLAUDE.md — not found</div>`;
+
+    let conceptRow;
+    if (d.concept.ambiguous) {
+      const opts = d.concept.allMatches.map(m =>
+        `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`
+      ).join('');
+      conceptRow = `<div class="import-file-row"><span class="file-status found">&#10003;</span>
+        Concept: <select id="importConceptSelect" style="margin-left:4px;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text-primary);font-size:12px;padding:2px 6px;">${opts}</select>
+      </div>`;
+    } else {
+      conceptRow = `<div class="import-file-row"><span class="file-status found">&#10003;</span> ${escapeHtml(d.concept.path)}</div>`;
+    }
+
+    let tasklistRow;
+    if (!d.tasklist.found) {
+      tasklistRow = `<div class="import-file-row"><span class="file-status missing">&#10007;</span> Tasklist — not found</div>`;
+    } else if (d.tasklist.ambiguous) {
+      const opts = d.tasklist.allMatches.map(m =>
+        `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`
+      ).join('');
+      tasklistRow = `<div class="import-file-row"><span class="file-status found">&#10003;</span>
+        Tasklist: <select id="importTasklistSelect" style="margin-left:4px;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text-primary);font-size:12px;padding:2px 6px;">${opts}</select>
+      </div>`;
+    } else {
+      tasklistRow = `<div class="import-file-row"><span class="file-status found">&#10003;</span> ${escapeHtml(d.tasklist.path)}</div>`;
+    }
+
+    // Info notices
+    const notices = [];
+    if (!d.claude.found) {
+      notices.push('No CLAUDE.md detected. You can generate one using Claude.ai.');
+    }
+    if (!d.tasklist.found) {
+      notices.push('No tasklist detected. You can create one using Claude.ai.');
+    }
+    if (scanResult.versioning.hasVersionedDocs && scanResult.versioning.suggestedActiveVersion) {
+      notices.push(`Versioned structure detected. Active version will be set to v${escapeHtml(scanResult.versioning.suggestedActiveVersion)}.`);
+    }
+
+    const infoHtml = notices.length > 0
+      ? `<div class="import-info-panel">${notices.map(n => `<p>${n}</p>`).join('')}</div>`
+      : '';
+
+    // Group options
+    const groupOptions = groups.map(g =>
+      `<option value="${escapeHtml(g.name)}" ${g.name === 'Parked' ? 'selected' : ''}>${escapeHtml(g.name)}</option>`
+    ).join('');
+
+    overlay.innerHTML = `
+      <div class="modal modal-wizard">
+        <div class="modal-header">
+          <span class="modal-title">Import Existing Project</span>
+          <span class="modal-close">&times;</span>
+        </div>
+        <div class="modal-body">
+          <div style="font-family:var(--font-mono);font-size:12px;color:var(--accent);margin-bottom:12px;word-break:break-all;">${escapeHtml(scanResult.absPath)}</div>
+
+          <div class="settings-group">
+            <label>Detected Files</label>
+            <div class="import-detected-files">
+              ${claudeRow}
+              ${conceptRow}
+              ${tasklistRow}
+            </div>
+          </div>
+
+          ${infoHtml}
+
+          <div class="settings-group">
+            <label>Project Name</label>
+            <input type="text" id="importName" value="${escapeHtml(scanResult.folderName)}">
+          </div>
+          <div class="settings-group">
+            <label>Group</label>
+            <select id="importGroup">
+              ${groupOptions}
+              <option value="__new__">-- Create New --</option>
+            </select>
+            <div class="new-group-input" id="importNewGroupWrap">
+              <input type="text" id="importNewGroup" placeholder="New group name">
+            </div>
+          </div>
+          <div class="wizard-error" id="importError"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" id="importBack">Back</button>
+          <button class="btn btn-primary" id="importSubmit">Import</button>
+        </div>
+      </div>
+    `;
+
+    // Close handlers
+    overlay.querySelector('.modal-close').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) overlay.remove();
     });
-  });
+
+    // Back button — return to Phase 1, preserve path
+    overlay.querySelector('#importBack').addEventListener('click', () => {
+      prefillPath = scanResult.absPath;
+      renderPhase1();
+    });
+
+    // Group dropdown — show/hide new group input
+    const groupSelect = overlay.querySelector('#importGroup');
+    groupSelect.addEventListener('change', () => {
+      const wrap = overlay.querySelector('#importNewGroupWrap');
+      if (groupSelect.value === '__new__') {
+        wrap.classList.add('visible');
+        overlay.querySelector('#importNewGroup').focus();
+      } else {
+        wrap.classList.remove('visible');
+      }
+    });
+
+    // Import button
+    overlay.querySelector('#importSubmit').addEventListener('click', async () => {
+      const errorEl = overlay.querySelector('#importError');
+      errorEl.classList.remove('visible');
+      errorEl.textContent = '';
+
+      const nameVal = overlay.querySelector('#importName').value.trim();
+      if (!nameVal) {
+        errorEl.textContent = 'Project name is required.';
+        errorEl.classList.add('visible');
+        return;
+      }
+
+      let groupVal = groupSelect.value;
+      if (groupVal === '__new__') {
+        groupVal = overlay.querySelector('#importNewGroup').value.trim();
+        if (!groupVal) {
+          errorEl.textContent = 'Please enter a name for the new group.';
+          errorEl.classList.add('visible');
+          return;
+        }
+      }
+
+      // Resolve selected concept/tasklist (from dropdowns if ambiguous)
+      const conceptPath = d.concept.ambiguous
+        ? overlay.querySelector('#importConceptSelect').value
+        : d.concept.path;
+      const tasklistPath = d.tasklist.ambiguous
+        ? (overlay.querySelector('#importTasklistSelect')?.value || null)
+        : d.tasklist.path;
+
+      const importBtn = overlay.querySelector('#importSubmit');
+      importBtn.disabled = true;
+      const loader = showLoadingOverlay(overlay);
+
+      try {
+        const result = await api('POST', '/api/projects', {
+          name: nameVal,
+          path: scanResult.registrationPath,
+          group: groupVal,
+          coreFiles: {
+            claude: d.claude.found ? 'CLAUDE.md' : '',
+            concept: conceptPath || '',
+            tasklist: tasklistPath || ''
+          }
+        });
+
+        if (result.error) {
+          errorEl.textContent = result.error;
+          errorEl.classList.add('visible');
+          importBtn.disabled = false;
+          hideLoadingOverlay(loader);
+          return;
+        }
+
+        // Set active version if versioned structure detected
+        if (scanResult.versioning.suggestedActiveVersion && result.id) {
+          await api('PUT', `/api/projects/${result.id}/active-version`, {
+            version: scanResult.versioning.suggestedActiveVersion
+          });
+        }
+
+        overlay.remove();
+        await loadProjects();
+        showToast(`Project "${nameVal}" imported.`);
+      } catch (err) {
+        errorEl.textContent = 'Import failed: ' + (err.message || 'Unknown error');
+        errorEl.classList.add('visible');
+        importBtn.disabled = false;
+        hideLoadingOverlay(loader);
+      }
+    });
+
+    overlay.querySelector('#importName').focus();
+  }
+
+  // Start with Phase 1
+  document.body.appendChild(overlay);
+  renderPhase1();
 }
 
 // Edit Project
@@ -1709,3 +1974,13 @@ document.getElementById('addProjectBtn').addEventListener('click', showNewProjec
 initResize();
 initWindowResize();
 loadSettings().then(() => loadProjects());
+
+// Load version info
+api('GET', '/api/version').then(data => {
+  if (data.version) {
+    const label = document.getElementById('versionLabel');
+    if (label) {
+      label.textContent = data.build ? `v${data.version} · Build ${data.build}` : `v${data.version}`;
+    }
+  }
+});
