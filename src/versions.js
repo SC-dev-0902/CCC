@@ -50,10 +50,20 @@ function scanVersions(projectAbsPath, projectName) {
   const docsDir = path.join(projectAbsPath, 'docs');
   const result = {
     versions: [],
-    hasFlatDocs: detectFlatDocs(projectAbsPath, projectName)
+    hasFlatDocs: detectFlatDocs(projectAbsPath, projectName),
+    testFiles: []
   };
 
   if (!fs.existsSync(docsDir)) return result;
+
+  // Scan for test files: {projectName}_test_stage*.md in docs/
+  const allDocsFiles = fs.readdirSync(docsDir);
+  const testPattern = new RegExp(`^${projectName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}_test_stage\\d+\\.md$`);
+  for (const f of allDocsFiles) {
+    if (testPattern.test(f) && fs.statSync(path.join(docsDir, f)).isFile()) {
+      result.testFiles.push(f);
+    }
+  }
 
   const entries = fs.readdirSync(docsDir, { withFileTypes: true });
 

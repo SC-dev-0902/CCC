@@ -2,8 +2,17 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const DATA_FILE = path.join(__dirname, '..', 'data', 'projects.json');
-const SETTINGS_FILE = path.join(__dirname, '..', 'data', 'settings.json');
+const DATA_DIR = path.join(__dirname, '..', 'data');
+const DATA_FILE = path.join(DATA_DIR, 'projects.json');
+const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
+
+const DEFAULT_DATA = {
+  groups: [
+    { name: 'Active', order: 0 },
+    { name: 'Parked', order: 1 }
+  ],
+  projects: []
+};
 
 /**
  * Resolve a project's relative path to an absolute path using settings.projectRoot.
@@ -24,8 +33,17 @@ function resolveProjectPath(projectPath) {
 }
 
 function readData() {
-  const raw = fs.readFileSync(DATA_FILE, 'utf8');
-  return JSON.parse(raw);
+  try {
+    const raw = fs.readFileSync(DATA_FILE, 'utf8');
+    return JSON.parse(raw);
+  } catch (e) {
+    // First run or corrupted file — create defaults
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    writeData(DEFAULT_DATA);
+    return JSON.parse(JSON.stringify(DEFAULT_DATA));
+  }
 }
 
 function writeData(data) {

@@ -24,6 +24,9 @@ const expandedVersions = new Set();
 // "projectId" strings for expanded Versions header
 const expandedVersionHeaders = new Set();
 
+// Read panel auto-refresh timers: tabId -> intervalId
+const readPanelTimers = new Map();
+
 // --- API ---
 
 async function api(method, url, body) {
@@ -297,7 +300,9 @@ async function startSession(projectId, command) {
     const result = await api('POST', `/api/sessions/${projectId}`, { command });
     if (result.error) {
       console.error('Session start failed:', result.error);
-      alert('Failed to start session: ' + result.error);
+      instance.state = 'none';
+      renderTabContent();
+      showToast('Failed to start session: ' + result.error);
       return;
     }
 
@@ -308,7 +313,7 @@ async function startSession(projectId, command) {
     renderTabContent();
   } catch (err) {
     console.error('startSession error:', err);
-    alert('Error starting session: ' + err.message);
+    showToast('Error starting session: ' + err.message);
   }
 }
 
@@ -479,6 +484,11 @@ function renderTreeView() {
       if (project.activeVersion) {
         // --- Versioned project ---
 
+        // Lazy-load version data (including test files) when project is expanded
+        if (expandedProjects.has(project.id) && !projectVersions.has(project.id)) {
+          loadProjectVersions(project.id).then(() => renderTreeView());
+        }
+
         // Versions header
         const versionsHeaderExpanded = expandedVersionHeaders.has(project.id);
         const versionsHeader = document.createElement('div');
@@ -546,6 +556,22 @@ function renderTreeView() {
           openFileTab(project.id, project.name, shpFilePath);
         });
         filesEl.appendChild(shpEl);
+
+        // Test files — docs/{ProjectName}_test_stageXX.md
+        const vData2 = projectVersions.get(project.id);
+        if (vData2 && vData2.testFiles) {
+          for (const testFileName of vData2.testFiles) {
+            const testFilePath = 'docs/' + testFileName;
+            const testEl = document.createElement('div');
+            testEl.className = 'tree-file';
+            testEl.innerHTML = `<span class="tree-file-icon">&#x1F4CB;</span><span class="tree-file-name">${escapeHtml(testFileName)}</span>`;
+            testEl.addEventListener('click', (e) => {
+              e.stopPropagation();
+              openFileTab(project.id, project.name, testFilePath);
+            });
+            filesEl.appendChild(testEl);
+          }
+        }
 
       } else {
         // --- Non-versioned project: show flat coreFiles ---
@@ -926,6 +952,14 @@ function renderTabContent() {
     inst.container.style.display = 'none';
   });
 
+  // Clear read panel auto-refresh timers for tabs that are no longer active
+  for (const [tabId, timerId] of readPanelTimers) {
+    if (tabId !== activeTab) {
+      clearInterval(timerId);
+      readPanelTimers.delete(tabId);
+    }
+  }
+
   // Remove everything except terminal containers
   Array.from(container.children).forEach(child => {
     if (!child.classList.contains('terminal-container')) {
@@ -959,18 +993,40 @@ function renderTabContent() {
 
   const instance = terminalInstances.get(activeTab);
 
-  if (instance && instance.state === 'active') {
-    // Show the existing terminal
+  if (instance && (instance.state === 'active' || instance.state === 'exited')) {
+    // Show the terminal (active or exited — keep scroll history visible)
     showTerminal(activeTab);
-  } else {
-    // Clean up exited terminal
-    if (instance && instance.state === 'exited') {
-      if (instance.ws) instance.ws.close();
-      instance.terminal.dispose();
-      if (instance.container.parentNode) instance.container.remove();
-      terminalInstances.delete(activeTab);
-    }
 
+    // If exited, overlay a restart bar at the bottom
+    if (instance.state === 'exited') {
+      const restartBar = document.createElement('div');
+      restartBar.className = 'session-restart-bar';
+      restartBar.innerHTML = `
+        <span>Session ended.</span>
+        <button class="btn btn-primary btn-sm">Restart Claude Code</button>
+        <button class="btn btn-sm">Open Shell</button>
+      `;
+      const restartClaude = restartBar.querySelector('.btn-primary');
+      const restartShell = restartBar.querySelector('.btn:not(.btn-primary)');
+      const projectId = activeTab;
+      restartClaude.addEventListener('click', () => {
+        // Dispose old terminal and start fresh
+        if (instance.ws) instance.ws.close();
+        instance.terminal.dispose();
+        if (instance.container.parentNode) instance.container.remove();
+        terminalInstances.delete(projectId);
+        startSession(projectId, 'claude');
+      });
+      restartShell.addEventListener('click', () => {
+        if (instance.ws) instance.ws.close();
+        instance.terminal.dispose();
+        if (instance.container.parentNode) instance.container.remove();
+        terminalInstances.delete(projectId);
+        startSession(projectId, 'shell');
+      });
+      container.appendChild(restartBar);
+    }
+  } else {
     // No session — show start prompt
     const prompt = document.createElement('div');
     prompt.className = 'no-session';
@@ -1181,6 +1237,24 @@ async function renderReadPanel(container, project, fileName) {
     panel.querySelector('.open-editor-btn').addEventListener('click', async () => {
       await api('POST', '/api/open-editor', { filePath: data.fullPath });
     });
+
+    // Auto-refresh every 10 minutes
+    const tabId = project.id + ':' + fileName;
+    if (readPanelTimers.has(tabId)) {
+      clearInterval(readPanelTimers.get(tabId));
+    }
+    const timerId = setInterval(async () => {
+      try {
+        const fresh = await api('GET', `/api/file/${project.id}?filePath=${encodeURIComponent(fileName)}`);
+        if (fresh.error || !fresh.content) return;
+        const scrollTop = contentEl.scrollTop;
+        contentEl.innerHTML = marked.parse(fresh.content, { gfm: true, breaks: false });
+        contentEl.scrollTop = scrollTop;
+      } catch (e) {
+        // Silent — don't disrupt the UI on refresh failure
+      }
+    }, 10 * 60 * 1000);
+    readPanelTimers.set(tabId, timerId);
   } catch (err) {
     const contentEl = panel.querySelector('.read-panel-content');
     contentEl.innerHTML = `<div class="read-panel-error">Failed to load file</div>`;
@@ -1901,7 +1975,7 @@ function showRemoveConfirm(project) {
     if (deleteFiles) {
       const result = await api('DELETE', `/api/projects/${project.id}?deleteFiles=true`);
       if (result.error) {
-        alert(result.error);
+        showToast(result.error);
         return;
       }
     } else {
@@ -1974,7 +2048,7 @@ function showNewVersionModal(project) {
 
     const result = await api('POST', `/api/projects/${project.id}/versions`, { version, type });
     if (result.error) {
-      alert(result.error);
+      showToast(result.error);
       return;
     }
 
@@ -2017,7 +2091,7 @@ function showMarkCompleteModal(project, version) {
 
     const result = await api('POST', `/api/projects/${project.id}/versions/${version}/complete`, { tagName });
     if (result.error) {
-      alert(result.error);
+      showToast(result.error);
       return;
     }
 
@@ -2041,7 +2115,7 @@ function showMigrationPrompt(project) {
 
     const result = await api('POST', `/api/projects/${project.id}/migrate-versions`, { version });
     if (result.error) {
-      alert(result.error);
+      showToast(result.error);
       return;
     }
 
@@ -2108,13 +2182,61 @@ function render() {
   renderTabContent();
 }
 
+// --- Onboarding ---
+
+function showOnboardingScreen(referralUrl) {
+  const app = document.querySelector('.app');
+  app.style.display = 'none';
+
+  const overlay = document.createElement('div');
+  overlay.className = 'onboarding-overlay';
+  overlay.innerHTML = `
+    <div class="onboarding-card">
+      <div class="onboarding-logo">&#x25B6; CCC</div>
+      <h1>Claude Command Center</h1>
+      <p>CCC requires <strong>Claude Code</strong> (the CLI) to be installed and authenticated on this machine.</p>
+      <a href="${escapeHtml(referralUrl)}" target="_blank" rel="noopener" class="btn btn-primary onboarding-btn">Get Claude Code</a>
+      <div class="onboarding-help">
+        <p><strong>Already have Claude Code?</strong></p>
+        <p>Make sure it's in your PATH and authenticated. Try running <code>claude --version</code> in a terminal.</p>
+      </div>
+      <button class="btn onboarding-retry">Retry</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  overlay.querySelector('.onboarding-retry').addEventListener('click', async () => {
+    overlay.remove();
+    await initApp();
+  });
+}
+
 // --- Init ---
+
+async function initApp() {
+  const preflight = await api('GET', '/api/preflight');
+
+  if (!preflight.claudeInstalled) {
+    showOnboardingScreen(preflight.referralUrl || 'https://claude.ai');
+    return;
+  }
+
+  // Remove onboarding overlay if it exists from a previous retry
+  const existingOnboarding = document.querySelector('.onboarding-overlay');
+  if (existingOnboarding) existingOnboarding.remove();
+
+  const app = document.querySelector('.app');
+  app.style.display = '';
+
+  await loadSettings();
+  await loadProjects();
+}
 
 document.getElementById('settingsEntry').addEventListener('click', openSettings);
 document.getElementById('addProjectBtn').addEventListener('click', showNewProjectWizard);
 initResize();
 initWindowResize();
-loadSettings().then(() => loadProjects());
+initApp();
 
 // Load version info
 api('GET', '/api/version').then(data => {

@@ -1429,3 +1429,83 @@ html, body {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* --- Onboarding Screen --- */
+
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-app);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+}
+
+.onboarding-card {
+  text-align: center;
+  max-width: 440px;
+  padding: 48px 40px;
+}
+
+.onboarding-logo {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+
+.onboarding-card h1 {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+}
+
+.onboarding-card > p {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+
+.onboarding-btn {
+  display: inline-block;
+  padding: 10px 28px;
+  font-size: 14px;
+  text-decoration: none;
+  margin-bottom: 24px;
+}
+
+.onboarding-help {
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+  text-align: left;
+}
+
+.onboarding-help p {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0 0 6px 0;
+}
+
+.onboarding-help p:last-child {
+  margin-bottom: 0;
+}
+
+.onboarding-help code {
+  background: var(--bg-tab-bar);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+.onboarding-retry {
+  margin-top: 4px;
+}

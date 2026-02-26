@@ -25,6 +25,32 @@ app.use('/vendor/xterm-addon-fit', express.static(path.join(__dirname, 'node_mod
 app.use('/vendor/xterm-addon-webgl', express.static(path.join(__dirname, 'node_modules', '@xterm', 'addon-webgl')));
 app.use('/vendor/marked', express.static(path.join(__dirname, 'node_modules', 'marked', 'lib')));
 
+// --- Settings Helper ---
+
+const SETTINGS_DEFAULTS = {
+  projectRoot: '',
+  editor: 'open',
+  shell: '',
+  theme: 'dark',
+  filePatterns: { concept: 'docs/{PROJECT}_concept.md', tasklist: 'docs/{PROJECT}_tasklist.md' },
+  githubToken: ''
+};
+
+function readSettings() {
+  const settingsPath = path.join(__dirname, 'data', 'settings.json');
+  try {
+    return JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+  } catch (e) {
+    // First run or corrupted — create defaults
+    const dataDir = path.join(__dirname, 'data');
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    fs.writeFileSync(settingsPath, JSON.stringify(SETTINGS_DEFAULTS, null, 2) + '\n', 'utf8');
+    return JSON.parse(JSON.stringify(SETTINGS_DEFAULTS));
+  }
+}
+
 // --- API Routes ---
 
 // Get all projects and groups
@@ -162,9 +188,7 @@ app.get('/api/browse', (req, res) => {
 // Get settings
 app.get('/api/settings', (req, res) => {
   try {
-    const settingsPath = path.join(__dirname, 'data', 'settings.json');
-    const data = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-    res.json(data);
+    res.json(readSettings());
   } catch (err) {
     res.status(500).json({ error: 'Failed to read settings' });
   }
@@ -173,8 +197,7 @@ app.get('/api/settings', (req, res) => {
 // Update settings
 app.put('/api/settings', (req, res) => {
   try {
-    const settingsPath = path.join(__dirname, 'data', 'settings.json');
-    const current = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    const current = readSettings();
 
     const allowed = ['projectRoot', 'editor', 'shell', 'theme', 'filePatterns', 'githubToken'];
     for (const key of allowed) {
@@ -183,6 +206,7 @@ app.put('/api/settings', (req, res) => {
       }
     }
 
+    const settingsPath = path.join(__dirname, 'data', 'settings.json');
     fs.writeFileSync(settingsPath, JSON.stringify(current, null, 2) + '\n', 'utf8');
     res.json(current);
   } catch (err) {
@@ -203,6 +227,11 @@ app.get('/api/file/:projectId', (req, res) => {
   if (!project) return res.status(404).json({ error: 'Project not found' });
 
   const projectPath = projects.resolveProjectPath(project.path);
+
+  if (!fs.existsSync(projectPath)) {
+    return res.status(400).json({ error: 'Project directory does not exist: ' + project.path });
+  }
+
   const fullPath = path.join(projectPath, filePath);
 
   // Security: ensure the resolved path is within the project directory
@@ -231,8 +260,7 @@ app.post('/api/open-editor', (req, res) => {
   // Read editor from settings
   let editor = 'open'; // macOS default
   try {
-    const settingsPath = path.join(__dirname, 'data', 'settings.json');
-    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    const settings = readSettings();
     if (settings.editor) {
       editor = settings.editor;
     }
@@ -676,8 +704,7 @@ app.post('/api/scaffold-project', (req, res) => {
     // Compute relative path if under projectRoot
     let projectPath = projectDir;
     try {
-      const settingsPath = path.join(__dirname, 'data', 'settings.json');
-      const settingsData = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      const settingsData = readSettings();
       if (settingsData.projectRoot) {
         const root = path.resolve(settingsData.projectRoot);
         if (projectDir.startsWith(root + path.sep) || projectDir === root) {
@@ -714,15 +741,33 @@ app.post('/api/scaffold-project', (req, res) => {
   }
 });
 
+// --- Preflight Check ---
+
+app.get('/api/preflight', (req, res) => {
+  const { execFile } = require('child_process');
+  const referralUrl = process.env.CLAUDE_REFERRAL_URL || 'https://claude.ai';
+
+  execFile('claude', ['--version'], { timeout: 10000, shell: true }, (err, stdout) => {
+    if (err) {
+      return res.json({ claudeInstalled: false, claudeVersion: null, referralUrl });
+    }
+    const version = stdout.trim();
+    res.json({ claudeInstalled: true, claudeVersion: version, referralUrl });
+  });
+});
+
 // --- Version / Build Info ---
 
 const APP_VERSION = require('./package.json').version;
 let appBuild = null;
 
-// Get git commit count at startup (non-blocking)
+// Extract highest stage number from commit messages at startup (non-blocking)
 const { execFile: execFileCb } = require('child_process');
-execFileCb('git', ['rev-list', '--count', 'HEAD'], { cwd: __dirname }, (err, stdout) => {
-  if (!err && stdout) appBuild = stdout.trim();
+execFileCb('git', ['log', '--oneline', '--grep=^Stage', '--all'], { cwd: __dirname }, (err, stdout) => {
+  if (!err && stdout) {
+    const match = stdout.trim().split('\n')[0].match(/Stage\s+0*(\d+)/);
+    if (match) appBuild = match[1];
+  }
 });
 
 app.get('/api/version', (req, res) => {
@@ -817,8 +862,7 @@ app.post('/api/scan-project', (req, res) => {
     // 5. Compute registrationPath (relative to projectRoot if applicable)
     let registrationPath = absPath;
     try {
-      const settingsPath = path.join(__dirname, 'data', 'settings.json');
-      const settingsData = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      const settingsData = readSettings();
       if (settingsData.projectRoot) {
         const root = path.resolve(settingsData.projectRoot);
         if (absPath.startsWith(root + path.sep) || absPath === root) {
@@ -945,6 +989,16 @@ wss.on('connection', (ws, req) => {
   ws.on('close', () => {
     sessions.removeClient(projectId, ws);
   });
+});
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`\nError: Port ${PORT} is already in use.`);
+    console.error(`Another instance of CCC may be running, or another service is using this port.`);
+    console.error(`To fix: stop the other process, or set a different port in .env (PORT=3001)\n`);
+    process.exit(1);
+  }
+  throw err;
 });
 
 server.listen(PORT, () => {
