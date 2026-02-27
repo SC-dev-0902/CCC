@@ -536,11 +536,11 @@ CCC solves terminal sprawl, but there is a deeper pain: every Claude Code sessio
 
 ### The Solution: File-Based SHP Storage
 
-CCC captures an end-of-day Session Handover Pack per project and stores it as a dated Markdown file. When a new session starts, CCC serves the most recent SHP to Claude Code automatically. No manual pasting, no lost context.
+CCC captures an end-of-day Session Handover Pack per project and stores it as a single Markdown file. When a new session starts, CCC serves the current SHP to Claude Code automatically. No manual pasting, no lost context.
 
 #### Storage Structure
 
-SHPs are stored per project inside `docs/shp/`:
+Each project gets one SHP file: `docs/{ProjectName}_shp.md`. The file is overwritten each `/eod` — Git history serves as the archive.
 
 ```
 CCC/
@@ -548,13 +548,10 @@ CCC/
     ├── v1.0/
     │   ├── CCC_concept.md
     │   └── CCC_tasklist.md
-    └── shp/
-        ├── 2026-02-25.md
-        ├── 2026-02-26.md
-        └── 2026-02-27.md
+    └── CCC_shp.md
 ```
 
-Each SHP file is a standard Markdown document — human-readable, Git-friendly, openable in CotEditor or any editor.
+The SHP file is a standard Markdown document — human-readable, Git-friendly, openable in CotEditor or any editor.
 
 #### Slash Commands
 
@@ -563,8 +560,8 @@ Three global slash commands power the workflow. These belong in `~/.claude/comma
 | Command | When | What it does |
 |---------|------|-------------|
 | `/start-project` | First session on a new project | Claude Code reads CLAUDE.md, concept doc, tasklist. Asks comprehension questions. Waits for instruction. |
-| `/continue` | Every returning session | CCC reads the most recent SHP from `docs/shp/` and feeds it to Claude Code. Picks up where yesterday left off. |
-| `/eod` | End of project day | Claude Code writes the SHP — what was done, decided, what's open, what's next. CCC saves it as a dated file in `docs/shp/`. |
+| `/continue` | Every returning session | CCC reads the current SHP (`docs/{ProjectName}_shp.md`) and feeds it to Claude Code. Picks up where yesterday left off. |
+| `/eod` | End of project day | Claude Code writes the SHP — what was done, decided, what's open, what's next. CCC overwrites `docs/{ProjectName}_shp.md`. |
 
 #### The Daily Workflow
 
@@ -580,7 +577,7 @@ Day 3:  /continue → work → /eod
 
 #### Why File-Based (v1.0) and Not SQLite
 
-File-based SHP storage is sufficient for v1.0: one Markdown file per day, human-readable, Git-friendly, no new dependencies. SQLite becomes the upgrade path in v2.0 when search across SHPs and richer context layering justify it. See `docs/CCC_Roadmap.md` for the version plan.
+File-based SHP storage is sufficient for v1.0: one Markdown file per project, overwritten each session, human-readable, Git-friendly, no new dependencies. Git captures the full history of SHP overwrites. SQLite becomes the upgrade path in v2.0 when search across SHPs and richer context layering justify it. See `docs/CCC_Roadmap.md` for the version plan.
 
 ---
 

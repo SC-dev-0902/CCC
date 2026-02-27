@@ -12,7 +12,10 @@ const sessions = new Map();
 let degradedIssueFiled = false;
 
 function getDefaultShell() {
-  return process.env.SHELL || (os.platform() === 'win32' ? 'powershell.exe' : '/bin/zsh');
+  if (os.platform() === 'win32') {
+    return process.env.COMSPEC || 'powershell.exe';
+  }
+  return process.env.SHELL || '/bin/sh';
 }
 
 function createSession(projectId, projectPath, command) {
@@ -24,9 +27,16 @@ function createSession(projectId, projectPath, command) {
   const shell = getDefaultShell();
   const isClaudeCode = command === 'claude';
 
-  // For Claude Code: spawn shell with -c to run claude and exit when done.
-  // For plain shell: spawn interactive shell.
-  const spawnArgs = isClaudeCode ? ['-i', '-c', 'claude'] : ['-i'];
+  // Platform-aware shell arguments:
+  // - macOS/Linux: interactive shell with -c for Claude, -i for plain shell
+  // - Windows: PowerShell uses -Command for Claude, no flags for plain shell
+  const isWindows = os.platform() === 'win32';
+  let spawnArgs;
+  if (isClaudeCode) {
+    spawnArgs = isWindows ? ['-Command', 'claude'] : ['-i', '-c', 'claude'];
+  } else {
+    spawnArgs = isWindows ? [] : ['-i'];
+  }
 
   const ptyProcess = pty.spawn(shell, spawnArgs, {
     name: 'xterm-256color',
@@ -37,7 +47,7 @@ function createSession(projectId, projectPath, command) {
       const env = Object.assign({}, process.env, {
         TERM: 'xterm-256color',
         COLORTERM: 'truecolor',
-        HOME: process.env.HOME
+        HOME: os.homedir()
       });
       // Remove Claude Code nesting guard so spawned sessions can run claude
       delete env.CLAUDECODE;
@@ -249,7 +259,7 @@ async function autoFileGitHubIssue(info) {
     let claudeVersion = 'unknown';
     try {
       const { execSync } = require('child_process');
-      claudeVersion = execSync('claude --version 2>/dev/null', { timeout: 5000 }).toString().trim();
+      claudeVersion = execSync('claude --version', { timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] }).toString().trim();
     } catch (e) {
       // Can't determine version
     }

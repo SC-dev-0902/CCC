@@ -22,14 +22,13 @@ app.use((req, res, next) => {
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/vendor/xterm', express.static(path.join(__dirname, 'node_modules', '@xterm', 'xterm')));
 app.use('/vendor/xterm-addon-fit', express.static(path.join(__dirname, 'node_modules', '@xterm', 'addon-fit')));
-app.use('/vendor/xterm-addon-webgl', express.static(path.join(__dirname, 'node_modules', '@xterm', 'addon-webgl')));
 app.use('/vendor/marked', express.static(path.join(__dirname, 'node_modules', 'marked', 'lib')));
 
 // --- Settings Helper ---
 
 const SETTINGS_DEFAULTS = {
   projectRoot: '',
-  editor: 'open',
+  editor: '',
   shell: '',
   theme: 'dark',
   filePatterns: { concept: 'docs/{PROJECT}_concept.md', tasklist: 'docs/{PROJECT}_tasklist.md' },
@@ -49,6 +48,18 @@ function readSettings() {
     fs.writeFileSync(settingsPath, JSON.stringify(SETTINGS_DEFAULTS, null, 2) + '\n', 'utf8');
     return JSON.parse(JSON.stringify(SETTINGS_DEFAULTS));
   }
+}
+
+// --- Path Security Helper ---
+
+function isPathWithin(child, parent) {
+  const resolvedChild = path.resolve(child);
+  const resolvedParent = path.resolve(parent);
+  if (os.platform() === 'win32') {
+    return resolvedChild.toLowerCase().startsWith(resolvedParent.toLowerCase() + path.sep) ||
+           resolvedChild.toLowerCase() === resolvedParent.toLowerCase();
+  }
+  return resolvedChild.startsWith(resolvedParent + path.sep) || resolvedChild === resolvedParent;
 }
 
 // --- API Routes ---
@@ -235,9 +246,7 @@ app.get('/api/file/:projectId', (req, res) => {
   const fullPath = path.join(projectPath, filePath);
 
   // Security: ensure the resolved path is within the project directory
-  const resolvedProject = path.resolve(projectPath);
-  const resolvedFile = path.resolve(fullPath);
-  if (!resolvedFile.startsWith(resolvedProject)) {
+  if (!isPathWithin(fullPath, projectPath)) {
     return res.status(403).json({ error: 'Access denied: path outside project directory' });
   }
 
@@ -246,7 +255,7 @@ app.get('/api/file/:projectId', (req, res) => {
       return res.status(404).json({ error: 'File not found: ' + filePath });
     }
     const content = fs.readFileSync(fullPath, 'utf8');
-    res.json({ content, filePath, fullPath: resolvedFile });
+    res.json({ content, filePath, fullPath: path.resolve(fullPath) });
   } catch (err) {
     res.status(500).json({ error: 'Failed to read file' });
   }
@@ -272,9 +281,7 @@ app.put('/api/file/:projectId', (req, res) => {
   const fullPath = path.join(projectPath, filePath);
 
   // Security: ensure the resolved path is within the project directory
-  const resolvedProject = path.resolve(projectPath);
-  const resolvedFile = path.resolve(fullPath);
-  if (!resolvedFile.startsWith(resolvedProject)) {
+  if (!isPathWithin(fullPath, projectPath)) {
     return res.status(403).json({ error: 'Access denied: path outside project directory' });
   }
 
@@ -291,8 +298,8 @@ app.post('/api/open-editor', (req, res) => {
   const { filePath } = req.body;
   if (!filePath) return res.status(400).json({ error: 'filePath is required' });
 
-  // Read editor from settings
-  let editor = 'open'; // macOS default
+  // Read editor from settings (empty string = system default)
+  let editor = '';
   try {
     const settings = readSettings();
     if (settings.editor) {
@@ -304,11 +311,24 @@ app.post('/api/open-editor', (req, res) => {
 
   try {
     const { exec } = require('child_process');
-    // Use 'open -a <editor>' on macOS for app names, or direct command for binary paths
-    if (editor === 'open' || editor === '') {
-      exec(`open "${filePath}"`);
+    const platform = os.platform();
+
+    if (!editor) {
+      // System default: platform-aware open command
+      if (platform === 'darwin') {
+        exec(`open "${filePath}"`);
+      } else if (platform === 'win32') {
+        exec(`start "" "${filePath}"`);
+      } else {
+        exec(`xdg-open "${filePath}"`);
+      }
     } else {
-      exec(`open -a "${editor}" "${filePath}"`);
+      // Specific editor configured
+      if (platform === 'darwin') {
+        exec(`open -a "${editor}" "${filePath}"`);
+      } else {
+        exec(`"${editor}" "${filePath}"`);
+      }
     }
     res.json({ ok: true });
   } catch (err) {
@@ -413,9 +433,7 @@ app.delete('/api/projects/:id/versions/:version', (req, res) => {
     }
 
     // Security: ensure path is within project
-    const resolvedProject = path.resolve(found.absPath);
-    const resolvedFolder = path.resolve(absFolder);
-    if (!resolvedFolder.startsWith(resolvedProject)) {
+    if (!isPathWithin(absFolder, found.absPath)) {
       return res.status(403).json({ error: 'Access denied: path outside project directory' });
     }
 

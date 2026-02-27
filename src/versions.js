@@ -61,8 +61,10 @@ function scanVersions(projectAbsPath, projectName) {
   const escapedName = projectName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const testPattern = new RegExp(`^${escapedName}_test_stage\\d+\\.md$`);
   for (const f of allDocsFiles) {
-    if (testPattern.test(f) && fs.statSync(path.join(docsDir, f)).isFile()) {
-      result.flatTestFiles.push(f);
+    const fullPath = path.join(docsDir, f);
+    if (testPattern.test(f) && fs.statSync(fullPath).isFile()) {
+      const counts = countTestCheckboxes(fullPath);
+      result.flatTestFiles.push({ name: f, checked: counts.checked, total: counts.total });
     }
   }
 
@@ -121,8 +123,33 @@ function scanVersions(projectAbsPath, projectName) {
 }
 
 /**
+ * Count checked and total checkboxes in a Markdown file.
+ * Matches lines like `- [x]` (checked) and `- [ ]` (unchecked).
+ * Returns { checked: number, total: number }
+ */
+function countTestCheckboxes(filePath) {
+  try {
+    const content = fs.readFileSync(filePath, 'utf8');
+    const lines = content.split('\n');
+    let checked = 0;
+    let total = 0;
+    for (const line of lines) {
+      if (/^\s*- \[x\]/i.test(line)) {
+        checked++;
+        total++;
+      } else if (/^\s*- \[ \]/.test(line)) {
+        total++;
+      }
+    }
+    return { checked, total };
+  } catch {
+    return { checked: 0, total: 0 };
+  }
+}
+
+/**
  * Scan a version directory for core files and test files.
- * Returns { files: string[], testFiles: string[] }
+ * Returns { files: string[], testFiles: { name, checked, total }[] }
  * Test files match {projectName}_test_stage\d+\.md
  */
 function scanVersionFiles(dirPath, projectName) {
@@ -137,7 +164,8 @@ function scanVersionFiles(dirPath, projectName) {
     const fullPath = path.join(dirPath, name);
     if (fs.statSync(fullPath).isFile() && name.endsWith('.md')) {
       if (testPattern.test(name)) {
-        result.testFiles.push(name);
+        const counts = countTestCheckboxes(fullPath);
+        result.testFiles.push({ name, checked: counts.checked, total: counts.total });
       } else {
         result.files.push(name);
       }

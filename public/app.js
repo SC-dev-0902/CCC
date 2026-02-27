@@ -570,11 +570,13 @@ function renderTreeView() {
         // Flat test files (legacy — not inside version folders)
         const vData2 = projectVersions.get(project.id);
         if (vData2 && vData2.flatTestFiles) {
-          for (const testFileName of vData2.flatTestFiles) {
+          for (const testFile of vData2.flatTestFiles) {
+            const testFileName = testFile.name || testFile;
             const testFilePath = 'docs/' + testFileName;
+            const badge = testFile.total ? ` <span class="test-progress-badge">[${testFile.checked}/${testFile.total}]</span>` : '';
             const testEl = document.createElement('div');
             testEl.className = 'tree-file';
-            testEl.innerHTML = `<span class="tree-file-icon">&#x1F4CB;</span><span class="tree-file-name">${escapeHtml(testFileName)}</span>`;
+            testEl.innerHTML = `<span class="tree-file-icon">&#x1F4CB;</span><span class="tree-file-name">${escapeHtml(testFileName)}${badge}</span>`;
             testEl.addEventListener('click', (e) => {
               e.stopPropagation();
               openFileTab(project.id, project.name, testFilePath);
@@ -760,11 +762,13 @@ function renderVersionRow(container, project, ver, activeVersion) {
       if (testingExpanded) {
         const testingFiles = document.createElement('div');
         testingFiles.className = 'tree-testing-files';
-        for (const testFileName of ver.testFiles) {
+        for (const testFile of ver.testFiles) {
+          const testFileName = testFile.name || testFile;
           const testFilePath = ver.folder + '/' + testFileName;
+          const badge = testFile.total ? ` <span class="test-progress-badge">[${testFile.checked}/${testFile.total}]</span>` : '';
           const testEl = document.createElement('div');
           testEl.className = 'tree-file tree-testing-file';
-          testEl.innerHTML = `<span class="tree-file-icon">&#x1F4CB;</span><span class="tree-file-name">${escapeHtml(testFileName)}</span>`;
+          testEl.innerHTML = `<span class="tree-file-icon">&#x1F4CB;</span><span class="tree-file-name">${escapeHtml(testFileName)}${badge}</span>`;
           testEl.addEventListener('click', (e) => {
             e.stopPropagation();
             openFileTab(project.id, project.name, testFilePath);
@@ -897,11 +901,13 @@ function renderPatchRow(container, project, patch, activeVersion) {
       if (testingExpanded) {
         const testingFiles = document.createElement('div');
         testingFiles.className = 'tree-testing-files tree-testing-files-patch';
-        for (const testFileName of patch.testFiles) {
+        for (const testFile of patch.testFiles) {
+          const testFileName = testFile.name || testFile;
           const testFilePath = patch.folder + '/' + testFileName;
+          const badge = testFile.total ? ` <span class="test-progress-badge">[${testFile.checked}/${testFile.total}]</span>` : '';
           const testEl = document.createElement('div');
           testEl.className = 'tree-file tree-testing-file-patch';
-          testEl.innerHTML = `<span class="tree-file-icon">&#x1F4CB;</span><span class="tree-file-name">${escapeHtml(testFileName)}</span>`;
+          testEl.innerHTML = `<span class="tree-file-icon">&#x1F4CB;</span><span class="tree-file-name">${escapeHtml(testFileName)}${badge}</span>`;
           testEl.addEventListener('click', (e) => {
             e.stopPropagation();
             openFileTab(project.id, project.name, testFilePath);
@@ -2517,6 +2523,9 @@ function initResize() {
   const sidebar = document.getElementById('sidebar');
   let isResizing = false;
 
+  const saved = localStorage.getItem('ccc-sidebar-width');
+  if (saved) sidebar.style.width = saved;
+
   handle.addEventListener('mousedown', (e) => {
     isResizing = true;
     handle.classList.add('active');
@@ -2535,6 +2544,7 @@ function initResize() {
     isResizing = false;
     handle.classList.remove('active');
     document.body.style.cursor = '';
+    localStorage.setItem('ccc-sidebar-width', sidebar.style.width);
   });
 }
 

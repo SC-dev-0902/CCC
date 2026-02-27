@@ -33,7 +33,7 @@
 | Project Memory | `/start-project`, `/eod`, `/continue` — file-based SHP storage |
 | Project Versioning | Version folders in `docs/`, active version pointer in JSON |
 | Resilience & Polish | Error handling, first-run experience, README |
-| Cross-Platform | macOS, Linux, Windows — tested and documented |
+| Cross-Platform | macOS verified, Linux/Windows code-complete (manual testing deferred — no target hardware) |
 | Housekeeping | Filesystem cleanup, documentation audit, code quality |
 
 ### What does NOT ship in v1.0
@@ -71,7 +71,7 @@
 
 Ship v1.0 → use it daily for 2-3 weeks → fix rough edges → ship v1.1 → promote. First impression must be flawless.
 
-All promotion material should highlight: **v1.0 supports macOS, Linux, and Windows.**
+All promotion material should highlight: **v1.0 supports macOS natively. Linux and Windows support is code-complete — manual testing pending target hardware.**
 
 ### Promotion assets (to be drafted in dedicated session)
 

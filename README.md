@@ -4,25 +4,34 @@ A local web dashboard for managing multiple simultaneous Claude Code sessions. R
 
 ## Requirements
 
-- **macOS** (v1.0 target platform)
+- **Git** — required to clone the repository (`git --version` should work)
 - **Node.js 20+**
-- **Claude Code** CLI — installed and authenticated (`claude --version` should work)
-- **Xcode Command Line Tools** — required for compiling `node-pty` (`xcode-select --install`)
+- **Claude Code CLI** — installed and authenticated (`claude --version` should work)
+- **Native build tools** (required for compiling `node-pty`):
+  - **macOS:** Xcode Command Line Tools (`xcode-select --install`)
+  - **Linux:** `build-essential` and `python3` (`sudo apt install build-essential python3`)
+  - **Windows:** Visual Studio Build Tools with "Desktop development with C++" workload
 
 ## Quick Start
 
 ```bash
-# Clone the repo
 git clone <your-repo-url> CCC
 cd CCC
+```
 
-# Install dependencies (node-pty compiles native code)
-npm install
+Run the installer for your platform:
 
-# Create your environment file
-cp .env.example .env
+| Platform | Command |
+|---|---|
+| **macOS** | `./tools/macos/install_CCC.sh` |
+| **Linux** | `./tools/linux/install_CCC.sh` |
+| **Windows** | `.\tools\windows\install_CCC.ps1` |
 
-# Start CCC
+The installer checks prerequisites, runs `npm install` (compiles `node-pty`), and creates your `.env` file.
+
+Then start CCC:
+
+```bash
 npm start
 ```
 
@@ -58,9 +67,18 @@ CCC/
 ├── data/
 │   ├── projects.json      Project registry (auto-created on first run)
 │   └── settings.json      User settings (auto-created on first run)
-└── docs/                  Project documentation
+├── tools/
+│   ├── macos/
+│   │   └── install_CCC.sh     Installer (macOS)
+│   ├── linux/
+│   │   └── install_CCC.sh     Installer (Linux)
+│   ├── windows/
+│   │   └── install_CCC.ps1    Installer (Windows)
+│   ├── build-release.sh        Builds OS-specific release archives
+│   └── screenshot.js           Playwright screenshot script
+└── docs/                      Project documentation
 ```
 
-## Platform Note
+## Platform Support
 
-CCC v1.0 targets macOS. Cross-platform support (Windows, Linux) is planned for a future version. The codebase avoids platform-specific APIs where possible to keep that door open.
+CCC v1.0 runs on macOS, Linux, and Windows. Shell spawning, editor launch, and path handling are all platform-aware. Primary development and testing happens on macOS — if you encounter platform-specific issues on Linux or Windows, please file an issue.

@@ -1,5 +1,5 @@
 # CLAUDE.md — Claude Command Center (CCC)
-*Derived from: docs/CCC_concept.md*
+*Derived from: docs/v1.0/CCC_concept.md*
 
 ---
 
@@ -15,7 +15,7 @@
 
 CCC is a local web application (Node.js + Express + xterm.js) that serves as a unified dashboard for managing multiple simultaneous Claude Code sessions. It replaces terminal sprawl with a single window: tree view of projects on the left, tab-based terminal sessions on the right, live colour-coded status indicators per project.
 
-Read `docs/CCC_concept.md` before starting any task. It is the single source of truth. Always read the latest version — there is only one file, no versioning in the filename.
+Read the active version's concept doc before starting any task. It is the single source of truth. The current active version is v1.0 — read `docs/v1.0/CCC_concept.md`.
 
 ---
 
@@ -37,6 +37,8 @@ Read `docs/CCC_concept.md` before starting any task. It is the single source of 
 ```
 CCC/
 ├── CLAUDE.md                  ← this file (project root)
+├── README.md
+├── CHANGELOG.md
 ├── .env                       ← local only, never committed
 ├── .env.example               ← committed, shows available variables
 ├── .gitignore
@@ -45,7 +47,8 @@ CCC/
 ├── src/
 │   ├── parser.js              ← ISOLATED: all status detection logic lives here
 │   ├── sessions.js            ← PTY session management
-│   └── projects.js            ← project registry logic
+│   ├── projects.js            ← project registry logic
+│   └── versions.js            ← version management (create, scan, migrate)
 ├── public/
 │   ├── index.html
 │   ├── app.js
@@ -53,13 +56,23 @@ CCC/
 ├── data/
 │   ├── projects.json          ← project registry (committed, no absolute paths)
 │   └── settings.json          ← user settings (gitignored)
+├── tools/
+│   ├── macos/
+│   │   └── install_CCC.sh    ← Installer for macOS
+│   ├── linux/
+│   │   └── install_CCC.sh    ← Installer for Linux
+│   ├── windows/
+│   │   └── install_CCC.ps1   ← Installer for Windows
+│   ├── build-release.sh       ← Builds OS-specific release archives
+│   └── screenshot.js          ← Playwright screenshot script
 └── docs/
-    ├── v1.0/
-    │   ├── CCC_concept.md     ← v1.0 concept
-    │   └── CCC_tasklist.md    ← v1.0 tasklist
-    └── v1.1/
-        ├── CCC_concept.md     ← v1.1 concept (active)
-        └── CCC_tasklist.md    ← v1.1 tasklist
+    ├── CCC_Roadmap.md         ← version plan (v1.0, v1.1, v2.0)
+    ├── CCC_shp.md             ← Session Handover Pack (overwritten each /eod)
+    ├── screenshots/            ← Playwright-captured images
+    └── v1.0/                  ← active version
+        ├── CCC_concept.md
+        ├── CCC_tasklist.md
+        └── CCC_test_stage*.md ← pre-GoNoGo test files (one per stage)
 ```
 
 ---
@@ -77,7 +90,7 @@ CCC models project evolution through explicit versions. Each version is a full d
 - **CLAUDE.md stays at the project root** and is always derived from the active version's concept doc.
 - **When a version's final stage receives a Go**, prompt for a Git tag matching the version number.
 
-Read `docs/CCC_concept.md` → Project Versioning section for the full specification.
+Read `docs/v1.0/CCC_concept.md` → Project Versioning section for the full specification.
 
 ---
 
@@ -85,7 +98,7 @@ Read `docs/CCC_concept.md` → Project Versioning section for the full specifica
 
 CCC gives Claude Code session continuity through file-based SHP (Session Handover Pack) storage.
 
-- **SHPs are stored as dated Markdown files** in `docs/shp/` per project (e.g., `docs/shp/2026-02-25.md`).
+- **SHPs are stored as a single file** per project: `docs/{ProjectName}_shp.md` (overwritten each `/eod`, Git provides history).
 - **Three global slash commands** drive the workflow: `/start-project`, `/continue`, `/eod`.
 - **`/start-project`** — reads CLAUDE.md, concept, tasklist. Asks comprehension questions. Works without CCC.
 - **`/continue`** — CCC feeds the most recent SHP to Claude Code. Requires CCC to be running.
@@ -93,7 +106,7 @@ CCC gives Claude Code session continuity through file-based SHP (Session Handove
 - **SHP files are human-readable Markdown** — Git-friendly, openable in any editor.
 - **Never store SHPs in the database.** v1.0 uses file-based storage. SQLite is a v2.0 upgrade.
 
-Read `docs/CCC_concept.md` → Project Memory section for the full specification.
+Read `docs/v1.0/CCC_concept.md` → Project Memory section for the full specification.
 
 ---
 
@@ -138,7 +151,7 @@ If the parser receives unrecognised output for more than 60 seconds of activity,
 
 ## Stage Gate Process
 
-Development proceeds in defined stages. See `docs/CCC_tasklist.md` for the full breakdown. See `docs/CCC_Roadmap.md` for the version plan (v1.0, v1.1, v2.0).
+Development proceeds in defined stages. See `docs/v1.0/CCC_tasklist.md` for the full breakdown. See `docs/CCC_Roadmap.md` for the version plan (v1.0, v1.1, v2.0).
 
 - Each stage has a defined set of tasks
 - Each stage ends with a Go/NoGo decision
@@ -185,8 +198,8 @@ The same Playwright script is extended to produce an animated GIF of live status
 ### Stage 13 Start
 Before writing a single word, Claude Code re-reads all four documents:
 - `CLAUDE.md`
-- `docs/CCC_concept.md`
-- `docs/CCC_tasklist.md`
+- `docs/v1.0/CCC_concept.md`
+- `docs/v1.0/CCC_tasklist.md`
 - `docs/CCC_shp.md`
 
 Manual structure is proposed and confirmed with Phet before writing begins.
