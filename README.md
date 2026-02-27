@@ -2,6 +2,20 @@
 
 A local web dashboard for managing multiple simultaneous Claude Code sessions. Replaces terminal sprawl with a single window: project tree on the left, tabbed terminal sessions on the right, live colour-coded status indicators per project.
 
+### Features
+
+- Full interactive terminal sessions via PTY (node-pty + xterm.js)
+- Live colour-coded status detection — red, yellow, green, orange, grey
+- Inline Markdown preview for project files with "Open in Editor" integration
+- New Project Wizard with template scaffolding
+- Import existing projects with auto-detection of concept docs and tasklists
+- Project versioning with version folders, active version tracking, and Git tagging
+- Interactive test runner for stage gate checklists
+- Project memory via Session Handover Packs (`/start-project`, `/eod`, `/continue`)
+- Settings panel: theme (dark/light), editor, shell, file patterns, GitHub token
+- Drag-and-drop project reordering between groups
+- First-run onboarding experience
+
 ## Requirements
 
 - **Git** — required to clone the repository (`git --version` should work)
@@ -81,4 +95,4 @@ CCC/
 
 ## Platform Support
 
-CCC v1.0 runs on macOS, Linux, and Windows. Shell spawning, editor launch, and path handling are all platform-aware. Primary development and testing happens on macOS — if you encounter platform-specific issues on Linux or Windows, please file an issue.
+CCC v1.0 is developed and tested on macOS. Linux and Windows support is code-complete — shell spawning, editor launch, and path handling are all platform-aware — but has not yet been manually tested on target hardware. If you encounter platform-specific issues, please file an issue.

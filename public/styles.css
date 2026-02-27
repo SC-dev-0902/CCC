@@ -179,7 +179,7 @@ html, body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
+  padding: 10px 12px;
   cursor: pointer;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -220,7 +220,7 @@ html, body {
 .tree-project-row {
   display: flex;
   align-items: center;
-  padding: 6px 12px 6px 28px;
+  padding: 10px 12px 10px 28px;
   cursor: pointer;
   gap: 8px;
   border-radius: 4px;
@@ -235,6 +235,8 @@ html, body {
   background: var(--bg-hover);
   border-left: 2px solid var(--accent);
   padding-left: 26px;
+  padding-top: 10px;
+  padding-bottom: 10px;
 }
 
 .tree-project-chevron {
@@ -334,7 +336,7 @@ html, body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 12px 4px 52px;
+  padding: 8px 12px 8px 52px;
   cursor: pointer;
   border-radius: 4px;
   margin: 1px 6px;
@@ -364,7 +366,7 @@ html, body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 12px 4px 52px;
+  padding: 10px 12px 10px 52px;
   cursor: pointer;
   color: var(--text-secondary);
   font-size: 12px;
@@ -430,7 +432,7 @@ html, body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 12px 4px 68px;
+  padding: 10px 12px 10px 68px;
   cursor: pointer;
   border-radius: 4px;
   margin: 1px 6px;
@@ -519,7 +521,7 @@ html, body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 12px 4px 84px;
+  padding: 10px 12px 10px 84px;
   cursor: pointer;
   color: var(--text-secondary);
   font-size: 11px;
