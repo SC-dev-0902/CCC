@@ -100,7 +100,7 @@ A local web application (Node.js + Express + xterm.js) that replaces terminal sp
 **Stage 11 — Resilience & Polish** (commit `3dcecdd`)
 - First-run onboarding, port conflict handling, invalid path protection, session crash recovery, read panel auto-refresh, README, `.env.example`
 
-**Stage 12 — Session-Version Binding & Interactive Test Runner** (this session, not yet committed)
+**Stage 12 — Session-Version Binding & Interactive Test Runner** (commit `955643f`)
 - Session entry point moved to version node, test files relocated into version folders, interactive test runner with checkboxes and comments, version delete, sidebar refresh
 
 ---
@@ -351,12 +351,12 @@ Four global commands at `~/.claude/commands/`:
 ## Git Remote
 - Forgejo: `http://mcs-git.mcsfam.local:3000/Phet/CCC`
 - Push after every stage Go decision
-- Last push: Stage 11 (commit `3dcecdd`)
+- Last push: Stage 11 (commit `3dcecdd`) — Stage 12 committed locally (`955643f`), push pending
 
 ---
 
 ## Open Items
-- None — Stage 12 Go received, ready to commit and push
+- Push Stage 12 commit to Forgejo (Phet will do this via CCC before starting Stage 13)
 
 ## Next Actions
 1. Commit Stage 12 and push to Forgejo

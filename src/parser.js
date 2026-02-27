@@ -62,6 +62,7 @@ const TOOL_USE = /⏺.*(?:file|ctrl\+o)/i;
 
 // Permission prompt patterns (WAITING_FOR_INPUT)
 const PERMISSION_PATTERNS = [
+  /Do you want to/i,
   /Claude wants to/,
   /\[y\]\s*(Yes|Accept)/i,
   /\[n\]\s*(No|Reject|Deny)/i,
@@ -69,6 +70,8 @@ const PERMISSION_PATTERNS = [
   /Allow\s+once/i,
   /Enter to select/i,
   /Do you want to proceed/i,
+  /❯\s+\d/,
+  /Esc to cancel/i,
   /\(y\/n\)/i,
   /\(Y\/n\)/i,
   /\(yes\/no\)/i
@@ -107,6 +110,7 @@ class ClaudeParser {
     this.state = STATES.UNKNOWN;
     this.degraded = false;
     this.lastRecognisedAt = Date.now();
+    this.lastDataAt = 0;            // 0 = no data received yet
     this.recentOutput = [];       // { timestamp, raw, stripped }
     this.runningDetectedAt = 0;   // last time a running indicator was seen
     this.degradeTimer = null;
@@ -120,6 +124,17 @@ class ClaudeParser {
   feed(data) {
     const now = Date.now();
     const stripped = stripAnsi(data);
+
+    // Skip empty chunks — pure ANSI control sequences with no visible content
+    if (stripped.trim().length === 0) return;
+
+    // Skip decorative UI lines — startup chrome that carries no state signal
+    const trimmed = stripped.trim();
+    if (/^[─━─\-=]{5,}$/.test(trimmed)) return;          // horizontal rules
+    if (/^[??]\s*for\s+shortcuts/i.test(trimmed)) return; // "? for shortcuts" hint
+    if (/^\/ide\s+for\s+/i.test(trimmed)) return;         // "/ide for Visual Studio Code"
+
+    this.lastDataAt = now;
 
     // Add to sliding window
     this.recentOutput.push({ timestamp: now, raw: data, stripped });
@@ -146,8 +161,10 @@ class ClaudeParser {
       }
     }
 
-    // Check for degradation
-    this._checkDegradation(now);
+    // DISABLED: Degradation check triggers false positives on idle silence and
+    // decorative output (horizontal rules, IDE hints). The timer ticks when no data
+    // arrives, not when data can't be matched. Redesign planned for v1.1.
+    // this._checkDegradation(now);
   }
 
   /**
@@ -258,6 +275,10 @@ class ClaudeParser {
     // Only check degradation if we're in an active state (not UNKNOWN)
     if (this.state === STATES.UNKNOWN) return;
 
+    // Only degrade if unrecognised data has actually been received
+    // (idle silence should not tick the timer)
+    if (this.lastDataAt <= this.lastRecognisedAt) return;
+
     const timeSinceRecognised = now - this.lastRecognisedAt;
 
     if (timeSinceRecognised >= this.degradeThresholdMs && !this.degraded) {
@@ -291,6 +312,7 @@ class ClaudeParser {
     this.state = STATES.UNKNOWN;
     this.degraded = false;
     this.lastRecognisedAt = Date.now();
+    this.lastDataAt = 0;
     this.recentOutput = [];
     this.runningDetectedAt = 0;
     if (this.degradeTimer) {

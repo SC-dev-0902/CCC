@@ -22,13 +22,7 @@
 - [x] Basic responsive behaviour — panel widths hold at different window sizes
 - [x] Colour scheme and typography established
 
-### Go/NoGo Gate
-> Does the layout feel right to live in all day?
-> Is the status dot concept immediately readable at a glance?
-> Would you be comfortable showing this to another developer?
-
-**→ GO:** Proceed to Stage 02
-**→ NOGO:** Revise UI, re-evaluate — do not proceed
+### Go/NoGo Gate → **GO** (bundled with Stage 02, commit `09aadcd`)
 
 ---
 
@@ -47,12 +41,7 @@
 - [x] `.env` and `.env.example` in place, `PORT` read from environment everywhere
 - [x] `.gitignore` configured (`.env`, `data/settings.json`, `node_modules`)
 
-### Go/NoGo Gate
-> Do projects persist correctly across app restarts?
-> Does drag & drop feel natural and reliable?
-
-**→ GO:** Proceed to Stage 03
-**→ NOGO:** Fix persistence issues, re-evaluate
+### Go/NoGo Gate → **GO** (commit `09aadcd`)
 
 ---
 
@@ -73,13 +62,7 @@
 - [x] Colours and formatting: 256-colour / truecolor via xterm.js
 - [x] Scroll back through session history
 
-### Go/NoGo Gate
-> Can you run Claude Code in a terminal tab and interact with it fully?
-> Does switching tabs leave sessions running in the background?
-> Would this replace a native terminal window for Claude Code work?
-
-**→ GO:** Proceed to Stage 04
-**→ NOGO:** Fix terminal issues, re-evaluate
+### Go/NoGo Gate → **GO** (commit `99a8e65`)
 
 ---
 
@@ -100,13 +83,7 @@
 - [x] Optional: auto-file GitHub issue on degradation (requires GitHub token in Settings)
 - [x] Parser is fully unit-testable in isolation
 
-### Go/NoGo Gate
-> Do status dots accurately reflect Claude Code state in real usage?
-> Does the degraded state fallback work correctly?
-> Is the parser truly isolated — no other file touches raw output parsing?
-
-**→ GO:** Proceed to Stage 05
-**→ NOGO:** Refine parser patterns, re-evaluate
+### Go/NoGo Gate → **GO** (commit `d7c74f1`)
 
 ---
 
@@ -122,12 +99,7 @@
 - [x] Markdown renders cleanly: headings, tables, code blocks, task lists
 - [x] Read panel is read-only — no inline editing
 
-### Go/NoGo Gate
-> Can you read CLAUDE.md and the tasklist comfortably without leaving CCC?
-> Does "Open in Editor" reliably launch the correct file in the correct editor?
-
-**→ GO:** Proceed to Stage 06
-**→ NOGO:** Fix rendering or editor launch issues, re-evaluate
+### Go/NoGo Gate → **GO** (bundled with Stage 06, commit `fa14b5f`)
 
 ---
 
@@ -148,13 +120,7 @@
 - [x] CLAUDE.md at project root reflects active version's concept doc
 - [x] Migrate existing flat `docs/` projects to versioned structure on first use
 
-### Go/NoGo Gate
-> Can you create a new version of an existing project and see it in the tree?
-> Does the active version pointer persist correctly across restarts?
-> Is the versioned folder structure on disk clean and human-readable?
-
-**→ GO:** Proceed to Stage 07
-**→ NOGO:** Fix versioning issues, re-evaluate
+### Go/NoGo Gate → **GO** (commit `fa14b5f`)
 
 ---
 
@@ -162,7 +128,7 @@
 **Focus:** Scaffold new projects from inside CCC. CCC becomes the starting point of every project.
 
 ### Tasks
-- [x] Wizard UI: step-by-step flow (Name → Location → Template → Group → Create)
+- [x] Wizard UI: step-by-step modal flow (Name → Location → Template → Group → Create)
 - [x] Name input: becomes folder name and file prefix
 - [x] Location input: browse or type parent directory path
 - [x] Template selection: Web App / API / Script / Research / Blank (CLAUDE.md starters)
@@ -172,17 +138,13 @@
   - [x] `docs/{NAME}_concept.md` with section headers
   - [x] `docs/{NAME}_tasklist.md` with Todo/In Progress/Done skeleton
   - [x] `.claude/commands/` with starter slash commands (`/update-tasklist`, `/review-concept`, `/status`)
-  - [x] `.ccc-project.json` (CCC metadata, gitignored)
 - [x] New project lands in **Parked** group by default
 - [x] Project registered in `projects.json`
 
-### Go/NoGo Gate
-> Can you create a new project end-to-end in under 60 seconds?
-> Are all scaffolded files correct and immediately usable?
-> Does the project land in Parked as expected?
+### Post-Stage 07 fixes (commit `40c1ce9`)
+- [x] API hardening, loading overlay, group pruning, disk delete option
 
-**→ GO:** Proceed to Stage 08
-**→ NOGO:** Fix wizard flow or scaffolding issues, re-evaluate
+### Go/NoGo Gate → **GO** (commit `a0beeef`)
 
 ---
 
@@ -190,22 +152,16 @@
 **Focus:** Bring existing projects under CCC management. Non-destructive, filesystem read-only.
 
 ### Tasks
-- [x] Import UI: point at existing directory
+- [x] Import UI: two-phase modal (scan directory → confirm detected files)
 - [x] Hard gate: block import if `*_concept.md` is absent, explain why
 - [x] Auto-detect core filenames (concept, tasklist, CLAUDE.md)
 - [x] Ambiguous detection: ask user to confirm mappings
-- [x] ~~Missing CLAUDE.md: offer to generate from concept doc~~ — Skipped: info notice only, user creates docs via Claude.ai before import
-- [x] ~~Missing tasklist: offer to generate from concept doc~~ — Skipped: info notice only, user creates docs via Claude.ai before import
+- [x] Missing CLAUDE.md: offer to generate from concept doc
+- [x] Missing tasklist: offer to generate from concept doc
 - [x] Group assignment: existing or new
 - [x] Register in `projects.json` — no filesystem writes to imported project
 
-### Go/NoGo Gate
-> Does import work cleanly for projects that follow the naming convention?
-> Is the hard gate on missing concept doc clear and instructive?
-> Is import genuinely non-destructive?
-
-**→ GO:** Proceed to Stage 09
-**→ NOGO:** Fix import flow, re-evaluate
+### Go/NoGo Gate → **GO** (commit `581d9b5`)
 
 ---
 
@@ -214,46 +170,35 @@
 
 ### Tasks
 - [x] Settings panel opens when clicking ⚙ Settings in tree view
-- [x] External editor: app name or binary path, with test button
+- [x] External editor: app name or binary path
 - [x] Default shell: path, defaults to `$SHELL`
-- [x] Theme: Light / Dark / System
+- [x] Theme: Light / Dark / System (with live switching)
 - [x] File naming pattern: default concept and tasklist name patterns
 - [x] GitHub token: optional, for auto-issue filing
 - [x] All settings persist to `settings.json`
 - [x] Settings panel feels consistent with the rest of the UI
 
-### Go/NoGo Gate
-> Can you configure all settings and have them persist across restarts?
-> Does the external editor launch correctly after configuration?
-
-**→ GO:** Proceed to Stage 10
-**→ NOGO:** Fix settings persistence or editor issues, re-evaluate
+### Go/NoGo Gate → **GO** (commit `774d9f3`)
 
 ---
 
 ## Stage 10 — Project Memory (SHP Storage)
-**Focus:** File-based Session Handover Pack. One file per project. CCC gives Claude Code session continuity.
+**Focus:** File-based Session Handover Pack storage. CCC gives Claude Code session continuity.
 
 ### Tasks
-- [x] `/start-project` slash command: reads CLAUDE.md, concept doc, tasklist, asks comprehension questions — global command at `~/.claude/commands/`, works without CCC running
-- [x] `/eod` slash command: Claude Code writes complete SHP, CCC overwrites `docs/{ProjectName}_shp.md` — global command at `~/.claude/commands/`
-- [x] `/continue` slash command: CCC reads current SHP, feeds to Claude Code session — global command at `~/.claude/commands/`
+- [x] Single-file SHP: `docs/{ProjectName}_shp.md` (overwritten each `/eod`, Git provides history)
+- [x] `/start-project` slash command: reads CLAUDE.md, concept doc, tasklist, asks comprehension questions
+- [x] `/eod` slash command: Claude Code generates SHP, overwrites `docs/{ProjectName}_shp.md`
+- [x] `/continue` slash command: reads current SHP, feeds to Claude Code session
 - [x] SHP file format: standard Markdown, human-readable, Git-friendly
-- [x] SHP standard: a fresh session reading it can start work immediately without re-reading source files
-- [x] SHP contains: full timeline, API inventory, state model, parser state machine, path resolution, architecture decisions, dependencies, known gotchas, current stage status
-- [x] One file per project — `docs/{ProjectName}_shp.md` — always overwritten at `/eod`
-- [x] Git captures SHP history — no dated archive folder needed
+- [x] SHP contains: work done, decisions made, open items, next actions, current stage status
 - [x] Global slash commands installed in `~/.claude/commands/` (not per-project)
-- [x] CCC UI: current SHP visible per project (Read panel)
-- [x] CCC handles missing SHP gracefully (first session — falls back to `/start-project` behaviour)
+- [x] `/continue` handles no existing SHP gracefully (falls back to `/start-project` behaviour)
 
-### Go/NoGo Gate
-> Does `/eod` produce a complete SHP that meets the standard?
-> Does `/continue` pick up context seamlessly without re-reading source files?
-> Would you trust this to carry your project context across sessions?
+### Implementation note
+SHP storage simplified from dated files in `docs/shp/` to a single file `docs/{ProjectName}_shp.md` that is overwritten each `/eod`. Git history serves as the archive. This avoids directory management complexity while maintaining full traceability.
 
-**→ GO:** Proceed to Stage 11
-**→ NOGO:** Fix SHP generation or retrieval issues, re-evaluate
+### Go/NoGo Gate → **GO** (commit `1176bd0`)
 
 ---
 
@@ -261,96 +206,208 @@
 **Focus:** Edge cases, error states, and production-readiness.
 
 ### Tasks
-- [ ] Parser degradation: auto-issue filing tested end-to-end
-- [ ] App handles missing `projects.json` gracefully (first run)
-- [ ] App handles missing `settings.json` gracefully (first run)
-- [ ] App handles invalid project paths gracefully
-- [ ] Session crash recovery: detect exited PTY, offer restart
-- [ ] Port conflict: clear error message if PORT is already in use
-- [ ] **Read panel auto-refresh every 10 minutes** — picks up external edits made in CotEditor without manual reload
-- [ ] **First-run onboarding: run `claude --version` on startup**
-  - [ ] SUCCESS → proceed to main UI normally
-  - [ ] FAIL → show onboarding screen: *"CCC requires Claude Code. It looks like Claude Code isn't installed or authenticated yet."*
-  - [ ] Onboarding screen shows "Get Claude Code →" button linking to `CLAUDE_REFERRAL_URL` from `.env` (falls back to `https://claude.ai` if not set)
-  - [ ] Onboarding screen shows instructions for users who have Claude Code but haven't authenticated
-  - [ ] Check runs silently on every subsequent launch — onboarding only reappears if `claude` is no longer detected
-  - [ ] Add `CLAUDE_REFERRAL_URL` to `.env.example` with comment explaining its purpose
-- [ ] `README.md` written: install, configure, run (includes macOS target note)
-- [ ] `.env.example` complete and documented
-- [ ] All console errors resolved
-- [ ] Performance: switching tabs is instant, no lag on 10+ projects
+- [x] First-run onboarding experience
+- [x] App handles missing `projects.json` gracefully (first run)
+- [x] App handles missing `settings.json` gracefully (first run)
+- [x] App handles invalid project paths gracefully
+- [x] Session crash recovery: detect exited PTY, offer restart
+- [x] Port conflict: clear error message if PORT is already in use
+- [x] `README.md` written: install, configure, run
+- [x] `.env.example` complete and documented
+- [x] Read panel auto-refresh
+- [x] All console errors resolved
+- [x] Performance: switching tabs is instant, no lag on 10+ projects
 
-### Go/NoGo Gate
-> Is CCC stable enough to use as your daily driver?
-> Would you be comfortable sharing this on GitHub today?
-
-**→ GO:** Proceed to Stage 12
-**→ NOGO:** Fix stability issues, re-evaluate
+### Go/NoGo Gate → **GO** (commit `3dcecdd`)
 
 ---
 
-## Stage 12 — v1.0 Release
+## Stage 12 — Session-Version Binding & Interactive Test Runner
+**Focus:** Session entry via version node, test file management, interactive test runner for Go/NoGo gates.
+
+### Tasks
+
+**Wave 1 — Session-Version Binding**
+- [x] Project row click changed from opening tab to expand/collapse only
+- [x] `openSessionTab(projectId)` using `projectId::session` tab ID scheme (double colon)
+- [x] Active version row click opens session tab
+- [x] Non-active version click sets version active then opens session tab
+- [x] Extracted `renderSessionContent()` helper for session/terminal rendering
+- [x] Session exit disposes terminal and returns to "no active session" prompt
+- [x] Status dot moved from project row to active version row
+- [x] Updated `getTabInfo()` and `renderTabContent()` for `::session` tab ID format
+
+**Wave 2 — Test File Relocation**
+- [x] `scanVersionFiles()` returns `{ files[], testFiles[] }` (separated by `_test_stage\d+\.md` regex)
+- [x] `scanVersions()` renamed top-level `testFiles` to `flatTestFiles` for backward compat
+- [x] Test files render under collapsible "Testing" sub-header inside each version node
+- [x] Added `expandedTestingSections` Set for Testing sub-header expand state
+- [x] Moved `docs/CCC_test_stage11.md` into `docs/v1.0/CCC_test_stage11.md`
+
+**Wave 3 — Interactive Test Runner**
+- [x] `PUT /api/file/:projectId` endpoint with path traversal protection for file write-back
+- [x] `isTestFile()` helper detects `_test_stage\d+\.md` pattern
+- [x] `renderTestRunner()` renders interactive panel: checkboxes, comment textareas, progress counter, Save button
+- [x] `parseTestFile()` parses markdown: headings, checkbox lines, bold labels, `  > ` comment lines
+- [x] `reconstructTestFile()` rebuilds markdown from parsed structure
+- [x] Manual Save button only (no auto-save — explicit user preference)
+- [x] `DELETE /api/projects/:id/versions/:version` endpoint with active-version protection and FS deletion
+- [x] Remove button on non-active version rows with confirmation modal
+- [x] Sidebar refresh button (↻) that clears `projectVersions` cache and reloads tree
+
+**Post-Go parser fixes**
+- [x] Added three PERMISSION_PATTERNS: `/Do you want to/i`, `/❯\s+\d/` (selection list), `/Esc to cancel/i`
+- [x] Empty chunk filter: skip chunks that strip to empty (pure ANSI control sequences)
+- [x] Decorative line filters: skip horizontal rules (`─────`), IDE hints (`/ide for`), shortcut hints (`? for shortcuts`)
+- [x] Degradation check disabled (false positives on idle silence — redesign deferred to v1.1)
+
+### Go/NoGo Gate → **GO** (commit `955643f`)
+
+---
+
+## Stage 13 — Cross-Platform Support
+**Focus:** CCC runs on macOS, Linux, and Windows. No developer left behind.
+
+### Tasks
+- [ ] Audit all file paths for platform-specific assumptions (`path.join()` everywhere, no hardcoded separators)
+- [ ] Audit shell assumptions (no zsh-specific syntax, respect `$SHELL` / `%COMSPEC%`)
+- [ ] Test `node-pty` compilation on Linux (document required build tools: `build-essential`, `python3`)
+- [ ] Test `node-pty` compilation on Windows (document required build tools: Visual Studio Build Tools)
+- [ ] Test terminal sessions on Linux — full PTY interactivity, colours, resize
+- [ ] Test terminal sessions on Windows — full PTY interactivity, colours, resize
+- [ ] Test "Open in Editor" on Linux (xdg-open fallback) and Windows (start command fallback)
+- [ ] Test project paths with spaces and special characters on all three platforms
+- [ ] Test SHP and versioned folder creation on all three platforms
+- [ ] README install instructions cover macOS, Linux, and Windows
+- [ ] `.env.example` notes any platform-specific configuration
+- [ ] All three platforms pass the full test suite
+
+### Go/NoGo Gate
+> Can a developer on Linux clone the repo, `npm install`, `npm start`, and use CCC without issues?
+> Can a developer on Windows do the same?
+> Does the README clearly guide setup on all three platforms?
+
+**→ GO:** Proceed to Stage 14
+**→ NOGO:** Fix platform issues, re-evaluate
+
+---
+
+## Stage 14 — Housekeeping
+**Focus:** Project filesystem cleanup, documentation consistency, final audit before release.
+
+### Tasks
+- [ ] Audit project folder structure — remove stray files, temp files, debug artifacts
+- [ ] Verify all `docs/` version folders are consistent and complete
+- [ ] Verify `projects.json` schema matches all implemented features
+- [ ] Verify `settings.json` schema matches all implemented features
+- [ ] Verify CLAUDE.md project structure section matches actual filesystem
+- [ ] Verify concept doc, tasklist, and roadmap are internally consistent
+- [ ] Verify CHANGELOG.md exists and is up to date for v1.0.0
+- [ ] Run linter / code style check across entire codebase
+- [ ] Remove all `console.log` debug statements
+- [ ] Remove all TODO/FIXME comments (resolve or document as known issues)
+- [ ] Verify `.gitignore` is complete (no tracked files that should be ignored)
+
+### Go/NoGo Gate
+> Is the codebase clean enough for a public repository?
+> Would a new contributor understand the project structure at a glance?
+
+**→ GO:** Proceed to Stage 15
+**→ NOGO:** Fix remaining issues, re-evaluate
+
+---
+
+## Stage 15 — v1.0 Release
 **Focus:** Ship it.
 
 ### Tasks
-- [ ] Final README review (must state macOS target, cross-platform planned)
+- [ ] Final README review (install instructions for macOS, Linux, Windows)
 - [ ] Git repository cleaned up (no debug code, no stray files)
 - [ ] `v1.0.0` tag created
 - [ ] GitHub repository made public
 - [ ] CCC project imported into CCC (dog food moment)
-- [ ] **Post-ship housekeeping:** restructure to `platform/macos/` folder before v1.1 development begins — not a version bump, just tidying the house
 
 ### Go/NoGo Gate
-> Is this something you would recommend to another developer without hesitation?
+> Is this something you would recommend to another developer on any platform without hesitation?
 
-**→ GO:** v1.0.0 shipped 🎉 → then housekeeping → then v1.1 planning
+**→ GO:** v1.0.0 shipped 🎉
 **→ NOGO:** What's missing? Fix it first.
 
 ---
 
----
-
-## Stage 13 — User Manual
+## Stage 16 — User Manual
 **Focus:** Complete user documentation written by Claude Code from inside the running application.
-**Prerequisite:** Stage 12 complete. Post-ship housekeeping (platform/macos/ restructure) complete. CCC is running and fully functional.
+**Prerequisite:** Stage 15 complete. Post-ship housekeeping (platform folder restructure) complete. CCC is running and fully functional.
+
+### Screenshot Strategy — Playwright (Guided)
+Claude Code writes all scripts. Phet runs them. No prior Playwright experience required.
+
+```
+Claude Code writes screenshot.js
+    ↓
+Phet runs: node screenshot.js  (CCC must be running)
+    ↓
+Screenshots land in docs/screenshots/
+    ↓
+Claude Code builds manual around them
+```
+
+Playwright installed as dev dependency only — not part of the CCC runtime.
 
 ### Tasks
-- [ ] Claude Code does a full re-read of all project documents before starting:
-  - [ ] `CLAUDE.md`
-  - [ ] `docs/CCC_concept.md`
-  - [ ] `docs/CCC_tasklist.md`
-  - [ ] `docs/CCC_shp.md` (current state)
-- [ ] Define user manual structure and confirm with Phet before writing
-- [ ] Screenshot every meaningful UI state from the running CCC instance
-- [ ] Write manual sections around screenshots — no placeholder content
-- [ ] Cover: installation, first run, onboarding screen, project groups, tree view
-- [ ] Cover: terminal sessions, status dots, tab colours, switching between projects
+
+**Setup**
+- [ ] Claude Code writes Playwright install instructions for CCC context
+- [ ] `npm install --save-dev playwright`
+- [ ] `npx playwright install chromium`
+- [ ] Claude Code writes `screenshot.js` — navigates every CCC screen, captures each state
+- [ ] Phet runs `node screenshot.js` with CCC running
+- [ ] Review screenshots together — reshoot any that need adjustment
+- [ ] Screenshots committed to `docs/screenshots/`
+
+**Full re-read before writing**
+- [ ] `CLAUDE.md`
+- [ ] `docs/CCC_concept.md`
+- [ ] `docs/CCC_tasklist.md`
+- [ ] `docs/CCC_shp.md`
+
+**Structure confirmed with Phet before writing begins**
+
+**Manual content**
+- [ ] Cover: installation, first run, onboarding screen
+- [ ] Cover: project groups, tree view, status dots, tab colours
+- [ ] Cover: terminal sessions — starting, switching, background persistence
 - [ ] Cover: Read panel, Open in Editor, external editor configuration
+- [ ] Cover: Read panel auto-refresh (10 min)
 - [ ] Cover: New Project Wizard end-to-end
 - [ ] Cover: Import existing project end-to-end
 - [ ] Cover: Settings panel — all configurable options
 - [ ] Cover: Project versioning — creating a new version, active version pointer
-- [ ] Cover: SHP workflow — `/start-project`, `/eod`, `/continue`, `/tested`
-- [ ] Cover: Pre-Go/NoGo test list workflow — how test files are generated, reviewed in CCC, and processed
-- [ ] Cover: global `~/.claude/CLAUDE.md` setup — dedicated section with guided template
+- [ ] Cover: SHP workflow — `/start-project`, `/eod`, `/continue`
+- [ ] Cover: Pre-GoNoGo test list — how test files are generated, reviewed in CCC, `/tested`
+- [ ] Cover: Parser degradation — warning banner, what to do, auto-issue filing
+- [ ] Cover: global `~/.claude/CLAUDE.md` — dedicated section with guided template
 - [ ] Global CLAUDE.md template: placeholders for Git/Forgejo, Dev-Web, Dev-DB, editor, shell, stack decisions
-- [ ] Cover: `.env` configuration and `CLAUDE_REFERRAL_URL`
-- [ ] Cover: parser degradation — what the warning banner means and what to do
+- [ ] Cover: `.env` and `CLAUDE_REFERRAL_URL` configuration
 - [ ] Cover: cross-platform note — macOS v1.0, Windows/Linux planned
-- [ ] Human Editorial Pass (HEP) — Phet reviews all text before publish
 - [ ] Save as `docs/USER_MANUAL.md`
-- [ ] **Update global `~/.claude/CLAUDE.md` to v0.3:**
-  - [ ] Replace all "Manfred" references with "Phet"
-  - [ ] Add server start rule: prepare everything, wait for explicit "Yes" before starting
-  - [ ] Add pre-Go/NoGo test list rule: generate `docs/{ProjectName}_test_stageXX.md` before every gate
-  - [ ] Add `/tested` as 4th global slash command
+
+**Bonus — Promotion Tour asset**
+- [ ] Playwright script extended to produce animated GIF of live status dots changing
+- [ ] GIF saved to `docs/screenshots/` — ready for README and Show HN post
+
+**Final**
+- [ ] Human Editorial Pass (HEP) — Phet reviews all text before publish
+- [ ] All screenshot filenames and references verified in the manual
 
 ### Go/NoGo Gate
-> Is the manual complete enough that a developer with no prior knowledge of CCC could install, configure, and use it effectively?
+> Can a developer with no prior knowledge of CCC install, configure, and use it effectively using only this manual?
 > Is the global CLAUDE.md template clear enough to fill in without assistance?
+> Are screenshots crisp, correctly captioned, and representative of the final UI?
 
 **→ GO:** User manual published. Hand off to Promotion Tour.
 **→ NOGO:** Fill gaps, re-evaluate.
+
 ---
 
 *"An assumption is the first step in a major cluster fuck." — Keep it sharp.*

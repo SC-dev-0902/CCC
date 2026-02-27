@@ -101,7 +101,7 @@ A project in CCC is not a single pass from start to finish. Projects evolve — 
 | Minor | x.Y | New feature integration, expanded concept | Yes | Yes |
 | Patch | x.y.Z | Bug fix / repair | Yes — seeded from parent minor version's concept | Yes |
 
-A major or minor version represents a new mandate for the project. It gets its own concept doc (which may be entirely new or an evolution of the previous one), its own tasklist, and its own full stage progression from Stage 01 to Stage 12.
+A major or minor version represents a new mandate for the project. It gets its own concept doc (which may be entirely new or an evolution of the previous one), its own tasklist, and its own full stage progression from Stage 01 to Stage 14.
 
 A patch version is a focused repair cycle. It gets its own concept doc (seeded from the parent minor version's concept as a starting point), its own tasklist, and its own stage progression.
 
@@ -540,7 +540,7 @@ CCC captures an end-of-day Session Handover Pack per project and stores it as a 
 
 #### Storage Structure
 
-Each project has exactly **one SHP file**. Always the same file. Always overwritten at `/eod`. Git captures the history if you ever need to look back.
+SHPs are stored per project inside `docs/shp/`:
 
 ```
 CCC/
@@ -548,12 +548,13 @@ CCC/
     ├── v1.0/
     │   ├── CCC_concept.md
     │   └── CCC_tasklist.md
-    └── CCC_shp.md             ← one file, always current, overwritten at /eod
+    └── shp/
+        ├── 2026-02-25.md
+        ├── 2026-02-26.md
+        └── 2026-02-27.md
 ```
 
-File naming follows the project convention: `{ProjectFolderName}_shp.md`.
-
-The SHP is a standard Markdown document — human-readable, Git-friendly, openable in CotEditor or any editor. Version history lives in Git, not in dated filenames.
+Each SHP file is a standard Markdown document — human-readable, Git-friendly, openable in CotEditor or any editor.
 
 #### Slash Commands
 
@@ -561,93 +562,41 @@ Three global slash commands power the workflow. These belong in `~/.claude/comma
 
 | Command | When | What it does |
 |---------|------|-------------|
-| `/start-project` | First session on a new project | Claude Code reads CLAUDE.md, concept doc, tasklist. Asks comprehension questions. Works without CCC running. |
-| `/continue` | Every returning session | CCC reads the current SHP (`docs/{ProjectName}_shp.md`) and feeds it to Claude Code. Picks up where the last session left off. |
-| `/eod` | End of every session | Claude Code writes the complete SHP — overwrites `docs/{ProjectName}_shp.md`. Git captures the history. |
-| `/tested` | After Phet has reviewed the pre-GoNoGo test file | Claude Code re-reads `docs/{ProjectName}_test_stageXX.md`, processes any comments, applies fixes or clarifications, then presents the Go/NoGo gate. |
-
-#### What a Complete SHP Must Contain
-
-The standard is: *a fresh session reading the SHP can start work immediately without re-reading source files.*
-
-A complete SHP covers:
-- **Full project timeline** — every stage, commit, and date
-- **Complete API inventory** — every endpoint with method, path, and purpose
-- **Frontend state model** — all variables, maps, sets, and the rendering pipeline
-- **Parser state machine** — detection priority, degradation logic, debounce behaviour
-- **Path resolution chain** — how relative paths work
-- **Version model** — folder structure, inheritance rules
-- **Architecture decisions** — the rules that govern how the code is written
-- **All dependencies** — with version notes (e.g. why node-pty needs the beta version)
-- **Known gotchas** — the things that will bite you if you don't know about them
-- **Current stage status** — where we are, what's done, what's next
-
-> *"It knows the outcome, not the journey."*
-
-A fresh session reading the SHP knows every decision and its result. It does not know the conversation that led there. For code work, that is enough.
+| `/start-project` | First session on a new project | Claude Code reads CLAUDE.md, concept doc, tasklist. Asks comprehension questions. Waits for instruction. |
+| `/continue` | Every returning session | CCC reads the most recent SHP from `docs/shp/` and feeds it to Claude Code. Picks up where yesterday left off. |
+| `/eod` | End of project day | Claude Code writes the SHP — what was done, decided, what's open, what's next. CCC saves it as a dated file in `docs/shp/`. |
 
 #### The Daily Workflow
 
 ```
 Day 1:  /start-project → work → /eod
 Day 2:  /continue → work → /eod
-Day N:  /continue → work → [stage complete] → test file generated → /tested → Go/NoGo
+Day 3:  /continue → work → /eod
 ```
-
-#### Pre-Go/NoGo Test List
-
-Before presenting any Go/NoGo gate, Claude Code generates a test checklist file:
-
-```
-docs/{ProjectName}_test_stageXX.md
-```
-
-The file appears in the CCC Read panel for the project. Phet works through the list inside CCC — ticking items, adding comments where something needs attention or fails. When review is complete, Phet types `/tested`. Claude Code re-reads the file, processes any comments (applies fixes, clarifications, re-tests), updates the file if needed, and then — and only then — presents the Go/NoGo gate.
-
-The test files accumulate in `docs/` — one per stage — giving a full audit trail of what was tested and what was found at each gate. They are human-readable, editable in CotEditor, and Git-tracked.
 
 #### CCC Dependency
 
-`/continue` and `/eod` require CCC to be running — CCC manages the SHP file. `/start-project` works independently (file reading only). This dependency is by design: CCC is the infrastructure that gives Claude Code memory.
+`/continue` and `/eod` require CCC to be running — CCC manages the SHP storage and retrieval. `/start-project` works independently (file reading only). This dependency is by design: CCC is the infrastructure that gives Claude Code memory.
 
-#### Why One File (Not Dated Archives)
+#### Why File-Based (v1.0) and Not SQLite
 
-One SHP per project. One file. Always current. Git is the version history — running `/eod` each session means every day's state is committed to the repo, searchable and restorable. No folder of dated files to manage, no ambiguity about which is latest.
+File-based SHP storage is sufficient for v1.0: one Markdown file per day, human-readable, Git-friendly, no new dependencies. SQLite becomes the upgrade path in v2.0 when search across SHPs and richer context layering justify it. See `docs/CCC_Roadmap.md` for the version plan.
 
 ---
 
 ## Platform Target
 
-v1.0 targets **macOS** as the development and testing platform. Cross-platform support (Linux, Windows) is not a v1.0 goal but is explicitly not excluded.
+v1.0 targets **macOS, Linux, and Windows**. Development and primary testing is on macOS, with cross-platform validation as a dedicated stage before release.
 
-Design choices must not close the door on future cross-platform support:
+Design rules to maintain cross-platform compatibility:
 - No platform-specific APIs (e.g., macOS-only system calls)
-- No hardcoded paths (e.g., `/Users/`, `~/Library/`)
+- No hardcoded paths (e.g., `/Users/`, `~/Library/`, `C:\Users\`)
 - No assumptions about the default shell being zsh
 - Use `path.join()` for all filesystem path construction
 - No filesystem symlinks (fragile across platforms — see Project Versioning)
+- Respect platform conventions for editor launch (`open` on macOS, `xdg-open` on Linux, `start` on Windows)
 
-The underlying tech stack (Node.js, Express, xterm.js, node-pty) is inherently cross-platform. `node-pty` requires platform-specific build tools (Xcode CLI on macOS, build-essential on Linux, Visual Studio Build Tools on Windows) but compiles on all three.
-
-Cross-platform support is a candidate for a future version if demand warrants it after the Promotion Tour.
-
----
-
-## Post-v1.0 Housekeeping — Platform Folder Structure
-
-After v1.0 ships and before v1.1 development begins, a housekeeping sprint will restructure the project to support cross-platform development properly:
-
-```
-CCC/
-└── platform/
-    ├── macos/      ← current codebase moves here
-    ├── windows/    ← placeholder
-    └── linux/      ← placeholder
-```
-
-This is **not a feature and not a version bump**. It is tidying up the house before the next development cycle begins. Each platform folder will be self-contained — its own codebase, its own versioned docs. Shared code is not extracted into a `core/` layer until multiple platforms are actively maintained.
-
-This restructuring applies to CCC itself **and** to the New Project Wizard and Import flow — new projects will scaffold under the correct platform folder, and imported projects will register accordingly.
+The underlying tech stack (Node.js, Express, xterm.js, node-pty) is inherently cross-platform. `node-pty` requires platform-specific build tools (Xcode CLI on macOS, build-essential on Linux, Visual Studio Build Tools on Windows) but compiles on all three. README must document setup for each platform.
 
 ---
 
@@ -658,7 +607,45 @@ This restructuring applies to CCC itself **and** to the New Project Wizard and I
 - Built-in text editor (read + external edit is sufficient)
 - Git integration beyond what Claude Code handles
 - Mobile / tablet support
-- Cross-platform support (Linux, Windows) — see Platform Target
+
+---
+
+## User Manual
+
+The user manual is produced in **Stage 16** — after v1.0 ships, after post-ship housekeeping, and before the Promotion Tour. It is the last step before handing off to v1.1.
+
+### Screenshots — Playwright
+
+Claude Code cannot take screenshots directly. Screenshots are captured via Playwright (Node.js — fits the CCC stack naturally). Claude Code writes all scripts, Phet runs them. No prior Playwright experience required.
+
+```
+Claude Code writes screenshot.js
+    ↓
+Phet runs: node screenshot.js  (CCC must be running)
+    ↓
+Screenshots land in docs/screenshots/
+    ↓
+Claude Code builds manual around them
+```
+
+Playwright is installed as a **dev dependency only** — not part of the CCC runtime.
+
+### Promotion Tour Asset
+
+The Playwright script is extended to produce an animated GIF of live status dots changing in real time. Saved to `docs/screenshots/` — ready for the README and Show HN post. One script, two deliverables.
+
+### Process
+
+Before writing a single word, Claude Code re-reads all four documents: `CLAUDE.md`, `CCC_concept.md`, `CCC_tasklist.md`, and `CCC_shp.md`. Manual structure is proposed and confirmed with Phet before writing begins.
+
+### Output
+
+- `docs/USER_MANUAL.md` — complete manual with embedded screenshots
+- `docs/screenshots/` — all Playwright-captured images and animated GIF
+
+### Human Editorial Pass
+
+All manual text requires a Human Editorial Pass (HEP) — Phet reviews and approves before publish. No outward-facing text goes out without human review.
 
 ---
 

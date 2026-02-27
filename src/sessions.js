@@ -2,6 +2,7 @@ const pty = require('node-pty');
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
+
 const { ClaudeParser, STATES } = require('./parser');
 
 // Active sessions keyed by project ID

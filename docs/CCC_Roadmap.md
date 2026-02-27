@@ -15,7 +15,7 @@
 ## v1.0 — The Foundation
 
 **Status:** In development
-**Platform:** macOS (cross-platform not excluded — see Platform Target in concept doc)
+**Platform:** macOS, Linux, Windows
 **Theme:** Dashboard + Project Memory. CCC manages Claude Code sessions and gives them continuity.
 
 ### What ships in v1.0
@@ -33,6 +33,8 @@
 | Project Memory | `/start-project`, `/eod`, `/continue` — file-based SHP storage |
 | Project Versioning | Version folders in `docs/`, active version pointer in JSON |
 | Resilience & Polish | Error handling, first-run experience, README |
+| Cross-Platform | macOS, Linux, Windows — tested and documented |
+| Housekeeping | Filesystem cleanup, documentation audit, code quality |
 
 ### What does NOT ship in v1.0
 
@@ -41,7 +43,6 @@
 - Built-in text editor
 - Git integration beyond post-stage push
 - Mobile / tablet support
-- Cross-platform support (Linux, Windows)
 - SQLite (file-based storage is sufficient for v1.0)
 
 ### Version lock
@@ -61,6 +62,7 @@
 | Area | Scope |
 |------|-------|
 | Bug fixes | Anything found during 2-3 weeks of daily use |
+| Degradation detection | Redesign — current approach triggers false positives on idle and decorative output |
 | Polish | UI refinements, performance, edge cases |
 | README | Polished with GIF/screen recording |
 | Promotion campaign | Show HN, Reddit (r/ClaudeAI, r/cursor), X/Twitter thread, blog post |
@@ -69,7 +71,7 @@
 
 Ship v1.0 → use it daily for 2-3 weeks → fix rough edges → ship v1.1 → promote. First impression must be flawless.
 
-All promotion material must state clearly: **v1.0/v1.1 is built and tested on macOS. Cross-platform support is planned.**
+All promotion material should highlight: **v1.0 supports macOS, Linux, and Windows.**
 
 ### Promotion assets (to be drafted in dedicated session)
 
@@ -95,7 +97,6 @@ All promotion material must state clearly: **v1.0/v1.1 is built and tested on ma
 | Searchable history | Full-text search across all stored SHPs per project |
 | Context layering | Yesterday's SHP in full + compressed digest of prior history |
 | User manual | CCC as infrastructure — must be running before Claude Code |
-| Cross-platform | Linux and Windows support (if demand warrants) |
 | Claude.ai API integration | Optional API key for in-CCC document generation |
 | Global slash commands | `~/.claude/commands/` for universal workflow commands |
 

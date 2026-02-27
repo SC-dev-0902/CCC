@@ -1424,7 +1424,6 @@ async function renderTestRunner(container, project, fileName) {
   // Parse markdown into structured items
   const lines = data.content.split('\n');
   const parsed = parseTestFile(lines);
-
   // State tracking
   let dirty = false;
   const saveBtn = panel.querySelector('.test-runner-save');
@@ -1462,7 +1461,7 @@ async function renderTestRunner(container, project, fileName) {
   // Render the content
   const contentEl = panel.querySelector('.test-runner-content');
   contentEl.innerHTML = '';
-  renderTestItems(contentEl, parsed, markDirty, scheduleAutoSave, updateProgress);
+  renderTestItems(contentEl, parsed, markDirty, null, updateProgress);
   updateProgress();
 }
 

@@ -1,7 +1,13 @@
 # CLAUDE.md — Claude Command Center (CCC)
-# Project-Level Behavioral Contract
-# Derived from: docs/CCC_concept.md
-# Global rules: ~/.claude/CLAUDE.md (always applies)
+*Derived from: docs/CCC_concept.md*
+
+---
+
+## Prime Directive
+
+> "An assumption is the first step in a major cluster fuck." — Marine Corps
+
+**Never assume. Always ask.** When in doubt about scope, intent, or next action — stop and ask. Do not proceed based on inference.
 
 ---
 
@@ -9,56 +15,35 @@
 
 CCC is a local web application (Node.js + Express + xterm.js) that serves as a unified dashboard for managing multiple simultaneous Claude Code sessions. It replaces terminal sprawl with a single window: tree view of projects on the left, tab-based terminal sessions on the right, live colour-coded status indicators per project.
 
-**Read `docs/CCC_concept.md` before starting any task.** It is the single source of truth. One file, no versioning in the filename, always current.
+Read `docs/CCC_concept.md` before starting any task. It is the single source of truth. Always read the latest version — there is only one file, no versioning in the filename.
 
 ---
 
-## CCC-Specific Behavioural Rules
+## Behavioural Rules
 
-These rules extend the global contract (~/.claude/CLAUDE.md) for this project specifically.
-
-- **Never hardcode the port.** Always read from `process.env.PORT`. Default: 3000, defined in `.env`.
-- **Never hardcode the referral URL.** Always read from `process.env.CLAUDE_REFERRAL_URL`. Falls back to `https://claude.ai` if not set.
-- **Never commit `.env`.** Gitignored. Repo ships with `.env.example`.
+- **Never hardcode the port.** Always read from `process.env.PORT`. Default is 3000, defined in `.env`.
+- **Never commit `.env`.** It is in `.gitignore`. The repo ships with `.env.example`.
+- **Never begin the next stage without an explicit Go from the developer.**
 - **Never modify files in an imported project directory.** CCC is read-only on the filesystem except for its own `projects.json` and `settings.json`.
 - **Never write version numbers into filenames.** Version history lives in Git.
-- **Never use filesystem symlinks.** Active version is tracked in `projects.json` via `activeVersion` field.
-- **Never use platform-specific APIs or hardcoded paths.** v1.0 targets macOS but must not close the door on cross-platform support. Use `path.join()` for all paths. No `/Users/`, no `~/Library/`, no assumptions about shell.
-- **Parser module is sacred.** All Claude Code output parsing lives exclusively in `src/parser.js`. Nothing else touches raw output interpretation. No exceptions.
-- **Do not implement platform folder restructuring during v1.0.** Platform separation (`platform/macos/`, `platform/windows/`, `platform/linux/`) is a post-v1.0 housekeeping task — not a feature, not a version bump. Do not touch during current build.
+- **Never use filesystem symlinks.** Active version is tracked in `projects.json`, not on the filesystem.
+- **Never use platform-specific APIs or hardcoded paths.** v1.0 targets macOS, Linux, and Windows. Use `path.join()` for all paths. No `/Users/`, no `~/Library/`, no `C:\Users\`, no assumptions about zsh.
+- **Parser module is sacred.** All Claude Code output parsing lives exclusively in `src/parser.js`. Nothing else touches raw output interpretation.
 
 ---
 
-## Current Platform
-
-**v1.0 target: macOS only.**
-
-Post-v1.0, before v1.1 development begins, a housekeeping sprint will restructure the project:
-
-```
-CCC/
-└── platform/
-    ├── macos/      ← current codebase moves here
-    ├── windows/    ← placeholder
-    └── linux/      ← placeholder
-```
-
-This applies to CCC itself and to the New Project Wizard and Import flow. It is housekeeping — not a version bump, not a feature release.
-
----
-
-## Project Structure (v1.0 — macOS)
+## Project Structure
 
 ```
 CCC/
 ├── CLAUDE.md                  ← this file (project root)
 ├── .env                       ← local only, never committed
-├── .env.example               ← committed, documents all variables
+├── .env.example               ← committed, shows available variables
 ├── .gitignore
 ├── package.json
-├── server.js                  ← Express entry point
+├── server.js                  ← Express server entry point
 ├── src/
-│   ├── parser.js              ← ISOLATED: status detection only
+│   ├── parser.js              ← ISOLATED: all status detection logic lives here
 │   ├── sessions.js            ← PTY session management
 │   └── projects.js            ← project registry logic
 ├── public/
@@ -69,11 +54,46 @@ CCC/
 │   ├── projects.json          ← project registry (committed, no absolute paths)
 │   └── settings.json          ← user settings (gitignored)
 └── docs/
-    ├── CCC_concept.md         ← source of truth
-    ├── CCC_tasklist.md        ← stage-gated task breakdown
-    ├── CCC_shp.md             ← project memory (overwritten at /eod)
-    └── CCC_test_stageXX.md    ← pre-GoNoGo test list (one per stage, accumulates)
+    ├── v1.0/
+    │   ├── CCC_concept.md     ← v1.0 concept
+    │   └── CCC_tasklist.md    ← v1.0 tasklist
+    └── v1.1/
+        ├── CCC_concept.md     ← v1.1 concept (active)
+        └── CCC_tasklist.md    ← v1.1 tasklist
 ```
+
+---
+
+## Project Versioning
+
+CCC models project evolution through explicit versions. Each version is a full development cycle.
+
+- **A version is a container** — it has its own concept doc, tasklist, stage progression, and Go/NoGo gates.
+- **Major (X.0) and Minor (x.Y) versions** get their own concept doc and tasklist.
+- **Patch versions (x.y.Z)** get their own concept doc (seeded from parent minor version) and their own tasklist.
+- **Version documents live in `docs/vX.Y/`** — e.g., `docs/v1.1/CCC_concept.md`.
+- **Patch version documents nest inside their parent** — e.g., `docs/v1.1/v1.1.1/CCC_concept.md` and `CCC_tasklist.md`.
+- **The active version is tracked in `projects.json`** via the `activeVersion` field. Never use filesystem symlinks.
+- **CLAUDE.md stays at the project root** and is always derived from the active version's concept doc.
+- **When a version's final stage receives a Go**, prompt for a Git tag matching the version number.
+
+Read `docs/CCC_concept.md` → Project Versioning section for the full specification.
+
+---
+
+## Project Memory
+
+CCC gives Claude Code session continuity through file-based SHP (Session Handover Pack) storage.
+
+- **SHPs are stored as dated Markdown files** in `docs/shp/` per project (e.g., `docs/shp/2026-02-25.md`).
+- **Three global slash commands** drive the workflow: `/start-project`, `/continue`, `/eod`.
+- **`/start-project`** — reads CLAUDE.md, concept, tasklist. Asks comprehension questions. Works without CCC.
+- **`/continue`** — CCC feeds the most recent SHP to Claude Code. Requires CCC to be running.
+- **`/eod`** — Claude Code writes the SHP. CCC stores it. Requires CCC to be running.
+- **SHP files are human-readable Markdown** — Git-friendly, openable in any editor.
+- **Never store SHPs in the database.** v1.0 uses file-based storage. SQLite is a v2.0 upgrade.
+
+Read `docs/CCC_concept.md` → Project Memory section for the full specification.
 
 ---
 
@@ -82,7 +102,7 @@ CCC/
 | Concern | Technology |
 |---|---|
 | Server | Node.js + Express |
-| Terminal | node-pty (beta) + xterm.js |
+| Terminal | node-pty + xterm.js |
 | WebSocket | ws library |
 | Frontend | Vanilla JS |
 | Markdown render | marked.js |
@@ -108,88 +128,72 @@ The parser (`src/parser.js`) maps Claude Code output to exactly five states:
 
 ## Parser Resilience
 
-If the parser receives unrecognised output for more than 60 seconds of activity:
+If the parser receives unrecognised output for more than 60 seconds of activity, it enters a degraded state:
 - All status dots fall back to ⚫
-- A warning banner appears with a link to the GitHub issues page
-- The terminal remains fully interactive — only status colours are affected
-- If a GitHub token is configured in Settings, CCC auto-files one issue:
-  `[Auto] Status detection degraded — Claude Code output format may have changed`
+- A warning banner appears in the UI with a link to the GitHub issues page
+- The terminal remains fully interactive — nothing is broken, only status colours are affected
+- If a GitHub token is configured in Settings, CCC auto-files one issue titled: `[Auto] Status detection degraded — Claude Code output format may have changed`
 
 ---
 
-## Project Versioning
+## Stage Gate Process
 
-- Each version is a full development cycle with its own concept doc and tasklist
-- Version documents live in `docs/vX.Y/` — e.g. `docs/v1.1/CCC_concept.md`
-- Patch versions nest inside their parent: `docs/v1.1/v1.1.1/`
-- Active version tracked in `projects.json` via `activeVersion` field
-- CLAUDE.md stays at project root, always derived from active version's concept doc
-- When final stage receives Go → prompt for Git tag matching version number
+Development proceeds in defined stages. See `docs/CCC_tasklist.md` for the full breakdown. See `docs/CCC_Roadmap.md` for the version plan (v1.0, v1.1, v2.0).
 
----
-
-## Project Memory — SHP
-
-The SHP (Session Handover Pack) is the **project memory**.
-
-> *"A fresh session reading it can start work immediately without re-reading source files. It knows the codebase without having built it."*
-
-> *"It knows the outcome, not the journey."*
-
-**One SHP per project. One file. Always overwritten at `/eod`.**
-File: `docs/CCC_shp.md`
-
-### SHP must contain
-
-- Full project timeline — every stage, commit, and date
-- Complete API inventory — every endpoint with method, path, and purpose
-- Frontend state model — all variables, maps, sets, and the rendering pipeline
-- Parser state machine — detection priority, degradation logic, debounce behaviour
-- Path resolution chain — how relative paths work
-- Version model — folder structure, inheritance rules
-- Architecture decisions — the rules that govern how CCC code is written
-- All dependencies — with version notes (e.g. why node-pty needs the beta version)
-- Known gotchas — the things that will bite you if you don't know about them
-- Current stage status — where we are, what's done, what's next
-
-### The four slash commands
-
-| Command | When | What it does |
-|---|---|---|
-| `/start-project` | First ever session | Reads CLAUDE.md, concept, tasklist. Asks comprehension questions. Works without CCC running. |
-| `/eod` | End of every session | Writes complete SHP to `docs/CCC_shp.md`, overwriting previous. Git captures history. |
-| `/continue` | Start of new session | CCC feeds current SHP to Claude Code. Resume without archaeology. |
-| `/tested` | After Phet has reviewed the pre-GoNoGo test file | Re-reads `docs/{ProjectName}_test_stageXX.md`, processes any comments, applies fixes, then presents Go/NoGo gate. |
-
-Global slash commands — installed in `~/.claude/commands/`, available across all projects.
-
-### Pre-Go/NoGo test list
-
-Before every Go/NoGo gate, Claude Code generates `docs/{ProjectName}_test_stageXX.md`. The file appears in the CCC Read panel. Phet works through it — ticking items, adding comments. When done, Phet types `/tested`. Claude Code processes comments and presents the gate. Test files accumulate in `docs/` — one per stage, full audit trail.
-
-### "Create SHP" — chat command
-
-When Phet says **"Create SHP"** in the Claude.ai chat interface: output the current SHP as plain text directly in chat. No files, no questions, no preamble. Ready to copy. Distinct from `/eod` — this is for human use across Claude.ai sessions.
+- Each stage has a defined set of tasks
+- Each stage ends with a Go/NoGo decision
+- **Never begin Stage N+1 without an explicit Go**
+- Stage 01 produces a static UI shell — no backend, no real terminals, hardcoded data only. The UI must feel right before any backend code is written.
 
 ---
 
 ## Git Protocol
 
-After every stage Go decision:
-```
-git add .
-git commit -m "Stage XX complete — [brief description]"
-git push
-```
+After every stage Go decision, push to the repository:
+  git add .
+  git commit -m "Stage XX complete — [brief description]"
+  git push
+  
+## SHP Protocol
+
+When the developer says **"Create SHP"** — output the current Session Handover Pack as plain text directly in the chat. No files, no questions, no preamble. Just the text, ready to copy. Update stage status and version number before outputting.
 
 ---
 
-## Stack Decisions (CCC entry for ~/.claude/CLAUDE.md §3.2)
+## User Manual
 
-| Project | Stack Decisions |
-|---|---|
-| CCC | Node.js + Express, node-pty beta, xterm.js, ws, marked.js, JSON persistence, no database |
+The user manual is **Stage 13** — written after v1.0 ships, after post-ship housekeeping, before the Promotion Tour.
 
----
+### Screenshots — Playwright
+Claude Code cannot take screenshots directly. Screenshots are captured via Playwright (Node.js — fits the CCC stack naturally). Claude Code writes all scripts. Phet runs them. No prior Playwright experience required.
 
-*Project contract ends here. Global rules (~/.claude/CLAUDE.md) always apply.*
+```
+Claude Code writes screenshot.js
+    ↓
+Phet runs: node screenshot.js  (CCC must be running)
+    ↓
+Screenshots land in docs/screenshots/
+    ↓
+Claude Code builds manual around them
+```
+
+Playwright is installed as a **dev dependency only** — not part of the CCC runtime.
+
+### Bonus — Promotion Tour Asset
+The same Playwright script is extended to produce an animated GIF of live status dots changing in real time. Saved to `docs/screenshots/` — ready for the README and Show HN post.
+
+### Stage 13 Start
+Before writing a single word, Claude Code re-reads all four documents:
+- `CLAUDE.md`
+- `docs/CCC_concept.md`
+- `docs/CCC_tasklist.md`
+- `docs/CCC_shp.md`
+
+Manual structure is proposed and confirmed with Phet before writing begins.
+
+### Output
+- `docs/USER_MANUAL.md` — full manual with embedded screenshots
+- `docs/screenshots/` — all Playwright-captured images and animated GIF
+
+### Human Editorial Pass (HEP)
+Phet reviews all manual text before publish. No outward-facing text goes out without human review.
