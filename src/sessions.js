@@ -49,8 +49,9 @@ function createSession(projectId, projectPath, command) {
         COLORTERM: 'truecolor',
         HOME: os.homedir()
       });
-      // Remove Claude Code nesting guard so spawned sessions can run claude
+      // Remove Claude Code nesting guards so spawned sessions can run claude
       delete env.CLAUDECODE;
+      delete env.CLAUDE_CODE_ENTRYPOINT;
       return env;
     })()
   });
@@ -89,7 +90,8 @@ function createSession(projectId, projectPath, command) {
         autoFileGitHubIssue(info);
       }
     });
-    session.parser.startDegradeMonitor();
+    // Degradation monitor disabled in v1.0 — false positives on streaming output.
+    // Redesign deferred to v1.1. See parser.js comment at feed().
   }
 
   // Forward PTY output to all connected WebSocket clients

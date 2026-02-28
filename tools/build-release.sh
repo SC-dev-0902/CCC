@@ -33,6 +33,8 @@ SHARED_FILES=(
   .gitignore
   CLAUDE.md
   README.md
+  CHANGELOG.md
+  LICENSE
   src
   public
   docs
@@ -45,6 +47,8 @@ build_archive() {
   local installer_src="$2"
   local installer_dest="$3"
   local archive_format="$4"
+  local starter_src="$5"
+  local starter_dest="$6"
 
   local stage_dir="$STAGE/CCC"
   rm -rf "$STAGE"
@@ -67,11 +71,22 @@ build_archive() {
   cp "$installer_src" "$stage_dir/$installer_dest"
   chmod +x "$stage_dir/$installer_dest" 2>/dev/null || true
 
+  # Copy OS-specific starter to archive root
+  cp "$starter_src" "$stage_dir/$starter_dest"
+  chmod +x "$stage_dir/$starter_dest" 2>/dev/null || true
+
   # Patch installer: change cd to work from project root
   if [[ "$installer_dest" == *.sh ]]; then
     sed -i '' 's|cd "$(dirname "$0")/../.."|cd "$(dirname "$0")"|' "$stage_dir/$installer_dest"
   elif [[ "$installer_dest" == *.ps1 ]]; then
     sed -i '' 's|Set-Location (Join-Path $PSScriptRoot "\\.\\.\\\\.\\.")|Set-Location $PSScriptRoot|' "$stage_dir/$installer_dest"
+  fi
+
+  # Patch starter: change cd to work from project root
+  if [[ "$starter_dest" == *.sh ]] || [[ "$starter_dest" == *.command ]]; then
+    sed -i '' 's|cd "$(dirname "$0")/../.."|cd "$(dirname "$0")"|' "$stage_dir/$starter_dest"
+  elif [[ "$starter_dest" == *.bat ]]; then
+    sed -i '' 's|cd /d "%~dp0\\..\\.."|cd /d "%~dp0"|' "$stage_dir/$starter_dest"
   fi
 
   # Create archive
@@ -89,9 +104,9 @@ build_archive() {
 
 # --- Build all three archives ---
 
-build_archive "macos"   "tools/macos/install_CCC.sh"      "install_CCC.sh"  "tar.gz"
-build_archive "linux"   "tools/linux/install_CCC.sh"      "install_CCC.sh"  "tar.gz"
-build_archive "windows" "tools/windows/install_CCC.ps1"   "install_CCC.ps1" "zip"
+build_archive "macos"   "tools/macos/install_CCC.sh"      "install_CCC.sh"  "tar.gz" "tools/macos/start_CCC.command"  "start_CCC.command"
+build_archive "linux"   "tools/linux/install_CCC.sh"      "install_CCC.sh"  "tar.gz" "tools/linux/start_CCC.sh"       "start_CCC.sh"
+build_archive "windows" "tools/windows/install_CCC.ps1"   "install_CCC.ps1" "zip"    "tools/windows/start_CCC.bat"    "start_CCC.bat"
 
 # --- Summary ---
 

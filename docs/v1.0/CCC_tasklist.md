@@ -153,13 +153,17 @@
 
 ### Tasks
 - [x] Import UI: two-phase modal (scan directory → confirm detected files)
-- [x] Hard gate: block import if `*_concept.md` is absent, explain why
 - [x] Auto-detect core filenames (concept, tasklist, CLAUDE.md)
 - [x] Ambiguous detection: ask user to confirm mappings
-- [x] Missing CLAUDE.md: offer to generate from concept doc
-- [x] Missing tasklist: offer to generate from concept doc
 - [x] Group assignment: existing or new
 - [x] Register in `projects.json` — no filesystem writes to imported project
+
+**Post-Go update — Import flow revised (no hard gate):**
+- [x] Remove hard gate that blocked import without concept doc — CCC now accepts any directory
+- [x] Add `evaluated: false` flag to `projects.json` for imports missing concept doc
+- [x] Display UI notice on unevaluated projects: "Run `/evaluate-import` in your Claude Code session before starting work"
+- [x] Auto-clear `evaluated` flag when CCC detects concept doc appears in the project directory
+- [x] `/evaluate-import` slash command created — reads code, interviews developer, generates CCC docs
 
 ### Go/NoGo Gate → **GO** (commit `581d9b5`)
 
@@ -255,7 +259,7 @@ SHP storage simplified from dated files in `docs/shp/` to a single file `docs/{P
 - [x] Remove button on non-active version rows with confirmation modal
 - [x] Sidebar refresh button (↻) that clears `projectVersions` cache and reloads tree
 
-**Post-Go parser fixes**
+**Post-Go parser hardening:**
 - [x] Added three PERMISSION_PATTERNS: `/Do you want to/i`, `/❯\s+\d/` (selection list), `/Esc to cancel/i`
 - [x] Empty chunk filter: skip chunks that strip to empty (pure ANSI control sequences)
 - [x] Decorative line filters: skip horizontal rules (`─────`), IDE hints (`/ide for`), shortcut hints (`? for shortcuts`)

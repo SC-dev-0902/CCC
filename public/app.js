@@ -77,6 +77,13 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () 
 async function loadProjectVersions(projectId) {
   const data = await api('GET', `/api/projects/${projectId}/versions`);
   projectVersions.set(projectId, data);
+
+  // Sync evaluated status back to project object (auto-clear detection)
+  if (data.evaluated !== undefined) {
+    const project = findProject(projectId);
+    if (project) project.evaluated = data.evaluated;
+  }
+
   return data;
 }
 
@@ -1084,7 +1091,14 @@ function renderSessionContent(container, project, projectId) {
 
     const prompt = document.createElement('div');
     prompt.className = 'no-session';
+
+    // Show evaluate-import notice for unevaluated projects
+    const evalNotice = project.evaluated === false
+      ? `<div class="evaluate-notice">This project has no CCC documentation yet. Run <code>/evaluate-import</code> in your Claude Code session before starting work.</div>`
+      : '';
+
     prompt.innerHTML = `
+      ${evalNotice}
       <span class="no-session-text">No active session. Start Claude Code in this project?</span>
       <div class="no-session-actions">
         <button class="btn btn-primary" title="Launch Claude Code in this project directory">Start Claude Code</button>
@@ -2095,7 +2109,9 @@ function showImportProjectModal(prefillPath) {
       : `<div class="import-file-row"><span class="file-status missing">&#10007;</span> CLAUDE.md — not found</div>`;
 
     let conceptRow;
-    if (d.concept.ambiguous) {
+    if (!d.concept.found) {
+      conceptRow = `<div class="import-file-row"><span class="file-status missing">&#10007;</span> Concept — not found</div>`;
+    } else if (d.concept.ambiguous) {
       const opts = d.concept.allMatches.map(m =>
         `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`
       ).join('');
@@ -2122,11 +2138,14 @@ function showImportProjectModal(prefillPath) {
 
     // Info notices
     const notices = [];
-    if (!d.claude.found) {
-      notices.push('No CLAUDE.md detected. You can generate one using Claude.ai.');
+    if (!d.concept.found) {
+      notices.push('No CCC documentation found. After importing, run <code>/evaluate-import</code> in your Claude Code session to generate project docs.');
     }
-    if (!d.tasklist.found) {
-      notices.push('No tasklist detected. You can create one using Claude.ai.');
+    if (d.concept.found && !d.claude.found) {
+      notices.push('No CLAUDE.md detected. It will be generated when you run <code>/start-project</code>.');
+    }
+    if (d.concept.found && !d.tasklist.found) {
+      notices.push('No tasklist detected. It will be generated when you run <code>/start-project</code>.');
     }
     if (scanResult.versioning.hasVersionedDocs && scanResult.versioning.suggestedActiveVersion) {
       notices.push(`Versioned structure detected. Active version will be set to v${escapeHtml(scanResult.versioning.suggestedActiveVersion)}.`);
@@ -2241,12 +2260,13 @@ function showImportProjectModal(prefillPath) {
       }
 
       // Resolve selected concept/tasklist (from dropdowns if ambiguous)
-      const conceptPath = d.concept.ambiguous
-        ? overlay.querySelector('#importConceptSelect').value
-        : d.concept.path;
-      const tasklistPath = d.tasklist.ambiguous
-        ? (overlay.querySelector('#importTasklistSelect')?.value || null)
-        : d.tasklist.path;
+      const conceptPath = d.concept.found
+        ? (d.concept.ambiguous ? overlay.querySelector('#importConceptSelect').value : d.concept.path)
+        : '';
+      const tasklistPath = d.tasklist.found
+        ? (d.tasklist.ambiguous ? (overlay.querySelector('#importTasklistSelect')?.value || null) : d.tasklist.path)
+        : '';
+      const needsEvaluation = !d.concept.found;
 
       const importBtn = overlay.querySelector('#importSubmit');
       importBtn.disabled = true;
@@ -2277,6 +2297,11 @@ function showImportProjectModal(prefillPath) {
           await api('PUT', `/api/projects/${result.id}/active-version`, {
             version: scanResult.versioning.suggestedActiveVersion
           });
+        }
+
+        // Flag unevaluated imports (no concept doc found)
+        if (needsEvaluation && result.id) {
+          await api('PUT', `/api/projects/${result.id}`, { evaluated: false });
         }
 
         overlay.remove();

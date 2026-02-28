@@ -37,6 +37,7 @@ Read the active version's concept doc before starting any task. It is the single
 ```
 CCC/
 ├── CLAUDE.md                  ← this file (project root)
+├── LICENSE                    ← Elastic License 2.0
 ├── README.md
 ├── CHANGELOG.md
 ├── .env                       ← local only, never committed
@@ -99,10 +100,13 @@ Read `docs/v1.0/CCC_concept.md` → Project Versioning section for the full spec
 CCC gives Claude Code session continuity through file-based SHP (Session Handover Pack) storage.
 
 - **SHPs are stored as a single file** per project: `docs/{ProjectName}_shp.md` (overwritten each `/eod`, Git provides history).
-- **Three global slash commands** drive the workflow: `/start-project`, `/continue`, `/eod`.
-- **`/start-project`** — reads CLAUDE.md, concept, tasklist. Asks comprehension questions. Works without CCC.
+- **Six global slash commands** drive the workflow:
+- **`/start-project`** — reads CLAUDE.md, concept, tasklist. Generates tasklist if missing. Asks comprehension questions. Works without CCC.
 - **`/continue`** — CCC feeds the most recent SHP to Claude Code. Requires CCC to be running.
 - **`/eod`** — Claude Code writes the SHP. CCC stores it. Requires CCC to be running.
+- **`/create-tasklist`** — manual trigger to generate tasklist from concept doc.
+- **`/reload-docs`** — re-reads all project docs after external changes.
+- **`/evaluate-import`** — reads existing code/docs, interviews developer, generates CCC-compliant docs for imported projects.
 - **SHP files are human-readable Markdown** — Git-friendly, openable in any editor.
 - **Never store SHPs in the database.** v1.0 uses file-based storage. SQLite is a v2.0 upgrade.
 

@@ -353,6 +353,30 @@ app.get('/api/projects/:id/versions', (req, res) => {
 
     const result = versions.scanVersions(found.absPath, found.project.name);
     result.activeVersion = found.project.activeVersion || null;
+
+    // Auto-clear evaluated flag when concept doc appears
+    if (found.project.evaluated === false) {
+      const hasConceptDoc = result.versions.some(v =>
+        v.files && v.files.some(f => f.endsWith('_concept.md'))
+      );
+      // Also check flat docs
+      const docsDir = path.join(found.absPath, 'docs');
+      let hasFlatConcept = false;
+      try {
+        if (fs.existsSync(docsDir)) {
+          const files = fs.readdirSync(docsDir);
+          hasFlatConcept = files.some(f => f.endsWith('_concept.md'));
+        }
+      } catch (e) { /* ignore */ }
+
+      if (hasConceptDoc || hasFlatConcept) {
+        projects.updateProject(req.params.id, { evaluated: true });
+        // Update the local reference so the response is fresh
+        found.project.evaluated = true;
+      }
+    }
+
+    result.evaluated = found.project.evaluated;
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: 'Failed to scan versions: ' + err.message });
@@ -916,15 +940,6 @@ app.post('/api/scan-project', (req, res) => {
       }
     }
 
-    // Hard gate: no concept doc
-    if (conceptMatches.length === 0) {
-      return res.json({
-        valid: false,
-        reason: 'no_concept_doc',
-        message: 'No concept document found. CCC requires a concept doc before importing. Use Claude.ai to create one from your project idea, then try again.'
-      });
-    }
-
     // 3. Search for *_tasklist.md in same locations
     const tasklistMatches = [];
     for (const { dir, rel } of searchDirs) {
@@ -958,7 +973,8 @@ app.post('/api/scan-project', (req, res) => {
     }
 
     // Pick best concept match (prefer versioned over flat over root)
-    const bestConcept = conceptMatches[0];
+    const conceptFound = conceptMatches.length > 0;
+    const bestConcept = conceptFound ? conceptMatches[0] : null;
     const bestTasklist = tasklistMatches.length > 0 ? tasklistMatches[0] : null;
 
     // Determine suggested active version from versioned docs
@@ -975,7 +991,7 @@ app.post('/api/scan-project', (req, res) => {
       detected: {
         claude: { found: claudeFound, path: claudeFound ? 'CLAUDE.md' : null },
         concept: {
-          found: true,
+          found: conceptFound,
           path: bestConcept,
           ambiguous: conceptMatches.length > 1,
           allMatches: conceptMatches

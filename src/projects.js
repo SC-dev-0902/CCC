@@ -99,7 +99,7 @@ function updateProject(id, updates) {
   const index = data.projects.findIndex(p => p.id === id);
   if (index === -1) return null;
 
-  const allowed = ['name', 'group', 'coreFiles', 'activeVersion'];
+  const allowed = ['name', 'group', 'coreFiles', 'activeVersion', 'evaluated'];
   for (const key of allowed) {
     if (updates[key] !== undefined) {
       data.projects[index][key] = updates[key];

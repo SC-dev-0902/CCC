@@ -173,35 +173,41 @@ The active version is visually distinguished. Expanding a version shows its core
 
 CCC provides an Import flow for bringing existing projects under CCC management. Import is distinct from the New Project Wizard — it does not scaffold files, it registers an existing directory.
 
-### Import Rules — Hard Gate
+### Import Rules
 
-**A project cannot be imported unless `*_concept.md` is present.** This is a non-negotiable requirement. The concept doc is the foundation of the document hierarchy; without it, CLAUDE.md and the tasklist have no verified source of truth.
+CCC accepts any existing directory as an import. It registers the project in `projects.json` and scans for CCC documentation.
 
-If `*_concept.md` is missing, CCC blocks the import and explains why:
-> *"No concept document found. CCC requires a concept doc before importing. Use Claude.ai to create one from your project idea, then try again."*
+**Two paths after import:**
 
-### Import Flow (when concept doc is present)
+**Path A — Project already has CCC-compliant docs:**
+CCC detects `*_concept.md`, `CLAUDE.md`, and `*_tasklist.md`. The project is ready. Run `/start-project` to begin.
+
+**Path B — Project has no CCC documentation (the common case):**
+CCC imports the project but flags it as unevaluated. Before any work begins, the developer **must** run `/evaluate-import` in the Claude Code session. This command reads existing code, configs, and docs, interviews the developer, and generates CCC-compliant documentation (concept doc, CLAUDE.md, tasklist). Only after `/evaluate-import` completes should the developer run `/start-project`.
+
+```
+Import → /evaluate-import → review generated docs → /start-project → work
+```
+
+**This sequence is mandatory for non-CCC projects.** Running `/start-project` on an unevaluated import will fail — there is no concept doc for Claude Code to read.
+
+### Import Flow
 
 1. User points CCC at an existing directory
 2. CCC scans for the three core files:
-   - `*_concept.md` — **required** (blocks import if absent)
-   - `CLAUDE.md` — optional; if missing, CCC offers to generate one from the concept doc
-   - `*_tasklist.md` — optional; if missing, CCC offers to generate one from the concept doc
+   - `*_concept.md` — if present, project is CCC-ready
+   - `CLAUDE.md` — optional; generated during `/evaluate-import` or `/start-project`
+   - `*_tasklist.md` — optional; generated during `/evaluate-import` or `/start-project`
 3. CCC auto-detects filenames and pre-fills mappings; if ambiguous, it asks
 4. User assigns a name and group
 5. Project is registered in `projects.json`
+6. If no concept doc was found, CCC displays a notice: *"Run `/evaluate-import` in your Claude Code session before starting work."*
 
 **Import is read-only on the filesystem.** CCC never moves, modifies, or deletes files in an existing project directory. It only writes to `projects.json`.
 
 ### What to do if you have no concept doc
 
-Any CCC user has access to Claude.ai. The recommended flow for projects without a concept doc:
-
-1. Gather your raw notes and ideas (Owner-Concept)
-2. Open Claude.ai and ask it to produce a structured `*_concept.md` from your notes
-3. From the concept doc, ask Claude.ai to generate `CLAUDE.md` and `*_tasklist.md`
-4. Save all three files into the project directory
-5. Import into CCC
+Run `/evaluate-import` in your Claude Code session. Claude Code reads the existing codebase, interviews you about the project, and generates all three CCC documents (concept doc, CLAUDE.md, tasklist). Review the generated docs, adjust as needed, then run `/start-project` to begin working under CCC guidance.
 
 ---
 
@@ -559,14 +565,17 @@ Three global slash commands power the workflow. These belong in `~/.claude/comma
 
 | Command | When | What it does |
 |---------|------|-------------|
-| `/start-project` | First session on a new project | Claude Code reads CLAUDE.md, concept doc, tasklist. Asks comprehension questions. Waits for instruction. |
+| `/start-project` | First session on a new project | Claude Code reads CLAUDE.md, concept doc. If tasklist exists, reads it and asks comprehension questions. If tasklist does NOT exist, generates it from concept doc, saves it, presents for review. Waits for instruction. |
 | `/continue` | Every returning session | CCC reads the current SHP (`docs/{ProjectName}_shp.md`) and feeds it to Claude Code. Picks up where yesterday left off. |
 | `/eod` | End of project day | Claude Code writes the SHP — what was done, decided, what's open, what's next. CCC overwrites `docs/{ProjectName}_shp.md`. |
+| `/create-tasklist` | Manual trigger | Reads concept doc, generates stage-gated tasklist, saves it. Use when tasklist needs regeneration or doesn't exist. |
+| `/reload-docs` | After documentation changes | Re-reads all project documentation. Reports what changed. |
+| `/evaluate-import` | After importing a non-CCC project | Reads existing code/docs, interviews developer, generates CCC-compliant concept doc, CLAUDE.md, and tasklist. |
 
 #### The Daily Workflow
 
 ```
-Day 1:  /start-project → work → /eod
+Day 1:  /start-project → (tasklist generated if missing) → review → work → /eod
 Day 2:  /continue → work → /eod
 Day 3:  /continue → work → /eod
 ```
@@ -594,6 +603,16 @@ Design rules to maintain cross-platform compatibility:
 - Respect platform conventions for editor launch (`open` on macOS, `xdg-open` on Linux, `start` on Windows)
 
 The underlying tech stack (Node.js, Express, xterm.js, node-pty) is inherently cross-platform. `node-pty` requires platform-specific build tools (Xcode CLI on macOS, build-essential on Linux, Visual Studio Build Tools on Windows) but compiles on all three. README must document setup for each platform.
+
+---
+
+## Licence
+
+CCC is released under the **Elastic License 2.0 (ELv2)**.
+
+- Code is visible, free to use, learn from, and contribute to
+- Two restrictions: (1) nobody offers CCC as a hosted/managed service, (2) nobody removes attribution or the licence
+- The licence file must be included in the repository before public release
 
 ---
 
