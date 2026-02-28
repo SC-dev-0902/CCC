@@ -339,17 +339,14 @@ SHP storage simplified from dated files in `docs/shp/` to a single file `docs/{P
 **Focus:** Ship it.
 
 ### Tasks
-- [ ] Final README review (install instructions for macOS, Linux, Windows)
-- [ ] Git repository cleaned up (no debug code, no stray files)
-- [ ] `v1.0.0` tag created
-- [ ] GitHub repository made public
-- [ ] CCC project imported into CCC (dog food moment)
+- [x] Final README review (install instructions for macOS, Linux, Windows)
+- [x] Git repository cleaned up (no debug code, no stray files)
+- [x] `v1.0.0` tag created
+- [x] GitHub repository made public
+- [x] CCC project imported into CCC (dog food moment)
 
-### Go/NoGo Gate
-> Is this something you would recommend to another developer on any platform without hesitation?
-
-**→ GO:** v1.0.0 shipped 🎉
-**→ NOGO:** What's missing? Fix it first.
+### Go/NoGo Gate → **GO**
+> Is this something you would recommend to another developer on any platform without hesitation? **Yes.**
 
 ---
 
