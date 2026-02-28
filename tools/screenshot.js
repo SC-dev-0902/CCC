@@ -43,6 +43,19 @@ async function settle(page, ms = 500) {
   await page.waitForTimeout(ms);
 }
 
+// Helper: close any open modal by removing all known overlay IDs
+async function closeModal(page) {
+  await page.evaluate(() => {
+    for (const id of ['modal', 'importModal']) {
+      const el = document.getElementById(id);
+      if (el) el.remove();
+    }
+    // Also remove any stray .modal-overlay elements
+    document.querySelectorAll('.modal-overlay').forEach(el => el.remove());
+  });
+  await settle(page, 300);
+}
+
 // --- Main ---
 
 (async () => {
@@ -75,6 +88,8 @@ async function settle(page, ms = 500) {
         await retryBtn.click();
         await settle(page, 1000);
       }
+    } else {
+      console.log('  → No onboarding (Claude CLI detected) — skipping 01');
     }
 
     // Main dashboard — sidebar + main panel
@@ -132,12 +147,14 @@ async function settle(page, ms = 500) {
     // =============================================
     console.log('4. Read Panel');
 
-    // Click a file in the tree to open Read panel
-    const fileLink = await page.$('.tree-file-link');
+    // Click a file in the tree to open Read panel (class is .tree-file)
+    const fileLink = await page.$('.tree-file');
     if (fileLink) {
       await fileLink.click();
       await settle(page, 1000);
       await snap(page, '06-read-panel');
+    } else {
+      console.log('  → No .tree-file found — skipping 06');
     }
 
     // =============================================
@@ -179,12 +196,8 @@ async function settle(page, ms = 500) {
 
       await snap(page, '09-wizard-filled');
 
-      // Close the wizard
-      const closeBtn = await page.$('.modal-close');
-      if (closeBtn) {
-        await closeBtn.click();
-        await settle(page);
-      }
+      // Force-close the modal (avoid issues with modal-close going back to wizard)
+      await closeModal(page);
     }
 
     // =============================================
@@ -203,21 +216,10 @@ async function settle(page, ms = 500) {
         await importLink.click();
         await settle(page, 500);
         await snap(page, '10-import-phase1');
-
-        // Close import modal
-        const closeBtn = await page.$('.modal-close');
-        if (closeBtn) {
-          await closeBtn.click();
-          await settle(page);
-        }
-      } else {
-        // Close wizard if import link not found
-        const closeBtn = await page.$('.modal-close');
-        if (closeBtn) {
-          await closeBtn.click();
-          await settle(page);
-        }
       }
+
+      // Force-close the modal completely (import close goes back to wizard)
+      await closeModal(page);
     }
 
     // =============================================
@@ -230,6 +232,8 @@ async function settle(page, ms = 500) {
       await settingsEntry.click();
       await settle(page, 500);
       await snap(page, '11-settings-panel');
+    } else {
+      console.log('  → #settingsEntry not found — skipping 11');
     }
 
     // =============================================
@@ -237,11 +241,10 @@ async function settle(page, ms = 500) {
     // =============================================
     console.log('9. Test Runner');
 
-    // Navigate back to project tree and look for a test file
-    // Expand project → version → Testing section
+    // First, make sure project is expanded with version files visible
     const projectRow2 = await page.$('.tree-project-row');
     if (projectRow2) {
-      // Make sure project is expanded
+      // Check if project is expanded
       const isExpanded = await projectRow2.evaluate(el => {
         return el.nextElementSibling && el.nextElementSibling.classList.contains('tree-project-files');
       });
@@ -251,36 +254,48 @@ async function settle(page, ms = 500) {
         await settle(page);
       }
 
-      // Find and expand Versions header if not already
+      // Expand Versions header if present
       const versionsHeader = await page.$('.tree-versions-header');
       if (versionsHeader) {
-        await versionsHeader.click();
-        await settle(page);
+        // Check if already expanded
+        const isVExpanded = await versionsHeader.evaluate(el => el.classList.contains('expanded'));
+        if (!isVExpanded) {
+          await versionsHeader.click();
+          await settle(page);
+        }
       }
 
-      // Find version row and expand it
+      // Expand the active version row to show files
       const verRow = await page.$('.tree-version-row.active-version');
       if (verRow) {
         const chevron = await verRow.$('.tree-version-chevron');
         if (chevron) {
+          // Click chevron to expand version files (toggle)
           await chevron.click();
           await settle(page);
         }
       }
 
-      // Find and click Testing header
+      // Find and expand Testing header
       const testingHeader = await page.$('.tree-testing-header');
       if (testingHeader) {
-        await testingHeader.click();
-        await settle(page);
+        const isTestExpanded = await testingHeader.evaluate(el => el.classList.contains('expanded'));
+        if (!isTestExpanded) {
+          await testingHeader.click();
+          await settle(page);
+        }
 
-        // Click the test file link
-        const testFileLink = await page.$('.tree-test-file');
+        // Click the test file link (class is .tree-testing-file)
+        const testFileLink = await page.$('.tree-testing-file');
         if (testFileLink) {
           await testFileLink.click();
           await settle(page, 1000);
           await snap(page, '12-test-runner');
+        } else {
+          console.log('  → No .tree-testing-file found — skipping 12');
         }
+      } else {
+        console.log('  → No .tree-testing-header found — skipping 12');
       }
     }
 
@@ -289,14 +304,12 @@ async function settle(page, ms = 500) {
     // =============================================
     console.log('10. Tab Bar');
 
-    // By now we should have multiple tabs open — capture the tab bar area
+    // By now we should have multiple tabs open (session, file, test, settings)
     const tabBar = await page.$('#tabBar');
     if (tabBar) {
-      // Get the tab bar + a bit of content
-      const mainPanel = await page.$('.main-panel');
-      if (mainPanel) {
-        await snap(page, '13-tab-bar-multiple');
-      }
+      await snap(page, '13-tab-bar-multiple');
+    } else {
+      console.log('  → No #tabBar found — skipping 13');
     }
 
     // =============================================
@@ -305,44 +318,45 @@ async function settle(page, ms = 500) {
     console.log('11. Theme Variants');
 
     // Switch to light theme via settings
-    await page.click('#settingsEntry');
-    await settle(page, 500);
+    const settingsEntry2 = await page.$('#settingsEntry');
+    if (settingsEntry2) {
+      await settingsEntry2.click();
+      await settle(page, 500);
 
-    const themeSelect = await page.$('#settingsTheme');
-    if (themeSelect) {
-      await themeSelect.selectOption('light');
-      await settle(page, 300);
+      const themeSelect = await page.$('#settingsTheme');
+      if (themeSelect) {
+        await themeSelect.selectOption('light');
+        await settle(page, 300);
 
-      // Save settings to apply theme
-      const saveBtn = await page.$('#settingsSave');
-      if (saveBtn) {
-        await saveBtn.click();
+        // Save settings to apply theme
+        const saveBtn = await page.$('#settingsSave');
+        if (saveBtn) {
+          await saveBtn.click();
+          await settle(page, 500);
+        }
+
+        // Navigate to a session tab for the light theme screenshot
+        const activeVer = await page.$('.tree-version-row.active-version');
+        if (activeVer) {
+          await activeVer.click();
+          await settle(page, 500);
+        }
+        await snap(page, '14-light-theme');
+
+        // Switch back to dark theme
+        await page.click('#settingsEntry');
         await settle(page, 500);
-      }
-    }
-
-    // Navigate to dashboard view for light theme screenshot
-    const projectRow3 = await page.$('.tree-project-row');
-    if (projectRow3) {
-      // Click the active version to get a session tab
-      const activeVer = await page.$('.tree-version-row.active-version');
-      if (activeVer) {
-        await activeVer.click();
-        await settle(page, 500);
-      }
-    }
-    await snap(page, '14-light-theme');
-
-    // Switch back to dark theme
-    await page.click('#settingsEntry');
-    await settle(page, 500);
-    const themeSelect2 = await page.$('#settingsTheme');
-    if (themeSelect2) {
-      await themeSelect2.selectOption('dark');
-      const saveBtn2 = await page.$('#settingsSave');
-      if (saveBtn2) {
-        await saveBtn2.click();
-        await settle(page, 500);
+        const themeSelect2 = await page.$('#settingsTheme');
+        if (themeSelect2) {
+          await themeSelect2.selectOption('dark');
+          const saveBtn2 = await page.$('#settingsSave');
+          if (saveBtn2) {
+            await saveBtn2.click();
+            await settle(page, 500);
+          }
+        }
+      } else {
+        console.log('  → #settingsTheme not found — skipping 14');
       }
     }
 
@@ -351,9 +365,15 @@ async function settle(page, ms = 500) {
     // =============================================
     console.log('12. Degraded Banner');
 
+    // Navigate to a normal view first
+    const activeVer2 = await page.$('.tree-version-row.active-version');
+    if (activeVer2) {
+      await activeVer2.click();
+      await settle(page, 500);
+    }
+
     // Inject the degraded banner via JavaScript to capture its appearance
     await page.evaluate(() => {
-      // Only inject if not already present
       if (!document.getElementById('degradedBanner')) {
         const banner = document.createElement('div');
         banner.id = 'degradedBanner';
@@ -383,20 +403,33 @@ async function settle(page, ms = 500) {
     // =============================================
     console.log('13. Version Management');
 
-    // Look for the "New Version" action — it's available when Versions header is expanded
-    // First make sure project is expanded with versions visible
-    const newVersionBtn = await page.$('.new-version-btn');
-    if (newVersionBtn) {
-      await newVersionBtn.click();
+    // Fresh load to get a clean tree state
+    await page.goto(BASE_URL, { waitUntil: 'networkidle' });
+    await settle(page, 1000);
+
+    // Expand project → versions to reveal the + button
+    const projRow3 = await page.$('.tree-project-row');
+    if (projRow3) {
+      await projRow3.click();
+      await settle(page);
+    }
+    const verHeader2 = await page.$('.tree-versions-header');
+    if (verHeader2) {
+      await verHeader2.click();
+      await settle(page);
+    }
+
+    // The + button next to VERSIONS header (class is .add-version-btn)
+    const addVersionBtn = await page.$('.add-version-btn');
+    if (addVersionBtn) {
+      await addVersionBtn.click();
       await settle(page, 500);
       await snap(page, '16-new-version-modal');
 
-      // Close modal
-      const closeBtn = await page.$('.modal-close');
-      if (closeBtn) {
-        await closeBtn.click();
-        await settle(page);
-      }
+      // Force-close the modal
+      await closeModal(page);
+    } else {
+      console.log('  → No .add-version-btn found — skipping 16');
     }
 
     // =============================================
@@ -404,21 +437,11 @@ async function settle(page, ms = 500) {
     // =============================================
     console.log('14. Drag & Drop');
 
-    // Navigate to show both groups in the sidebar
-    // Collapse all expanded items first for a clean tree view
+    // Fresh page load for a clean tree view
     await page.goto(BASE_URL, { waitUntil: 'networkidle' });
     await settle(page, 1000);
 
-    // Expand both groups to show drag & drop targets
-    const groupHeaders = await page.$$('.tree-group-header');
-    for (const header of groupHeaders) {
-      // Click collapsed groups to expand them
-      const parent = await header.evaluate(el => el.parentElement.classList.contains('collapsed'));
-      if (parent) {
-        await header.click();
-        await settle(page, 200);
-      }
-    }
+    // Both groups should be expanded by default — just capture the tree
     await snap(page, '17-drag-drop-groups');
 
     // =============================================
