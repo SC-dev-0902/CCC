@@ -2,63 +2,65 @@
 
 ## Project
 **CCC — Claude Command Center**
-**Version:** 1.0
-**Current Stage:** 16 — User Manual — **Near Complete** (screenshots captured, manual written, HEP passed, PDF generated)
-**Active bug:** Parser status dots stuck on grey — debug logging added, awaiting diagnostic data
+**Version:** 1.0.0 — **SHIPPED**
+**All stages (01–16) complete — all Go/NoGo gates passed**
+**Tag:** `v1.0.0` pushed to Forgejo and GitHub
 
 ---
 
 ## What Was Done This Session
 
-### Handover from Claude.ai — Global Tooling Updates
-- **`~/.claude/CLAUDE.md`** bumped to v0.6 — added `/evaluate-import` to slash commands table, added v0.6 change note
-- **`~/.claude/commands/start-project.md`** updated — tasklist auto-generation from concept doc when missing, `/evaluate-import` pre-check
-- **`~/.claude/commands/evaluate-import.md`** created — reads existing code/docs, interviews developer, generates CCC-compliant concept doc, CLAUDE.md, and tasklist
-- **`~/.claude/commands/create-tasklist.md`** created — manual trigger to generate stage-gated tasklist from concept doc
-- All 7 global commands now installed: start-project, continue, eod, tested, reload-docs, create-tasklist, evaluate-import
+### Parser Fix (Root Cause Found)
+- Status dots stuck on grey — root cause: `CLAUDE_CODE_ENTRYPOINT=cli` env var leaked into PTY sessions
+- Claude Code detected nesting and altered its output → parser patterns couldn't match
+- Fix: `src/sessions.js` now deletes both `CLAUDECODE` and `CLAUDE_CODE_ENTRYPOINT` from PTY env
+- Parser confirmed working via debug logging: `unknown → completed → running → completed` transitions verified
 
-### Import Flow Revised — No Hard Gate
-**server.js:**
-- Removed hard gate in `/api/scan-project` that returned `valid: false` when no concept doc found
-- Scan now always returns `valid: true` for valid directories — `detected.concept.found` indicates whether concept doc exists
-- `/api/projects/:id/versions` auto-clears `evaluated` flag when concept doc detected (checks version files and flat docs)
-- Version scan response now includes `evaluated` field
+### Degraded Banner Fix
+- `startDegradeMonitor()` was still active despite degradation being "disabled" in `feed()`
+- During streaming character-by-character output, `lastRecognisedAt` stopped updating → timer fired after 60s
+- Fix: replaced `startDegradeMonitor()` call in `sessions.js` with comment — monitor disabled for v1.0
+- Degradation redesign deferred to v1.1
 
-**src/projects.js:**
-- Added `evaluated` to allowed fields in `updateProject()` (alongside name, group, coreFiles, activeVersion)
+### Desktop Starter Scripts
+- `tools/macos/start_CCC.command` — double-clickable, starts server + opens browser
+- `tools/linux/start_CCC.sh` — same for Linux (xdg-open)
+- `tools/windows/start_CCC.bat` — same for Windows
+- All scripts: read PORT from .env, check if already running, wait for server ready
+- `tools/build-release.sh` updated to include starters + LICENSE + CHANGELOG.md in archives
 
-**public/app.js:**
-- Import Phase 2 now handles missing concept doc — shows `/evaluate-import` notice instead of blocking
-- Info notices updated: no concept → "Run `/evaluate-import`"; concept but no CLAUDE.md → "Generated at `/start-project`"; concept but no tasklist → same
-- Import submit sets `evaluated: false` on projects missing concept doc via `PUT /api/projects/:id`
-- `loadProjectVersions()` syncs `evaluated` status from version scan response back to project object
-- `renderSessionContent()` shows orange `evaluate-notice` banner for unevaluated projects above the session start prompt
+### Release Archives Rebuilt
+- `dist/CCC-1.0.0-macos.tar.gz`, `dist/CCC-1.0.0-linux.tar.gz`, `dist/CCC-1.0.0-windows.zip`
+- Now include: installer, starter script, LICENSE, CHANGELOG.md
 
-**public/styles.css:**
-- Added `.evaluate-notice` — orange background, black text, rounded, max-width 480px, centered
-- Added `.evaluate-notice code` — monospace with subtle background
+### PDF Regenerated
+- `docs/USER_MANUAL.pdf` regenerated via `node tools/manual-to-pdf.js`
 
-### Documentation & Licence
-- **`LICENSE`** — Elastic License 2.0 file added to repo root
-- **`CLAUDE.md`** — Added LICENSE to project structure tree, updated slash commands section from "Three" to "Six" with all command descriptions
-- **`docs/v1.0/CCC_tasklist.md`** — Stage 08 updated (removed hard gate task, added 5 new tasks for revised import flow). Parser section renamed to "Post-Go parser hardening"
+### GitHub Setup
+- GitHub account created: `SC-dev-0902`
+- Remote added: `github` → `https://github.com/SC-dev-0902/CCC.git`
+- Credentials stored via `git credential-store` (not in URL)
+- Repo made public
+- `bug_report.yml` created via GitHub web UI (issue template)
 
-### Parser Debug Investigation
-- Status dots stuck on grey reported by Phet — parser not recognising Claude Code output
-- Claude Code version: 2.1.63 (patterns were written for v2.1.x — should match)
-- Added always-on debug logging to `src/parser.js` — writes to `parser-debug.log` at project root
-- Debug logs every `feed()` call with stripped text (first 200 chars), detected state, and current state
-- Logs state transitions explicitly
-- **CCC restart required** for debug logging to take effect — then open a Claude session, interact, read the log
+### Stage Gates
+- **Stage 16 (User Manual)** — GO
+- **Stage 15 (v1.0 Release)** — GO
+- `v1.0.0` tag created and pushed to both remotes
+
+### README Updated
+- Clone URL points to GitHub
+- Starter scripts documented in Quick Start
+- Project structure tree updated with starter scripts
+- Licence section added (ELv2)
 
 ## Decisions Made
 
-- **Import flow: no hard gate** — CCC accepts any directory. Unevaluated imports get `evaluated: false` flag. UI shows notice. Auto-cleared when concept doc appears.
-- **`/evaluate-import` is mandatory** for non-CCC projects before `/start-project`
-- **Sequence:** Import → `/evaluate-import` → review docs → `/start-project` → work
-- **Licence: Elastic License 2.0** — decided, file in repo
-- **Parser debug approach** — always-on file logging to `parser-debug.log`, read after CCC restart + brief interaction
-- **CCC must not be developed via CCC** — development continues in normal CC terminal
+- **Parser root cause:** `CLAUDE_CODE_ENTRYPOINT=cli` — must be cleared from PTY env
+- **Degradation monitor:** disabled entirely for v1.0 (false positives on streaming output)
+- **CCC must not be developed via CCC** — rule stands for v1.1 (restart problem)
+- **Roadmap will change slightly** for v1.1 — details TBD next session
+- **GitHub as second remote** — Forgejo remains `origin`, GitHub is `github`
 
 ---
 
@@ -123,18 +125,19 @@
 **Post-Stage 14** (commit `56e69b1`)
 - iPad touch targets, README feature list update
 
-**Stage 15 — v1.0 Release** (Conditional Go — paused on GitHub + tag)
+**Stage 15 — v1.0 Release** (commit `a30a71d`, Go)
+- README final review, `v1.0.0` tag, GitHub public, CCC self-import
 
-**Stage 16 — User Manual** (In Progress)
-- Screenshots captured, manual written, PDF generated, HEP passed
+**Stage 16 — User Manual** (commit `ec2cc53`, Go)
+- 16 Playwright screenshots, full manual, PDF export, HEP passed
 
 ### Day 5 — 2026-02-28
 
-**Handover from Claude.ai** — global tooling updates, import flow revised, licence added
-- 7 global slash commands installed
-- Import flow: no hard gate, `evaluated` flag, UI notice, auto-clear
-- ELv2 licence file added
-- Parser debug logging added (status dots stuck on grey)
+**Post-Stage 16** (commit `c080ae0`)
+- Parser fix (CLAUDE_CODE_ENTRYPOINT), degraded monitor disabled, import flow revised, ELv2 licence, starter scripts, release archives rebuilt
+
+**Final** (commits `1041d8e`, `d081619`, `a30a71d`)
+- README updated, bug_report.yml, Stage 15+16 Go, v1.0.0 tag pushed
 
 ---
 
@@ -145,11 +148,10 @@ CCC/
 ├── CLAUDE.md                  ← project contract (derived from active version's concept doc)
 ├── LICENSE                    ← Elastic License 2.0
 ├── CHANGELOG.md               ← public-facing changelog (v1.0.0)
-├── README.md                  ← install + run instructions, feature list
-├── parser-debug.log           ← TEMPORARY: parser debug output (remove after fix)
+├── README.md                  ← install + run instructions, feature list, licence
 ├── server.js                  ← Express entry point, all HTTP + WebSocket routes
 ├── src/
-│   ├── parser.js              ← SACRED: all Claude Code output parsing (+ temporary debug logging)
+│   ├── parser.js              ← SACRED: all Claude Code output parsing
 │   ├── sessions.js            ← PTY lifecycle, WebSocket clients, parser integration
 │   ├── projects.js            ← projects.json CRUD, path resolution, group management
 │   └── versions.js            ← version scanning, creation, migration, test checkbox counting
@@ -161,12 +163,19 @@ CCC/
 │   ├── projects.json          ← Project registry (committed)
 │   └── settings.json          ← User settings (gitignored)
 ├── tools/
-│   ├── macos/install_CCC.sh   ← Installer (macOS)
-│   ├── linux/install_CCC.sh   ← Installer (Linux)
-│   ├── windows/install_CCC.ps1 ← Installer (Windows)
+│   ├── macos/
+│   │   ├── install_CCC.sh     ← Installer (macOS)
+│   │   └── start_CCC.command  ← Desktop starter (macOS)
+│   ├── linux/
+│   │   ├── install_CCC.sh     ← Installer (Linux)
+│   │   └── start_CCC.sh       ← Desktop starter (Linux)
+│   ├── windows/
+│   │   ├── install_CCC.ps1    ← Installer (Windows)
+│   │   └── start_CCC.bat      ← Desktop starter (Windows)
 │   ├── build-release.sh       ← Builds OS-specific release archives
 │   ├── screenshot.js          ← Playwright screenshot automation (17 shots)
 │   └── manual-to-pdf.js       ← Markdown→PDF via marked + Playwright
+├── dist/                       ← Release archives (gitignored)
 ├── docs/
 │   ├── CCC_shp.md             ← Session Handover Pack (this file)
 │   ├── CCC_Roadmap.md         ← Version roadmap
@@ -211,7 +220,7 @@ CCC/
 ### Versions
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/api/projects/:id/versions` | Scan version structure (includes `testFiles[]` as objects with `{name, checked, total}`, `evaluated` field, auto-clears evaluated flag when concept doc found) |
+| GET | `/api/projects/:id/versions` | Scan version structure (includes `testFiles[]`, `evaluated` field, auto-clears evaluated flag) |
 | POST | `/api/projects/:id/versions` | Create new version (scaffolds folder + docs) |
 | PUT | `/api/projects/:id/active-version` | Set active version |
 | DELETE | `/api/projects/:id/versions/:version` | Delete version (FS + prevents active version delete) |
@@ -226,7 +235,7 @@ CCC/
 | GET | `/api/version` | App version + build number |
 | GET | `/api/preflight` | Check if `claude` CLI is installed |
 | POST | `/api/scaffold-project` | New project wizard backend |
-| POST | `/api/scan-project` | Import scan backend (no hard gate — returns `valid: true` for any valid directory) |
+| POST | `/api/scan-project` | Import scan backend (no hard gate) |
 
 ### Sessions
 | Method | Path | Purpose |
@@ -267,13 +276,13 @@ readPanelTimers (Map)          — tabId → intervalId for auto-refresh
 
 **Rendering pipeline:** `render()` → `renderTreeView()` + `renderTabBar()` + `renderTabContent()`
 
-**Import flow (new):**
+**Import flow:**
 - `scanResult.detected.concept.found` determines if project needs evaluation
 - `needsEvaluation` flag set during import → `PUT /api/projects/:id { evaluated: false }`
 - `loadProjectVersions()` syncs `evaluated` from version scan response to project object
 - `renderSessionContent()` shows orange `.evaluate-notice` banner when `project.evaluated === false`
 
-**Test file progress:** `countTestCheckboxes(filePath)` in `versions.js` returns `{ checked, total }` — displayed as `[x/y]` badge in tree view via `.test-progress-badge` class
+**Test file progress:** `countTestCheckboxes(filePath)` in `versions.js` returns `{ checked, total }` — displayed as `[x/y]` badge in tree view
 
 **Sidebar persistence:** `initResize()` saves width to `localStorage('ccc-sidebar-width')` on mouseup, restores on init
 
@@ -288,7 +297,7 @@ Detection priority (checked in order):
 4. **ERROR** — error patterns (`Error:`, `Permission denied`, `rate limit`) only when NOT currently RUNNING
 5. **UNKNOWN** — no session or unrecognised
 
-**Degradation:** Disabled in v1.0 (false positives on idle silence). Redesign deferred to v1.1.
+**Degradation:** Disabled in v1.0 (false positives on streaming character output). Monitor not started. Redesign deferred to v1.1.
 
 **Running state debounce:** Persists for 2 seconds after last indicator.
 
@@ -298,9 +307,7 @@ Detection priority (checked in order):
 - `? for shortcuts` → skipped
 - `/ide for ...` → skipped
 
-**ACTIVE BUG:** Status dots stuck on grey. Debug logging added — writes to `parser-debug.log`. Logs every `feed()` call with stripped text and detection result. **Next session must read this log after CCC restart + brief interaction to diagnose.**
-
-**Debug logging location in code:** Top of `parser.js`, always-on `_debugLogStream` writing to `parser-debug.log`. Two log points: one in `feed()` after `_detect()`, one on state change.
+**Critical PTY env fix:** Both `CLAUDECODE` and `CLAUDE_CODE_ENTRYPOINT` must be deleted from PTY env. If either leaks, Claude Code detects nesting and alters output, breaking pattern matching.
 
 ---
 
@@ -341,7 +348,7 @@ Project paths in `projects.json` are **relative** to `settings.projectRoot`. Res
 - **Manual language is humanized** — not robotic, per Phet's explicit instruction
 - **Import accepts any directory** — no hard gate; unevaluated imports flagged with `evaluated: false`
 - **`/evaluate-import` mandatory** for non-CCC projects before `/start-project`
-- **CCC must not be developed via CCC** — normal CC terminal only
+- **CCC must not be developed via CCC** — normal CC terminal only (restart problem)
 - **Changelog/roadmap never auto-updated** — always ask Phet first
 - **Licence: Elastic License 2.0** — file at repo root
 
@@ -379,8 +386,21 @@ Project paths in `projects.json` are **relative** to `settings.projectRoot`. Res
 9. Playwright selectors: `.tree-file` (not `.tree-file-link`), `.tree-testing-file` (not `.tree-test-file`), `.add-version-btn` (not `.new-version-btn`)
 10. Screenshot 01-onboarding cannot be captured when Claude CLI is installed — skip is expected
 11. `updateProject()` allowed fields: `name`, `group`, `coreFiles`, `activeVersion`, `evaluated`
-12. **Parser debug logging is active** — `parser-debug.log` grows on every PTY chunk. Remove after fixing parser.
-13. `CLAUDE_CODE_ENTRYPOINT=cli` env var is NOT cleared when spawning sessions — may affect Claude Code nesting detection
+12. **PTY env must clear both `CLAUDECODE` and `CLAUDE_CODE_ENTRYPOINT`** — if either leaks, Claude Code detects nesting and alters output, breaking the parser
+13. Degradation monitor must NOT be started — `startDegradeMonitor()` causes false positives on streaming character output after 60s
+
+---
+
+## Git Remotes
+
+| Remote | URL | Purpose |
+|--------|-----|---------|
+| origin | `http://mcs-git.mcsfam.local:3000/Phet/CCC.git` | Forgejo (primary) |
+| github | `https://github.com/SC-dev-0902/CCC.git` | GitHub (public) |
+
+- Credentials for GitHub stored via `git credential-store` (not in URL)
+- Push to both remotes after stage Go decisions
+- Last push: `a30a71d` — Stage 15 Go, v1.0.0 shipped
 
 ---
 
@@ -389,60 +409,49 @@ Project paths in `projects.json` are **relative** to `settings.projectRoot`. Res
 Seven global commands at `~/.claude/commands/`:
 | Command | File | Purpose |
 |---------|------|---------|
-| `/start-project` | `start-project.md` | First session: reads all docs, generates tasklist if missing, asks comprehension questions. Pre-check: requires concept doc (run `/evaluate-import` first if missing). |
-| `/continue` | `continue.md` | Reads `docs/{ProjectFolderName}_shp.md`, restores context |
-| `/eod` | `eod.md` | Writes complete SHP to `docs/{ProjectFolderName}_shp.md`, always overwrites |
+| `/start-project` | `start-project.md` | First session: reads all docs, generates tasklist if missing |
+| `/continue` | `continue.md` | Reads SHP, restores context |
+| `/eod` | `eod.md` | Writes complete SHP, always overwrites |
 | `/reload-docs` | `reload-docs.md` | Re-reads all project docs after external changes |
 | `/tested` | `tested.md` | Processes test file comments, presents Go/NoGo gate |
-| `/create-tasklist` | `create-tasklist.md` | Manual trigger: reads concept doc, generates stage-gated tasklist |
-| `/evaluate-import` | `evaluate-import.md` | For non-CCC imports: reads code/docs, interviews developer, generates concept doc + CLAUDE.md + tasklist |
+| `/create-tasklist` | `create-tasklist.md` | Manual trigger: reads concept doc, generates tasklist |
+| `/evaluate-import` | `evaluate-import.md` | For non-CCC imports: interviews developer, generates docs |
 
 ---
 
-## Git Remote
-- Forgejo: `http://mcs-git.mcsfam.local:3000/Phet/CCC`
-- Push after every stage Go decision
-- Last push: Stage 14 + post-fixes (commit `56e69b1`)
-- **Uncommitted changes:** import flow revision, licence file, parser debug logging, global tooling updates
-
----
-
-## Screenshots Captured (docs/screenshots/)
+## Screenshots (docs/screenshots/)
 
 | File | Content |
 |------|---------|
 | 02-main-dashboard.png | Default dashboard, sidebar + empty main panel |
-| 03-tree-expanded.png | CCC project expanded, Versions header open, v1.0 visible |
+| 03-tree-expanded.png | CCC project expanded, Versions header open |
 | 04-tree-version-files.png | Version files listed under v1.0 |
-| 05-no-active-session.png | "No active session" prompt with Start/Shell buttons |
+| 05-no-active-session.png | "No active session" prompt |
 | 06-read-panel.png | CLAUDE.md rendered in Read panel |
-| 07-status-dots-sidebar.png | Sidebar-only crop showing status dots |
+| 07-status-dots-sidebar.png | Sidebar crop showing status dots |
 | 08-new-project-wizard.png | New Project wizard modal (blank) |
-| 09-wizard-filled.png | Wizard with name + Web App template selected |
+| 09-wizard-filled.png | Wizard with name + template selected |
 | 10-import-phase1.png | Import Existing Project modal |
-| 11-settings-panel.png | Settings panel with all fields visible |
+| 11-settings-panel.png | Settings panel |
 | 12-test-runner.png | Interactive test runner with checkboxes |
-| 13-tab-bar-multiple.png | Multiple tabs open simultaneously |
+| 13-tab-bar-multiple.png | Multiple tabs open |
 | 14-light-theme.png | Light theme variant |
 | 15-degraded-banner.png | Degraded status banner (simulated) |
-| 16-new-version-modal.png | New Version modal (Major/Minor/Patch) |
-| 17-drag-drop-groups.png | Groups showing drag & drop targets |
+| 16-new-version-modal.png | New Version modal |
+| 17-drag-drop-groups.png | Groups with drag & drop targets |
 
 Missing: 01-onboarding.png (cannot capture — Claude CLI installed)
 
 ---
 
 ## Open Items
-- **Parser stuck on grey** — debug logging added, awaiting CCC restart + interaction to capture `parser-debug.log`
-- `CLAUDE_CODE_ENTRYPOINT=cli` not cleared in PTY env — may be relevant to parser issue
-- `01-onboarding.png` missing — manual text describes the screen in words
-- Bonus: animated GIF of live status dots (Playwright extension — not yet written)
-- Stage 15 completion: GitHub account setup, `v1.0.0` tag, make repo public
-- Stage 16 Go/NoGo gate not yet presented
+
+- Roadmap will change slightly for v1.1 — details TBD
+- Bonus animated GIF of live status dots not yet written
+- `01-onboarding.png` missing — manual describes the screen in words
 
 ## Next Actions
-1. **PRIORITY: Fix parser** — restart CCC, open a Claude session in CCC, interact briefly, read `parser-debug.log`, identify why patterns don't match, fix patterns, remove debug logging
-2. Also check: clear `CLAUDE_CODE_ENTRYPOINT` in session env (gotcha #13) — may prevent Claude from starting properly
-3. After parser fix: commit all uncommitted changes (import flow, licence, parser fix, global tooling)
-4. Present Stage 16 Go/NoGo gate
-5. Return to Stage 15 — GitHub account, `v1.0.0` tag, ship
+
+1. Read roadmap (`docs/CCC_Roadmap.md`), discuss v1.1 scope with Phet
+2. Create `docs/v1.1/` with concept doc and tasklist
+3. Continue developing CCC in normal CC terminal (not via CCC)
