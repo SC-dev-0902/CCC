@@ -1,0 +1,112 @@
+name: "🐛 Bug Report"
+description: "Report a bug to help us improve"
+title: "[Bug]: "
+labels: ["bug", "bugfix-ready"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to report a bug. Please fill out the sections below as completely as possible — the more detail you provide, the faster we can identify and fix the issue.
+
+  - type: input
+    id: version
+    attributes:
+      label: "Version"
+      description: "Which version are you using? (e.g., v1.0.0)"
+      placeholder: "v1.0.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: "Severity"
+      description: "How severely does this affect your usage?"
+      options:
+        - "Critical — crash, data loss, or application unusable"
+        - "High — a core feature is broken"
+        - "Medium — something works incorrectly but there is a workaround"
+        - "Low — cosmetic issue or minor inconvenience"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "Bug Description"
+      description: "A clear and concise description of what the bug is."
+      placeholder: "Describe the bug..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Steps to Reproduce"
+      description: "How can we reproduce this bug? Be as specific as possible."
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. Scroll down to '...'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: "Expected Behaviour"
+      description: "What did you expect to happen?"
+      placeholder: "I expected..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: "Actual Behaviour"
+      description: "What actually happened instead?"
+      placeholder: "Instead, what happened was..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: "Environment"
+      description: "Please provide details about your setup."
+      placeholder: |
+        - OS: macOS 15.2 / Windows 11 / Ubuntu 24.04
+        - Browser: Chrome 131 / Firefox 133 / Safari 18
+        - Node.js: v22.x (if applicable)
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: "Error Messages / Logs"
+      description: "If applicable, paste any error messages or relevant log output."
+      placeholder: "Paste error messages or logs here..."
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: "Screenshots"
+      description: "If applicable, add screenshots to help explain the problem. Drag and drop images here."
+      placeholder: "Drag and drop screenshots here..."
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: "Additional Context"
+      description: "Anything else that might help us understand the issue — related issues, recent changes, workarounds you have tried."
+      placeholder: "Any additional context..."
+    validations:
+      required: false
