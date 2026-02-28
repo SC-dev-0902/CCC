@@ -418,13 +418,11 @@ Playwright installed as dev dependency only — not part of the CCC runtime.
 - [ ] Human Editorial Pass (HEP) — Phet reviews all text before publish
 - [ ] All screenshot filenames and references verified in the manual
 
-### Go/NoGo Gate
-> Can a developer with no prior knowledge of CCC install, configure, and use it effectively using only this manual?
-> Is the global CLAUDE.md template clear enough to fill in without assistance?
-> Are screenshots crisp, correctly captioned, and representative of the final UI?
+### Go/NoGo Gate → **GO**
 
-**→ GO:** User manual published. Hand off to Promotion Tour.
-**→ NOGO:** Fill gaps, re-evaluate.
+> Can a developer with no prior knowledge of CCC install, configure, and use it effectively using only this manual? **Yes.**
+> Is the global CLAUDE.md template clear enough to fill in without assistance? **Yes.**
+> Are screenshots crisp, correctly captioned, and representative of the final UI? **Yes.**
 
 ---
 

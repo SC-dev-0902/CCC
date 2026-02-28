@@ -29,7 +29,7 @@ A local web dashboard for managing multiple simultaneous Claude Code sessions. R
 ## Quick Start
 
 ```bash
-git clone <your-repo-url> CCC
+git clone https://github.com/SC-dev-0902/CCC.git
 cd CCC
 ```
 
@@ -50,6 +50,8 @@ npm start
 ```
 
 Open `http://localhost:3000` in your browser.
+
+**Desktop shortcut:** Each release archive includes a starter script (`start_CCC.command` on macOS, `start_CCC.sh` on Linux, `start_CCC.bat` on Windows). Place it on your Desktop — double-click to start the server and open CCC in your browser.
 
 ## Configuration
 
@@ -83,16 +85,23 @@ CCC/
 │   └── settings.json      User settings (auto-created on first run)
 ├── tools/
 │   ├── macos/
-│   │   └── install_CCC.sh     Installer (macOS)
+│   │   ├── install_CCC.sh          Installer (macOS)
+│   │   └── start_CCC.command       Desktop starter (macOS)
 │   ├── linux/
-│   │   └── install_CCC.sh     Installer (Linux)
+│   │   ├── install_CCC.sh          Installer (Linux)
+│   │   └── start_CCC.sh            Desktop starter (Linux)
 │   ├── windows/
-│   │   └── install_CCC.ps1    Installer (Windows)
-│   ├── build-release.sh        Builds OS-specific release archives
-│   └── screenshot.js           Playwright screenshot script
+│   │   ├── install_CCC.ps1         Installer (Windows)
+│   │   └── start_CCC.bat           Desktop starter (Windows)
+│   ├── build-release.sh            Builds OS-specific release archives
+│   └── screenshot.js               Playwright screenshot script
 └── docs/                      Project documentation
 ```
 
 ## Platform Support
 
 CCC v1.0 is developed and tested on macOS. Linux and Windows support is code-complete — shell spawning, editor launch, and path handling are all platform-aware — but has not yet been manually tested on target hardware. If you encounter platform-specific issues, please file an issue.
+
+## Licence
+
+[Elastic License 2.0 (ELv2)](LICENSE)
