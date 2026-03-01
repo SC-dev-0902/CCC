@@ -299,6 +299,13 @@ function connectTerminal(projectId) {
 
 async function startSession(projectId, command) {
   try {
+    // Guard: parked projects cannot start sessions
+    const proj = findProject(projectId);
+    if (proj && proj.group !== 'Active') {
+      showToast('Move this project to Active before starting a session.');
+      return;
+    }
+
     // Create terminal instance if it doesn't exist
     let instance = terminalInstances.get(projectId);
     if (!instance) {
@@ -649,7 +656,7 @@ function renderVersionRow(container, project, ver, activeVersion) {
   const row = document.createElement('div');
   row.className = 'tree-version-row' + (isActive ? ' active-version' : '') + (isExpanded ? ' expanded' : '');
 
-  const hasChildren = ver.files.length > 0 || (ver.testFiles && ver.testFiles.length > 0) || ver.patches.length > 0;
+  const hasChildren = true; // Testing section always present
 
   const versionStatus = isActive ? getProjectStatus(project.id) : null;
 
@@ -746,17 +753,18 @@ function renderVersionRow(container, project, ver, activeVersion) {
 
     container.appendChild(versionFiles);
 
-    // Testing sub-header (collapsible, nested under version)
-    if (ver.testFiles && ver.testFiles.length > 0) {
+    // Testing sub-header (collapsible, nested under version — always visible)
+    {
       const testingKey = project.id + ':' + ver.version;
       const testingExpanded = expandedTestingSections.has(testingKey);
+      const testCount = (ver.testFiles && ver.testFiles.length) || 0;
 
       const testingHeader = document.createElement('div');
       testingHeader.className = 'tree-testing-header' + (testingExpanded ? ' expanded' : '');
       testingHeader.innerHTML = `
         <span class="tree-testing-chevron">&#x25B8;</span>
         <span>Testing</span>
-        <span class="tree-testing-count">${ver.testFiles.length}</span>
+        <span class="tree-testing-count">${testCount}</span>
       `;
       testingHeader.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -772,18 +780,25 @@ function renderVersionRow(container, project, ver, activeVersion) {
       if (testingExpanded) {
         const testingFiles = document.createElement('div');
         testingFiles.className = 'tree-testing-files';
-        for (const testFile of ver.testFiles) {
-          const testFileName = testFile.name || testFile;
-          const testFilePath = ver.folder + '/' + testFileName;
-          const badge = testFile.total ? ` <span class="test-progress-badge">[${testFile.checked}/${testFile.total}]</span>` : '';
-          const testEl = document.createElement('div');
-          testEl.className = 'tree-file tree-testing-file';
-          testEl.innerHTML = `<span class="tree-file-icon">&#x1F4CB;</span><span class="tree-file-name">${escapeHtml(testFileName)}${badge}</span>`;
-          testEl.addEventListener('click', (e) => {
-            e.stopPropagation();
-            openFileTab(project.id, project.name, testFilePath);
-          });
-          testingFiles.appendChild(testEl);
+        if (testCount === 0) {
+          const emptyEl = document.createElement('div');
+          emptyEl.className = 'tree-testing-empty';
+          emptyEl.textContent = 'No test files yet';
+          testingFiles.appendChild(emptyEl);
+        } else {
+          for (const testFile of ver.testFiles) {
+            const testFileName = testFile.name || testFile;
+            const testFilePath = ver.folder + '/' + testFileName;
+            const badge = testFile.total ? ` <span class="test-progress-badge">[${testFile.checked}/${testFile.total}]</span>` : '';
+            const testEl = document.createElement('div');
+            testEl.className = 'tree-file tree-testing-file';
+            testEl.innerHTML = `<span class="tree-file-icon">&#x1F4CB;</span><span class="tree-file-name">${escapeHtml(testFileName)}${badge}</span>`;
+            testEl.addEventListener('click', (e) => {
+              e.stopPropagation();
+              openFileTab(project.id, project.name, testFilePath);
+            });
+            testingFiles.appendChild(testEl);
+          }
         }
         container.appendChild(testingFiles);
       }
@@ -884,17 +899,18 @@ function renderPatchRow(container, project, patch, activeVersion) {
 
     container.appendChild(patchFiles);
 
-    // Testing sub-header for patch
-    if (patch.testFiles && patch.testFiles.length > 0) {
+    // Testing sub-header for patch (always visible)
+    {
       const testingKey = project.id + ':' + patch.version;
       const testingExpanded = expandedTestingSections.has(testingKey);
+      const testCount = (patch.testFiles && patch.testFiles.length) || 0;
 
       const testingHeader = document.createElement('div');
       testingHeader.className = 'tree-testing-header tree-testing-header-patch' + (testingExpanded ? ' expanded' : '');
       testingHeader.innerHTML = `
         <span class="tree-testing-chevron">&#x25B8;</span>
         <span>Testing</span>
-        <span class="tree-testing-count">${patch.testFiles.length}</span>
+        <span class="tree-testing-count">${testCount}</span>
       `;
       testingHeader.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -910,18 +926,25 @@ function renderPatchRow(container, project, patch, activeVersion) {
       if (testingExpanded) {
         const testingFiles = document.createElement('div');
         testingFiles.className = 'tree-testing-files tree-testing-files-patch';
-        for (const testFile of patch.testFiles) {
-          const testFileName = testFile.name || testFile;
-          const testFilePath = patch.folder + '/' + testFileName;
-          const badge = testFile.total ? ` <span class="test-progress-badge">[${testFile.checked}/${testFile.total}]</span>` : '';
-          const testEl = document.createElement('div');
-          testEl.className = 'tree-file tree-testing-file-patch';
-          testEl.innerHTML = `<span class="tree-file-icon">&#x1F4CB;</span><span class="tree-file-name">${escapeHtml(testFileName)}${badge}</span>`;
-          testEl.addEventListener('click', (e) => {
-            e.stopPropagation();
-            openFileTab(project.id, project.name, testFilePath);
-          });
-          testingFiles.appendChild(testEl);
+        if (testCount === 0) {
+          const emptyEl = document.createElement('div');
+          emptyEl.className = 'tree-testing-empty';
+          emptyEl.textContent = 'No test files yet';
+          testingFiles.appendChild(emptyEl);
+        } else {
+          for (const testFile of patch.testFiles) {
+            const testFileName = testFile.name || testFile;
+            const testFilePath = patch.folder + '/' + testFileName;
+            const badge = testFile.total ? ` <span class="test-progress-badge">[${testFile.checked}/${testFile.total}]</span>` : '';
+            const testEl = document.createElement('div');
+            testEl.className = 'tree-file tree-testing-file-patch';
+            testEl.innerHTML = `<span class="tree-file-icon">&#x1F4CB;</span><span class="tree-file-name">${escapeHtml(testFileName)}${badge}</span>`;
+            testEl.addEventListener('click', (e) => {
+              e.stopPropagation();
+              openFileTab(project.id, project.name, testFilePath);
+            });
+            testingFiles.appendChild(testEl);
+          }
         }
         container.appendChild(testingFiles);
       }
@@ -1093,6 +1116,16 @@ function renderSessionContent(container, project, projectId) {
 
     const prompt = document.createElement('div');
     prompt.className = 'no-session';
+
+    // Parked projects cannot start sessions — show "move to Active" banner
+    if (project.group !== 'Active') {
+      prompt.innerHTML = `
+        <div class="evaluate-notice">Move this project to <strong>Active</strong> before starting a session.</div>
+        <div class="no-session-path">${escapeHtml(project.path)}</div>
+      `;
+      container.appendChild(prompt);
+      return;
+    }
 
     // Show evaluate-import notice for unevaluated projects
     const evalNotice = project.evaluated === false
@@ -2280,9 +2313,6 @@ function showImportProjectModal(prefillPath) {
       const tasklistPath = d.tasklist.found
         ? (d.tasklist.ambiguous ? (overlay.querySelector('#importTasklistSelect')?.value || null) : d.tasklist.path)
         : '';
-      // Determine needsEvaluation from the ORIGINAL scan result, before scaffolding
-      const needsEvaluation = !d.concept.found;
-
       const importBtn = overlay.querySelector('#importSubmit');
       importBtn.disabled = true;
       const loader = showLoadingOverlay(overlay);
@@ -2338,8 +2368,10 @@ function showImportProjectModal(prefillPath) {
           version: majorMinor
         });
 
-        // 5. Flag unevaluated imports LAST (must be after scaffolding so it's the final state)
-        if (needsEvaluation && result.id) {
+        // 5. Flag ALL imports as unevaluated LAST (must be after scaffolding so it's the final state).
+        // The server-side auto-clear logic in GET /api/projects/:id/versions will clear this
+        // flag automatically when a real (non-template) concept doc is found.
+        if (result.id) {
           await api('PUT', `/api/projects/${result.id}`, { evaluated: false });
         }
 

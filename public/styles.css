@@ -574,6 +574,15 @@ html, body {
   padding-left: 116px;
 }
 
+.tree-testing-empty {
+  padding-left: 100px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
 .test-progress-badge {
   font-family: var(--font-mono);
   font-size: 10px;

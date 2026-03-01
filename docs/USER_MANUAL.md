@@ -85,6 +85,8 @@ The sidebar is your command center. It shows all your projects, organised into g
 
 **Groups** are collapsible folders. CCC starts with two: **Active** and **Parked**. You can create your own (Client Work, Research, whatever makes sense for you). Drag projects between groups to organise them however you like.
 
+Only projects in the **Active** group can start Claude Code sessions. If you try to open a session for a parked project, CCC shows a banner asking you to move it to Active first. This prevents accidental work on projects you've deliberately set aside.
+
 **Projects** appear inside groups. Each one has a coloured status dot that tells you what Claude is doing right now.
 
 Click a project to expand it and see its contents — version folders, documentation files, test files.
@@ -224,15 +226,13 @@ The import wizard asks for a **version number** (defaults to `1.0.0`). This dete
 
 Existing files are never overwritten. If the project already has a `CLAUDE.md` or a `docs/v1.0/` folder with content, CCC leaves them untouched.
 
-**After importing a non-CCC project**, you'll see an orange notification banner in the session view indicating the project needs evaluation. Run `/evaluate-import` in the Claude Code session before doing anything else. Claude reads your existing code, configs, and docs, asks you questions until it understands the project, then populates the CCC documentation with real content. Once that's done, run `/start-project` to begin working.
+**After importing**, you'll see an orange notification banner and an orange status dot indicating the project needs evaluation. Run `/evaluate-import` in the Claude Code session before doing anything else. Claude reads your existing code, configs, and docs, asks you questions until it understands the project, then populates the CCC documentation with real content. Once that's done, run `/start-project` to begin working.
 
 ```
 Import → /evaluate-import → review docs → /start-project → work
 ```
 
-The orange banner and orange status dot clear automatically once the concept doc has been populated with real content (replacing the blank template).
-
-If the project already has CCC-compliant docs (`*_concept.md`, `CLAUDE.md`, `*_tasklist.md`), skip `/evaluate-import` and go straight to `/start-project`.
+The orange banner and orange status dot clear automatically once the concept doc has been populated with real content. If the project already has CCC-compliant documentation, the orange indicators clear on their own the first time you expand the version tree — no manual steps needed.
 
 ### Editing & Removing Projects
 
@@ -294,7 +294,7 @@ CCC has a built-in test runner for managing pre-release checklists. It's designe
 
 Test files follow the naming convention `{ProjectName}_test_stageXX.md` and live inside version folders (e.g., `docs/v1.0/CCC_test_stage01.md`).
 
-In the sidebar, they appear under a collapsible **Testing** sub-header inside each version. Each test file shows a progress badge like `[6/30]` — how many items are checked off out of the total.
+In the sidebar, they appear under a collapsible **Testing** sub-header inside each version. The Testing section is always visible — even for new projects with no test files yet, so you always know where to find it. Each test file shows a progress badge like `[6/30]` — how many items are checked off out of the total.
 
 ### The Interactive Test Runner
 
