@@ -234,6 +234,8 @@ Import → /evaluate-import → review docs → /start-project → work
 
 The orange banner and orange status dot clear automatically once the concept doc has been populated with real content. If the project already has CCC-compliant documentation, the orange indicators clear on their own the first time you expand the version tree — no manual steps needed.
 
+For best results, when evaluating an imported project, only the CCC concept template should be used. This ensures the generated documentation follows the structure that CCC and its slash commands expect.
+
 ### Editing & Removing Projects
 
 Hover over a project in the sidebar and you'll see action buttons — pencil to edit (rename, change group), trash to remove. Removing a project from CCC doesn't delete any files on disk unless you explicitly choose that option.

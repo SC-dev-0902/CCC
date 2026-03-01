@@ -1,66 +1,57 @@
 # Session Handover Pack — CCC
+*Generated: 2026-03-01*
 
 ## Project
 **CCC — Claude Command Center**
 **Version:** 1.0.0 — **SHIPPED**
+**Build:** 21 (total git commits)
 **All stages (01–16) complete — all Go/NoGo gates passed**
 **Tag:** `v1.0.0` pushed to Forgejo and GitHub
+**Last commit:** `4a88a41` — Fix import wizard scaffolding, traffic light dots, build number
 
 ---
 
 ## What Was Done This Session
 
-### Parser Fix (Root Cause Found)
-- Status dots stuck on grey — root cause: `CLAUDE_CODE_ENTRYPOINT=cli` env var leaked into PTY sessions
-- Claude Code detected nesting and altered its output → parser patterns couldn't match
-- Fix: `src/sessions.js` now deletes both `CLAUDECODE` and `CLAUDE_CODE_ENTRYPOINT` from PTY env
-- Parser confirmed working via debug logging: `unknown → completed → running → completed` transitions verified
+### Import Wizard — Bug Fixes (#1 & #2)
+- **Bug #2 fixed:** Imported projects now get full CCC folder structure scaffolded into them. New `POST /api/scaffold-import` endpoint creates `docs/vX.Y/`, `CLAUDE.md`, `.claude/commands/`, `.ccc-project.json` — only for files that don't already exist (additive only, never overwrites).
+- Three new template generators: `generateImportClaudeMd()`, `generateImportConceptMd()`, `generateImportTasklistMd()` — version-parameterised, concept doc includes `<!-- CCC_TEMPLATE: -->` marker.
+- Version field added to Import Wizard Phase 2 (defaults to `1.0.0`, validates `X.Y` or `X.Y.Z` format). Version determines the `docs/vX.Y/` folder name.
+- **Bug #1 fixed:** Evaluate-import notice now persists correctly. Auto-clear logic in `GET /api/projects/:id/versions` reads concept doc content and checks for template marker — only clears `evaluated: false` when marker is absent (real content replaces template).
+- **CSS fix:** `.evaluate-notice` background was `var(--status-orange)` (undefined variable, invisible) → changed to `var(--status-error)` (actual orange `#db6d28`).
+- Scaffold per-file checks: changed from folder-level `vFolderHasFiles` to individual `!fs.existsSync()` per file, so partial scaffolds work correctly.
 
-### Degraded Banner Fix
-- `startDegradeMonitor()` was still active despite degradation being "disabled" in `feed()`
-- During streaming character-by-character output, `lastRecognisedAt` stopped updating → timer fired after 60s
-- Fix: replaced `startDegradeMonitor()` call in `sessions.js` with comment — monitor disabled for v1.0
-- Degradation redesign deferred to v1.1
+### Traffic Light Dots
+- Active version dot changed from static blue to status-coloured: green = OK, orange = needs attention (unevaluated import), yellow = running, red = waiting.
+- No-session default changed from grey (`unknown`) to green (`completed`).
+- Removed separate `version-status-dot` span — `version-active-dot` now carries both "active" and "status" meaning via CSS class.
+- `getProjectStatus()` checks `project.evaluated === false` first → returns `'error'` (orange).
 
-### Desktop Starter Scripts
-- `tools/macos/start_CCC.command` — double-clickable, starts server + opens browser
-- `tools/linux/start_CCC.sh` — same for Linux (xdg-open)
-- `tools/windows/start_CCC.bat` — same for Windows
-- All scripts: read PORT from .env, check if already running, wait for server ready
-- `tools/build-release.sh` updated to include starters + LICENSE + CHANGELOG.md in archives
+### Build Number Fix
+- Replaced `git log --grep=^Stage` with `git rev-list --count HEAD`. Build = total commit count, format-agnostic, always incrementing.
+- Convention added to `~/.claude/CLAUDE.md` §1.6.
 
-### Release Archives Rebuilt
-- `dist/CCC-1.0.0-macos.tar.gz`, `dist/CCC-1.0.0-linux.tar.gz`, `dist/CCC-1.0.0-windows.zip`
-- Now include: installer, starter script, LICENSE, CHANGELOG.md
+### Documentation & Cleanup
+- Updated `CLAUDE.md` — replaced "never modify imported project files" with "import scaffolding is additive only" rule; added traffic light dot docs to Status Model.
+- Updated `docs/v1.0/CCC_concept.md` — Import Rules section rewritten for scaffolding, template markers, version field.
+- Updated `docs/USER_MANUAL.md` — import wizard (version field, scaffolding, orange banner), status dots (traffic light), active version (green/orange not blue).
+- Regenerated `docs/USER_MANUAL.pdf` (1.1 MB).
+- Removed LedgerNest test entry from `data/projects.json`.
+- Pushed to both remotes (Forgejo + GitHub).
 
-### PDF Regenerated
-- `docs/USER_MANUAL.pdf` regenerated via `node tools/manual-to-pdf.js`
-
-### GitHub Setup
-- GitHub account created: `SC-dev-0902`
-- Remote added: `github` → `https://github.com/SC-dev-0902/CCC.git`
-- Credentials stored via `git credential-store` (not in URL)
-- Repo made public
-- `bug_report.yml` created via GitHub web UI (issue template)
-
-### Stage Gates
-- **Stage 16 (User Manual)** — GO
-- **Stage 15 (v1.0 Release)** — GO
-- `v1.0.0` tag created and pushed to both remotes
-
-### README Updated
-- Clone URL points to GitHub
-- Starter scripts documented in Quick Start
-- Project structure tree updated with starter scripts
-- Licence section added (ELv2)
+---
 
 ## Decisions Made
 
-- **Parser root cause:** `CLAUDE_CODE_ENTRYPOINT=cli` — must be cleared from PTY env
-- **Degradation monitor:** disabled entirely for v1.0 (false positives on streaming output)
-- **CCC must not be developed via CCC** — rule stands for v1.1 (restart problem)
-- **Roadmap will change slightly** for v1.1 — details TBD next session
-- **GitHub as second remote** — Forgejo remains `origin`, GitHub is `github`
+| Decision | Rationale |
+|----------|-----------|
+| Import scaffolds into existing projects | Overrides original "read-only on filesystem" rule. Without scaffolding, imported projects look nothing like wizard-created ones. |
+| Template marker `<!-- CCC_TEMPLATE: -->` | Prevents auto-clear from defeating the evaluate-notice. Simple string check, no schema changes needed. |
+| Traffic light dots (not static blue) | Blue had no semantic meaning. Humans think red=stop, orange=caution, green=OK. Active version dot now conveys status. |
+| No-session = green (not grey) | Grey implied something wrong. No session + docs OK = project is fine = green. |
+| Build = commit count | Stage-number extraction was fragile. `git rev-list --count HEAD` is simple and always incrementing. |
+| Per-file scaffold checks | Folder-level check skipped all files if folder existed with even one file. Per-file check allows partial scaffolding. |
+| Evaluated flag set LAST in import | Must be after scaffolding + coreFiles update so it's the final state — prevents auto-clear race. |
 
 ---
 
@@ -125,40 +116,42 @@
 **Post-Stage 14** (commit `56e69b1`)
 - iPad touch targets, README feature list update
 
-**Stage 15 — v1.0 Release** (commit `a30a71d`, Go)
-- README final review, `v1.0.0` tag, GitHub public, CCC self-import
+### Day 5 — 2026-02-28
 
 **Stage 16 — User Manual** (commit `ec2cc53`, Go)
 - 16 Playwright screenshots, full manual, PDF export, HEP passed
 
-### Day 5 — 2026-02-28
-
 **Post-Stage 16** (commit `c080ae0`)
 - Parser fix (CLAUDE_CODE_ENTRYPOINT), degraded monitor disabled, import flow revised, ELv2 licence, starter scripts, release archives rebuilt
 
-**Final** (commits `1041d8e`, `d081619`, `a30a71d`)
-- README updated, bug_report.yml, Stage 15+16 Go, v1.0.0 tag pushed
+**Final** (commits `1041d8e`, `d081619`, `a30a71d`, `1cccf92`)
+- README updated, bug_report.yml, Stage 15+16 Go, v1.0.0 tag pushed, final SHP
+
+### Day 6 — 2026-03-01
+
+**Post-ship bug fixes** (commit `4a88a41`)
+- Import wizard scaffolding, traffic light dots, build number fix, USER_MANUAL update + PDF, cleanup
 
 ---
 
 ## Architecture & File Map
 
 ```
-CCC/
+CCC/                           (6,973 lines total)
 ├── CLAUDE.md                  ← project contract (derived from active version's concept doc)
 ├── LICENSE                    ← Elastic License 2.0
 ├── CHANGELOG.md               ← public-facing changelog (v1.0.0)
 ├── README.md                  ← install + run instructions, feature list, licence
-├── server.js                  ← Express entry point, all HTTP + WebSocket routes
+├── server.js                  (1,304 lines) Express entry point, all HTTP + WebSocket routes, template generators
 ├── src/
-│   ├── parser.js              ← SACRED: all Claude Code output parsing
-│   ├── sessions.js            ← PTY lifecycle, WebSocket clients, parser integration
-│   ├── projects.js            ← projects.json CRUD, path resolution, group management
-│   └── versions.js            ← version scanning, creation, migration, test checkbox counting
+│   ├── parser.js              (363 lines)  SACRED: all Claude Code output parsing
+│   ├── sessions.js            (326 lines)  PTY lifecycle, WebSocket clients, parser integration
+│   ├── projects.js            (172 lines)  projects.json CRUD, path resolution, group management
+│   └── versions.js            (282 lines)  version scanning, creation, migration, test checkbox counting
 ├── public/
-│   ├── index.html             ← Minimal skeleton: sidebar, resize handle, main panel
-│   ├── app.js                 ← All state, rendering, modals, terminals, test runner
-│   └── styles.css             ← CSS custom properties, dark/light themes
+│   ├── index.html             (53 lines)   Minimal skeleton: sidebar, resize handle, main panel
+│   ├── app.js                 (2,716 lines) All state, rendering, modals, terminals, test runner
+│   └── styles.css             (1,757 lines) CSS custom properties, dark/light themes
 ├── data/
 │   ├── projects.json          ← Project registry (committed)
 │   └── settings.json          ← User settings (gitignored)
@@ -182,10 +175,13 @@ CCC/
 │   ├── USER_MANUAL.md         ← User manual (Stage 16)
 │   ├── USER_MANUAL.pdf        ← PDF export of manual
 │   ├── screenshots/           ← Playwright-captured screenshots (16 files)
-│   └── v1.0/
+│   ├── v1.0/                  ← Active version
+│   │   ├── CCC_concept.md
+│   │   ├── CCC_tasklist.md
+│   │   └── CCC_test_stage*.md ← Test files (stages 01–14)
+│   └── v1.1/                  ← Next version (scaffolded, not started)
 │       ├── CCC_concept.md
-│       ├── CCC_tasklist.md
-│       └── CCC_test_stage*.md ← Test files (stages 01–14)
+│       └── CCC_tasklist.md
 ├── .env                       ← Local only (PORT, CLAUDE_REFERRAL_URL)
 └── .env.example               ← Committed template
 ```
@@ -213,14 +209,14 @@ CCC/
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/file/:projectId?filePath=` | Read file content (path-traversal protected) |
-| PUT | `/api/file/:projectId` | Write file content `{ filePath, content }` (path-traversal protected) — used by test runner |
+| PUT | `/api/file/:projectId` | Write file content `{ filePath, content }` — used by test runner |
 | POST | `/api/open-editor` | Launch external editor with file path |
 | GET | `/api/browse?path=` | List subdirectories for browser modal |
 
 ### Versions
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/api/projects/:id/versions` | Scan version structure (includes `testFiles[]`, `evaluated` field, auto-clears evaluated flag) |
+| GET | `/api/projects/:id/versions` | Scan version structure (includes auto-clear of evaluated flag with template marker check) |
 | POST | `/api/projects/:id/versions` | Create new version (scaffolds folder + docs) |
 | PUT | `/api/projects/:id/active-version` | Set active version |
 | DELETE | `/api/projects/:id/versions/:version` | Delete version (FS + prevents active version delete) |
@@ -232,10 +228,11 @@ CCC/
 |--------|------|---------|
 | GET | `/api/settings` | Read settings |
 | PUT | `/api/settings` | Update settings (whitelisted keys only) |
-| GET | `/api/version` | App version + build number |
+| GET | `/api/version` | App version + build number (`git rev-list --count HEAD`) |
 | GET | `/api/preflight` | Check if `claude` CLI is installed |
 | POST | `/api/scaffold-project` | New project wizard backend |
-| POST | `/api/scan-project` | Import scan backend (no hard gate) |
+| POST | `/api/scaffold-import` | Import scaffolding backend (creates docs/vX.Y/, CLAUDE.md, .claude/commands/, .ccc-project.json) |
+| POST | `/api/scan-project` | Import scan backend (detect CCC files) |
 
 ### Sessions
 | Method | Path | Purpose |
@@ -276,15 +273,20 @@ readPanelTimers (Map)          — tabId → intervalId for auto-refresh
 
 **Rendering pipeline:** `render()` → `renderTreeView()` + `renderTabBar()` + `renderTabContent()`
 
+**Status resolution in `getProjectStatus()`:**
+1. `project.evaluated === false` → `'error'` (orange dot)
+2. No terminal instance → `'completed'` (green dot)
+3. Session exited → `'completed'` (green dot)
+4. Degraded → `'unknown'` (grey dot)
+5. Parser state from terminal output → mapped to status string
+
 **Import flow:**
-- `scanResult.detected.concept.found` determines if project needs evaluation
-- `needsEvaluation` flag set during import → `PUT /api/projects/:id { evaluated: false }`
-- `loadProjectVersions()` syncs `evaluated` from version scan response to project object
-- `renderSessionContent()` shows orange `.evaluate-notice` banner when `project.evaluated === false`
+1. Phase 1: scan directory → `POST /api/scan-project`
+2. Phase 2: confirm name, version, group → `POST /api/projects` (register) → `POST /api/scaffold-import` (scaffold) → `PUT /api/projects/:id` (coreFiles) → `PUT /api/projects/:id/active-version` → `PUT /api/projects/:id` (evaluated: false, if needed — LAST)
+3. `loadProjectVersions()` syncs `evaluated` from version scan response to project object
+4. `renderSessionContent()` shows orange `.evaluate-notice` banner when `project.evaluated === false`
 
 **Test file progress:** `countTestCheckboxes(filePath)` in `versions.js` returns `{ checked, total }` — displayed as `[x/y]` badge in tree view
-
-**Sidebar persistence:** `initResize()` saves width to `localStorage('ccc-sidebar-width')` on mouseup, restores on init
 
 ---
 
@@ -298,25 +300,9 @@ Detection priority (checked in order):
 5. **UNKNOWN** — no session or unrecognised
 
 **Degradation:** Disabled in v1.0 (false positives on streaming character output). Monitor not started. Redesign deferred to v1.1.
-
 **Running state debounce:** Persists for 2 seconds after last indicator.
 
-**Filters (before detection):**
-- Empty chunks (pure ANSI) → skipped
-- Horizontal rules (`─────`) → skipped
-- `? for shortcuts` → skipped
-- `/ide for ...` → skipped
-
 **Critical PTY env fix:** Both `CLAUDECODE` and `CLAUDE_CODE_ENTRYPOINT` must be deleted from PTY env. If either leaks, Claude Code detects nesting and alters output, breaking pattern matching.
-
----
-
-## Path Resolution
-
-Project paths in `projects.json` are **relative** to `settings.projectRoot`. Resolution chain:
-1. `projects.resolveProjectPath(project.path)` called for all file operations
-2. If path is absolute → use as-is
-3. If relative → `path.join(settings.projectRoot, project.path)`
 
 ---
 
@@ -333,34 +319,13 @@ Project paths in `projects.json` are **relative** to `settings.projectRoot`. Res
 
 ---
 
-## Key Decisions & Conventions
-
-- **Parser is sacred** — only `src/parser.js` touches raw output interpretation
-- **Never hardcode port** — always `process.env.PORT`
-- **Never modify imported project files** — CCC is read-only on filesystem except its own data files and test file write-back
-- **No platform-specific paths** — `path.join()` everywhere
-- **Single-file SHP** — `docs/{ProjectName}_shp.md`, always overwritten at `/eod`, Git is the history
-- **Protected groups** — "Active" and "Parked" never auto-pruned
-- **One session per project** — starting Claude Code replaces open shell and vice versa
-- **Session entry via version node** — project row is expand/collapse only; active version row opens session tab
-- **Test files in version folders** — `docs/vX.Y/{ProjectName}_test_stageXX.md`
-- **Manual save for test runner** — no auto-save; explicit Save button
-- **Manual language is humanized** — not robotic, per Phet's explicit instruction
-- **Import accepts any directory** — no hard gate; unevaluated imports flagged with `evaluated: false`
-- **`/evaluate-import` mandatory** for non-CCC projects before `/start-project`
-- **CCC must not be developed via CCC** — normal CC terminal only (restart problem)
-- **Changelog/roadmap never auto-updated** — always ask Phet first
-- **Licence: Elastic License 2.0** — file at repo root
-
----
-
 ## Dependencies (package.json v1.0.0)
 
 | Package | Version | Purpose |
 |---------|---------|---------|
 | express | ^4.21.2 | HTTP server |
 | ws | ^8.19.0 | WebSocket |
-| node-pty | ^1.2.0-beta.11 | PTY spawning (beta required for Node v25) |
+| node-pty | ^1.2.0-beta.11 | PTY spawning (**beta required for Node v25**) |
 | @xterm/xterm | ^6.0.0 | Terminal emulator |
 | @xterm/addon-fit | ^0.11.0 | Auto-fit terminal |
 | marked | ^17.0.3 | Markdown parser |
@@ -377,17 +342,19 @@ Project paths in `projects.json` are **relative** to `settings.projectRoot`. Res
 
 1. `node-pty@1.2.0-beta.11` — stable 1.0.0 doesn't compile on Node.js v25
 2. `FitAddon` UMD export — constructor is `new FitAddon.FitAddon()`, not `new FitAddon()`
-3. Server must be restarted for code changes — no hot-reload
-4. Build number extracted from `git log --grep=^Stage` at startup — only updates on restart
-5. File API has path traversal protection — resolved path must start with project directory
-6. Settings update whitelists keys: `['projectRoot', 'editor', 'shell', 'theme', 'filePatterns', 'githubToken']`
-7. Tab ID scheme: `::session` (double colon) vs `:filePath` (single colon) — must not confuse the two
-8. Import modal uses `id="importModal"` (not `id="modal"`) — affects programmatic close
-9. Playwright selectors: `.tree-file` (not `.tree-file-link`), `.tree-testing-file` (not `.tree-test-file`), `.add-version-btn` (not `.new-version-btn`)
-10. Screenshot 01-onboarding cannot be captured when Claude CLI is installed — skip is expected
+3. **PTY env must clear both `CLAUDECODE` and `CLAUDE_CODE_ENTRYPOINT`** — if either leaks, Claude Code detects nesting and alters output, breaking the parser
+4. **`startDegradeMonitor()` must NOT be called** — causes false positives on streaming character output after 60s
+5. **CSS variable names:** Orange state uses `--status-error` (not `--status-orange`). There is no `--status-orange` variable.
+6. Server must be restarted for code changes — no hot-reload
+7. Build number = `git rev-list --count HEAD` — only computed at server startup, only updates on restart
+8. File API has path traversal protection — resolved path must start with project directory
+9. Settings update whitelists keys: `['projectRoot', 'editor', 'shell', 'theme', 'filePatterns', 'githubToken']`
+10. Tab ID scheme: `::session` (double colon) vs `:filePath` (single colon) — must not confuse the two
 11. `updateProject()` allowed fields: `name`, `group`, `coreFiles`, `activeVersion`, `evaluated`
-12. **PTY env must clear both `CLAUDECODE` and `CLAUDE_CODE_ENTRYPOINT`** — if either leaks, Claude Code detects nesting and alters output, breaking the parser
-13. Degradation monitor must NOT be started — `startDegradeMonitor()` causes false positives on streaming character output after 60s
+12. **Import evaluated flag must be set LAST** in the submit handler — after scaffolding and coreFiles update — otherwise auto-clear can race and clear it
+13. **Template marker `<!-- CCC_TEMPLATE: -->`** in scaffolded concept docs prevents auto-clear from prematurely removing the evaluate-notice
+14. Playwright selectors: `.tree-file` (not `.tree-file-link`), `.tree-testing-file` (not `.tree-test-file`), `.add-version-btn` (not `.new-version-btn`)
+15. Screenshot 01-onboarding cannot be captured when Claude CLI is installed — skip is expected
 
 ---
 
@@ -400,7 +367,7 @@ Project paths in `projects.json` are **relative** to `settings.projectRoot`. Res
 
 - Credentials for GitHub stored via `git credential-store` (not in URL)
 - Push to both remotes after stage Go decisions
-- Last push: `a30a71d` — Stage 15 Go, v1.0.0 shipped
+- Last push: `4a88a41` — post-ship bug fixes (both remotes up to date)
 
 ---
 
@@ -419,39 +386,17 @@ Seven global commands at `~/.claude/commands/`:
 
 ---
 
-## Screenshots (docs/screenshots/)
-
-| File | Content |
-|------|---------|
-| 02-main-dashboard.png | Default dashboard, sidebar + empty main panel |
-| 03-tree-expanded.png | CCC project expanded, Versions header open |
-| 04-tree-version-files.png | Version files listed under v1.0 |
-| 05-no-active-session.png | "No active session" prompt |
-| 06-read-panel.png | CLAUDE.md rendered in Read panel |
-| 07-status-dots-sidebar.png | Sidebar crop showing status dots |
-| 08-new-project-wizard.png | New Project wizard modal (blank) |
-| 09-wizard-filled.png | Wizard with name + template selected |
-| 10-import-phase1.png | Import Existing Project modal |
-| 11-settings-panel.png | Settings panel |
-| 12-test-runner.png | Interactive test runner with checkboxes |
-| 13-tab-bar-multiple.png | Multiple tabs open |
-| 14-light-theme.png | Light theme variant |
-| 15-degraded-banner.png | Degraded status banner (simulated) |
-| 16-new-version-modal.png | New Version modal |
-| 17-drag-drop-groups.png | Groups with drag & drop targets |
-
-Missing: 01-onboarding.png (cannot capture — Claude CLI installed)
-
----
-
 ## Open Items
 
-- Roadmap will change slightly for v1.1 — details TBD
+- v1.1 scope: `docs/v1.1/` folder exists with concept doc and tasklist skeleton — scope not yet defined
+- Linux/Windows testing: code is platform-aware but untested on non-macOS
+- HEP applies to updated USER_MANUAL.md — human review before publish
 - Bonus animated GIF of live status dots not yet written
-- `01-onboarding.png` missing — manual describes the screen in words
+- `01-onboarding.png` screenshot missing — manual describes the screen in words
 
 ## Next Actions
 
-1. Read roadmap (`docs/CCC_Roadmap.md`), discuss v1.1 scope with Phet
-2. Create `docs/v1.1/` with concept doc and tasklist
-3. Continue developing CCC in normal CC terminal (not via CCC)
+1. Review updated `docs/USER_MANUAL.md` text (HEP applies)
+2. Define v1.1 scope and populate `docs/v1.1/CCC_concept.md`
+3. When ready, run `/start-project` or `/continue` to begin v1.1 work
+4. Continue developing CCC in normal CC terminal (not via CCC — restart problem)

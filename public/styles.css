@@ -655,6 +655,45 @@ html, body {
   color: var(--text-primary);
 }
 
+.toast-warning {
+  bottom: auto;
+  top: 50%;
+  left: 50%;
+  right: auto;
+  transform: translate(-50%, -50%);
+  max-width: 480px;
+  background: var(--status-error);
+  border: 2px solid #f0883e;
+  color: #000;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 20px 28px;
+  text-align: center;
+  animation: fadeIn 0.2s ease;
+}
+
+.toast-ok-btn {
+  display: block;
+  margin: 14px auto 0;
+  padding: 6px 32px;
+  background: #000;
+  color: var(--status-error);
+  border: 1px solid #000;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.toast-ok-btn:hover {
+  background: #222;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* --- Sidebar Footer --- */
 
 .sidebar-footer {

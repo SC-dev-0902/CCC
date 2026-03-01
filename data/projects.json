@@ -28,20 +28,21 @@
       "name": "PatchPilot",
       "path": "PatchPilot",
       "group": "Parked",
-      "order": 0,
+      "order": 1,
       "coreFiles": {
         "claude": "CLAUDE.md",
         "concept": "docs/v1.0/PatchPilot_concept.md",
         "tasklist": "docs/v1.0/PatchPilot_tasklist.md"
       },
-      "activeVersion": "1.0"
+      "activeVersion": "1.0",
+      "evaluated": true
     },
     {
       "id": "9fcb1bc6-9ae3-4a1c-ac65-6e89114111af",
       "name": "CC-Monitor",
       "path": "CC-Monitor",
       "group": "Parked",
-      "order": 1,
+      "order": 2,
       "coreFiles": {
         "claude": "CLAUDE.md",
         "concept": "docs/v1.0/CC-Monitor_concept.md",
@@ -54,13 +55,28 @@
       "name": "PeuanRuamChan",
       "path": "PeuanRuamChan",
       "group": "Parked",
-      "order": 2,
+      "order": 0,
       "coreFiles": {
         "claude": "CLAUDE.md",
         "concept": "docs/v1.0/PeuanRuamChan_concept.md",
         "tasklist": "docs/v1.0/PeuanRuamChan_tasklist.md"
       },
-      "activeVersion": "1.0"
+      "activeVersion": "1.0",
+      "evaluated": true
+    },
+    {
+      "id": "73c6f8f5-1786-436b-8f2f-b74f13876cb7",
+      "name": "LedgerNest",
+      "path": "LedgerNest",
+      "group": "Parked",
+      "order": 3,
+      "coreFiles": {
+        "claude": "CLAUDE.md",
+        "concept": "docs/v1.0/LedgerNest_concept.md",
+        "tasklist": "docs/v1.0/LedgerNest_tasklist.md"
+      },
+      "activeVersion": "1.0",
+      "evaluated": false
     }
   ]
 }

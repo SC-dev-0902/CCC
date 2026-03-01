@@ -299,10 +299,11 @@ function connectTerminal(projectId) {
 
 async function startSession(projectId, command) {
   try {
-    // Guard: parked projects cannot start sessions
+    // Guard: parked + evaluated projects cannot start sessions (must move to Active first)
+    // Parked + unevaluated is allowed — needed for /evaluate-import
     const proj = findProject(projectId);
-    if (proj && proj.group !== 'Active') {
-      showToast('Move this project to Active before starting a session.');
+    if (proj && proj.group !== 'Active' && proj.evaluated !== false) {
+      showWarning('Move this project to Active before starting a session.');
       return;
     }
 
@@ -999,6 +1000,17 @@ function showToast(message, duration) {
   }, duration || 6000);
 }
 
+function showWarning(message) {
+  const existing = document.querySelector('.toast-notification');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.className = 'toast-notification toast-warning';
+  toast.innerHTML = `<span>${escapeHtml(message)}</span><button class="toast-ok-btn">OK</button>`;
+  toast.querySelector('.toast-ok-btn').addEventListener('click', () => toast.remove());
+  document.body.appendChild(toast);
+}
+
 // --- Drag & Drop Handler ---
 
 async function handleDrop(targetGroup, beforeProjectId) {
@@ -1009,7 +1021,8 @@ async function handleDrop(targetGroup, beforeProjectId) {
 
   // Block unevaluated projects from being dragged to Active
   if (targetGroup === 'Active' && dragged.evaluated !== true) {
-    showToast('Run /evaluate-import before moving this project to Active.');
+    showWarning('Run /evaluate-import before moving this project to Active.');
+    renderTreeView(); // Re-render to snap project back to original position
     return;
   }
 
@@ -1123,8 +1136,8 @@ function renderSessionContent(container, project, projectId) {
     const prompt = document.createElement('div');
     prompt.className = 'no-session';
 
-    // Parked projects cannot start sessions — show "move to Active" banner
-    if (project.group !== 'Active') {
+    // Parked + evaluated projects cannot start sessions — must move to Active first
+    if (project.group !== 'Active' && project.evaluated !== false) {
       prompt.innerHTML = `
         <div class="evaluate-notice">Move this project to <strong>Active</strong> before starting a session.</div>
         <div class="no-session-path">${escapeHtml(project.path)}</div>
@@ -1133,7 +1146,7 @@ function renderSessionContent(container, project, projectId) {
       return;
     }
 
-    // Show evaluate-import notice for unevaluated projects
+    // Show evaluate-import notice for unevaluated projects (works in any group)
     const evalNotice = project.evaluated === false
       ? `<div class="evaluate-notice">This project has no CCC documentation yet. Run <code>/evaluate-import</code> in your Claude Code session before starting work.</div>`
       : '';
@@ -2429,7 +2442,7 @@ function showEditModal(project) {
 
     // Block unevaluated projects from being moved to Active
     if (group === 'Active' && project.evaluated !== true) {
-      showToast('Run /evaluate-import before moving this project to Active.');
+      showWarning('Run /evaluate-import before moving this project to Active.');
       return;
     }
 
