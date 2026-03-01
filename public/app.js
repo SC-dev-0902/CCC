@@ -1007,6 +1007,12 @@ async function handleDrop(targetGroup, beforeProjectId) {
   const dragged = findProject(draggedId);
   if (!dragged) return;
 
+  // Block unevaluated projects from being dragged to Active
+  if (targetGroup === 'Active' && dragged.evaluated !== true) {
+    showToast('Run /evaluate-import before moving this project to Active.');
+    return;
+  }
+
   let groupProjects = projectsInGroup(targetGroup).filter(p => p.id !== draggedId);
 
   if (beforeProjectId) {
@@ -2190,10 +2196,10 @@ function showImportProjectModal(prefillPath) {
       ? `<div class="import-info-panel">${notices.map(n => `<p>${n}</p>`).join('')}</div>`
       : '';
 
-    // Group options
+    // Group options — exclude Active (imports must be evaluated first)
     const groupOptions = [
       `<option value="" disabled selected>-- Select Group --</option>`,
-      ...groups.map(g =>
+      ...groups.filter(g => g.name !== 'Active').map(g =>
         `<option value="${escapeHtml(g.name)}">${escapeHtml(g.name)}</option>`
       ),
       `<option value="__new__">-- Create New --</option>`
@@ -2420,6 +2426,12 @@ function showEditModal(project) {
     const name = overlay.querySelector('#editName').value.trim();
     const group = overlay.querySelector('#editGroup').value;
     if (!name) return;
+
+    // Block unevaluated projects from being moved to Active
+    if (group === 'Active' && project.evaluated !== true) {
+      showToast('Run /evaluate-import before moving this project to Active.');
+      return;
+    }
 
     await api('PUT', `/api/projects/${project.id}`, { name, group });
     await loadProjects();

@@ -354,8 +354,12 @@ app.get('/api/projects/:id/versions', (req, res) => {
     const result = versions.scanVersions(found.absPath, found.project.name);
     result.activeVersion = found.project.activeVersion || null;
 
-    // Auto-clear evaluated flag when a real (non-template) concept doc appears
-    if (found.project.evaluated === false) {
+    // Normalize evaluated flag: check concept doc on every version load
+    // until the project is explicitly marked as evaluated.
+    // - Real concept doc (no template marker) → evaluated: true (green)
+    // - Template/missing concept doc → evaluated: false (orange)
+    // This covers legacy imports (evaluated undefined) and new imports alike.
+    if (found.project.evaluated !== true) {
       // Find concept doc path from versioned folders
       let conceptFilePath = null;
       for (const v of result.versions) {
@@ -388,8 +392,20 @@ app.get('/api/projects/:id/versions', (req, res) => {
           if (!content.includes('<!-- CCC_TEMPLATE:')) {
             projects.updateProject(req.params.id, { evaluated: true });
             found.project.evaluated = true;
+          } else {
+            // Template marker present — ensure flag is false (covers legacy imports)
+            if (found.project.evaluated !== false) {
+              projects.updateProject(req.params.id, { evaluated: false });
+              found.project.evaluated = false;
+            }
           }
         } catch (e) { /* ignore read errors */ }
+      } else {
+        // No concept doc at all — flag as unevaluated
+        if (found.project.evaluated !== false) {
+          projects.updateProject(req.params.id, { evaluated: false });
+          found.project.evaluated = false;
+        }
       }
     }
 
