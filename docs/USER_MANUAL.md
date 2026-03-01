@@ -105,6 +105,8 @@ The dots are the whole point of CCC. At a glance, you know what needs your atten
 
 The same colours show up in both the sidebar dots and the tab bar, so you always know what's happening even when you're looking at a different project.
 
+The active version dot in the sidebar follows traffic light logic too: green when everything is in order, orange when the project needs attention (for example, an unevaluated import). If no session is running and the project is healthy, the dot is green — not grey.
+
 ### The Tab Bar
 
 Every open project gets a tab at the top of the main panel. Tabs carry the status colour, so you can scan them quickly. Click a tab to switch. Click the `×` to close it.
@@ -211,13 +213,24 @@ Already have projects on disk? Click the **+** button, then the **Import existin
 
 Point CCC at the project directory and it scans for the key files. CCC accepts any directory — it doesn't require CCC documentation to exist yet.
 
-Import is completely non-destructive. CCC never modifies files in your project directory — it only registers the project in its own `projects.json`.
+The import wizard asks for a **version number** (defaults to `1.0.0`). This determines which version folder CCC creates for the project's documentation.
 
-**After importing a non-CCC project**, you must run `/evaluate-import` in the Claude Code session before doing anything else. Claude reads your existing code, configs, and docs, asks you questions until it understands the project, then generates CCC-compliant documentation (concept doc, CLAUDE.md, tasklist). Once that's done, run `/start-project` to begin working.
+**What CCC scaffolds on import:** CCC creates the CCC folder structure inside the imported project — but only for files that don't already exist:
+
+- `docs/vX.Y/` — version folder with a concept doc template and tasklist template
+- `CLAUDE.md` — project-level Claude Code instructions
+- `.claude/commands/` — starter slash commands
+- `.ccc-project.json` — project marker file
+
+Existing files are never overwritten. If the project already has a `CLAUDE.md` or a `docs/v1.0/` folder with content, CCC leaves them untouched.
+
+**After importing a non-CCC project**, you'll see an orange notification banner in the session view indicating the project needs evaluation. Run `/evaluate-import` in the Claude Code session before doing anything else. Claude reads your existing code, configs, and docs, asks you questions until it understands the project, then populates the CCC documentation with real content. Once that's done, run `/start-project` to begin working.
 
 ```
 Import → /evaluate-import → review docs → /start-project → work
 ```
+
+The orange banner and orange status dot clear automatically once the concept doc has been populated with real content (replacing the blank template).
 
 If the project already has CCC-compliant docs (`*_concept.md`, `CLAUDE.md`, `*_tasklist.md`), skip `/evaluate-import` and go straight to `/start-project`.
 
@@ -257,7 +270,7 @@ The new version automatically becomes the active version.
 
 ### The Active Version
 
-One version is always "active" — it's the one you're currently working on. The active version is shown with a blue dot and bold text in the sidebar. Clicking it opens a terminal session.
+One version is always "active" — it's the one you're currently working on. The active version is shown with a status-coloured dot and bold text in the sidebar. The dot follows traffic light logic: green when everything is in order, orange when the project needs attention. Clicking it opens a terminal session.
 
 ![Version files in tree](screenshots/04-tree-version-files.png)
 

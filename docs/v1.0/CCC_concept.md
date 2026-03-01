@@ -175,39 +175,45 @@ CCC provides an Import flow for bringing existing projects under CCC management.
 
 ### Import Rules
 
-CCC accepts any existing directory as an import. It registers the project in `projects.json` and scans for CCC documentation.
+CCC accepts any existing directory as an import. It registers the project in `projects.json`, scans for CCC documentation, and scaffolds CCC folder structure into the project.
 
 **Two paths after import:**
 
 **Path A — Project already has CCC-compliant docs:**
-CCC detects `*_concept.md`, `CLAUDE.md`, and `*_tasklist.md`. The project is ready. Run `/start-project` to begin.
+CCC detects `*_concept.md`, `CLAUDE.md`, and `*_tasklist.md`. If a versioned docs folder already exists with files, CCC skips scaffolding entirely. The project is ready. Run `/start-project` to begin.
 
 **Path B — Project has no CCC documentation (the common case):**
-CCC imports the project but flags it as unevaluated. Before any work begins, the developer **must** run `/evaluate-import` in the Claude Code session. This command reads existing code, configs, and docs, interviews the developer, and generates CCC-compliant documentation (concept doc, CLAUDE.md, tasklist). Only after `/evaluate-import` completes should the developer run `/start-project`.
+CCC imports the project and scaffolds the CCC folder structure: `docs/vX.Y/` with a blank concept template (containing a template marker), a blank tasklist, CLAUDE.md, `.claude/commands/` with starter slash commands, and `.ccc-project.json`. The concept template is flagged as unevaluated — the developer **must** run `/evaluate-import` in the Claude Code session to populate it. Only after `/evaluate-import` completes should the developer run `/start-project`.
 
 ```
-Import → /evaluate-import → review generated docs → /start-project → work
+Import → scaffolding → /evaluate-import → review generated docs → /start-project → work
 ```
 
-**This sequence is mandatory for non-CCC projects.** Running `/start-project` on an unevaluated import will fail — there is no concept doc for Claude Code to read.
+**This sequence is mandatory for non-CCC projects.** The scaffolded concept doc is a blank template — running `/start-project` before `/evaluate-import` will not produce meaningful results.
 
 ### Import Flow
 
 1. User points CCC at an existing directory
 2. CCC scans for the three core files:
    - `*_concept.md` — if present, project is CCC-ready
-   - `CLAUDE.md` — optional; generated during `/evaluate-import` or `/start-project`
-   - `*_tasklist.md` — optional; generated during `/evaluate-import` or `/start-project`
+   - `CLAUDE.md` — optional; scaffolded during import if missing
+   - `*_tasklist.md` — optional; scaffolded during import if missing
 3. CCC auto-detects filenames and pre-fills mappings; if ambiguous, it asks
-4. User assigns a name and group
+4. User assigns a name, group, and **version** (defaults to 1.0.0)
 5. Project is registered in `projects.json`
-6. If no concept doc was found, CCC displays a notice: *"Run `/evaluate-import` in your Claude Code session before starting work."*
+6. CCC scaffolds CCC structure into the project directory:
+   - Creates `docs/vX.Y/` with concept and tasklist templates (only if version folder doesn't already contain files)
+   - Creates `CLAUDE.md` at project root (only if missing)
+   - Creates `.claude/commands/` with starter slash commands (only if missing)
+   - Creates `.ccc-project.json` (only if missing)
+7. Active version is set to the specified version (major.minor)
+8. If no real concept doc was found by the scan, CCC displays a notice: *"Run `/evaluate-import` in your Claude Code session before starting work."*
 
-**Import is read-only on the filesystem.** CCC never moves, modifies, or deletes files in an existing project directory. It only writes to `projects.json`.
+**Scaffolded concept templates include a marker (`<!-- CCC_TEMPLATE: ... -->`) that prevents the auto-clear logic from prematurely removing the evaluate-import notice.** The notice persists until a real concept doc (without the marker) is written — either manually or via `/evaluate-import`.
 
 ### What to do if you have no concept doc
 
-Run `/evaluate-import` in your Claude Code session. Claude Code reads the existing codebase, interviews you about the project, and generates all three CCC documents (concept doc, CLAUDE.md, tasklist). Review the generated docs, adjust as needed, then run `/start-project` to begin working under CCC guidance.
+Run `/evaluate-import` in your Claude Code session. Claude Code reads the existing codebase, interviews you about the project, and populates the scaffolded concept doc, CLAUDE.md, and tasklist with real content. Review the generated docs, adjust as needed, then run `/start-project` to begin working under CCC guidance.
 
 ---
 

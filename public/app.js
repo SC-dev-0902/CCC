@@ -123,11 +123,15 @@ function escapeHtml(str) {
  * No session: unknown
  */
 function getProjectStatus(projectId) {
-  const instance = terminalInstances.get(projectId);
-  if (!instance) return 'unknown';
+  // Unevaluated import — orange dot signals "needs attention"
+  const project = findProject(projectId);
+  if (project && project.evaluated === false) return 'error';
 
-  // Exited sessions are grey regardless
-  if (instance.state === 'exited') return 'unknown';
+  const instance = terminalInstances.get(projectId);
+  if (!instance) return 'completed';
+
+  // Exited sessions — green (docs in order, session finished)
+  if (instance.state === 'exited') return 'completed';
 
   // If degraded, all dots fall back to unknown (grey)
   if (instance.degraded) return 'unknown';
@@ -651,14 +655,13 @@ function renderVersionRow(container, project, ver, activeVersion) {
 
   row.innerHTML = `
     ${hasChildren ? '<span class="tree-version-chevron">&#x25B8;</span>' : '<span class="tree-version-chevron" style="visibility:hidden">&#x25B8;</span>'}
-    <span class="version-active-dot"></span>
+    <span class="version-active-dot ${isActive ? (versionStatus || 'completed') : ''}"></span>
     <span class="tree-version-name">v${escapeHtml(ver.version)}</span>
     <span class="tree-version-actions">
       ${isActive ? '<span class="action-btn mark-complete-btn" title="Mark complete (git tag)">&#x2713;</span>' : ''}
       ${!isActive ? '<span class="action-btn set-active-btn" title="Set as active version">&#x25C9;</span>' : ''}
       ${!isActive ? '<span class="action-btn remove-btn remove-version-btn" title="Remove version">&times;</span>' : ''}
     </span>
-    ${isActive ? `<span class="status-dot version-status-dot ${versionStatus}"></span>` : ''}
   `;
 
   // Remove version button
@@ -806,14 +809,13 @@ function renderPatchRow(container, project, patch, activeVersion) {
 
   row.innerHTML = `
     ${hasFiles ? '<span class="tree-version-chevron">&#x25B8;</span>' : '<span class="tree-version-chevron" style="visibility:hidden">&#x25B8;</span>'}
-    <span class="version-active-dot"></span>
+    <span class="version-active-dot ${isActive ? (patchStatus || 'completed') : ''}"></span>
     <span class="tree-version-name">v${escapeHtml(patch.version)}</span>
     <span class="tree-version-actions">
       ${isActive ? '<span class="action-btn mark-complete-btn" title="Mark complete (git tag)">&#x2713;</span>' : ''}
       ${!isActive ? '<span class="action-btn set-active-btn" title="Set as active version">&#x25C9;</span>' : ''}
       ${!isActive ? '<span class="action-btn remove-btn remove-version-btn" title="Remove version">&times;</span>' : ''}
     </span>
-    ${isActive ? `<span class="status-dot version-status-dot ${patchStatus}"></span>` : ''}
   `;
 
   // Mark complete button
@@ -2189,6 +2191,11 @@ function showImportProjectModal(prefillPath) {
             <input type="text" id="importName" placeholder="${escapeHtml(scanResult.folderName)}">
           </div>
           <div class="settings-group">
+            <label>Version</label>
+            <input type="text" id="importVersion" value="${scanResult.versioning.suggestedActiveVersion ? escapeHtml(scanResult.versioning.suggestedActiveVersion) : '1.0.0'}" placeholder="1.0.0">
+            <span class="settings-hint">What version does this project represent?</span>
+          </div>
+          <div class="settings-group">
             <label>Group</label>
             <div class="select-wrap"><select id="importGroup">
               ${groupOptions}
@@ -2244,6 +2251,13 @@ function showImportProjectModal(prefillPath) {
         return;
       }
 
+      const versionVal = overlay.querySelector('#importVersion').value.trim();
+      if (!versionVal || !/^\d+\.\d+(\.\d+)?$/.test(versionVal)) {
+        errorEl.textContent = 'Version must be in X.Y or X.Y.Z format (e.g. 1.0.0).';
+        errorEl.classList.add('visible');
+        return;
+      }
+
       let groupVal = groupSelect.value;
       if (!groupVal) {
         errorEl.textContent = 'Please select a group.';
@@ -2266,6 +2280,7 @@ function showImportProjectModal(prefillPath) {
       const tasklistPath = d.tasklist.found
         ? (d.tasklist.ambiguous ? (overlay.querySelector('#importTasklistSelect')?.value || null) : d.tasklist.path)
         : '';
+      // Determine needsEvaluation from the ORIGINAL scan result, before scaffolding
       const needsEvaluation = !d.concept.found;
 
       const importBtn = overlay.querySelector('#importSubmit');
@@ -2273,6 +2288,7 @@ function showImportProjectModal(prefillPath) {
       const loader = showLoadingOverlay(overlay);
 
       try {
+        // 1. Register project
         const result = await api('POST', '/api/projects', {
           name: nameVal,
           path: scanResult.registrationPath,
@@ -2292,21 +2308,48 @@ function showImportProjectModal(prefillPath) {
           return;
         }
 
-        // Set active version if versioned structure detected
-        if (scanResult.versioning.suggestedActiveVersion && result.id) {
-          await api('PUT', `/api/projects/${result.id}/active-version`, {
-            version: scanResult.versioning.suggestedActiveVersion
-          });
+        // 2. Scaffold CCC structure into the project
+        const majorMinor = versionVal.split('.').slice(0, 2).join('.');
+        const vFolder = 'docs/v' + majorMinor;
+        const scaffoldResult = await api('POST', '/api/scaffold-import', {
+          absPath: scanResult.absPath,
+          projectName: nameVal,
+          version: versionVal
+        });
+
+        if (scaffoldResult.error) {
+          errorEl.textContent = 'Scaffold failed: ' + scaffoldResult.error;
+          errorEl.classList.add('visible');
+          importBtn.disabled = false;
+          hideLoadingOverlay(loader);
+          return;
         }
 
-        // Flag unevaluated imports (no concept doc found)
+        // 3. Update coreFiles to point to scaffolded files (only for newly created ones)
+        const updatedCoreFiles = {
+          claude: 'CLAUDE.md',
+          concept: conceptPath || (vFolder + '/' + nameVal + '_concept.md'),
+          tasklist: tasklistPath || (vFolder + '/' + nameVal + '_tasklist.md')
+        };
+        await api('PUT', `/api/projects/${result.id}`, { coreFiles: updatedCoreFiles });
+
+        // 4. Set active version
+        await api('PUT', `/api/projects/${result.id}/active-version`, {
+          version: majorMinor
+        });
+
+        // 5. Flag unevaluated imports LAST (must be after scaffolding so it's the final state)
         if (needsEvaluation && result.id) {
           await api('PUT', `/api/projects/${result.id}`, { evaluated: false });
         }
 
         overlay.remove();
         await loadProjects();
-        showToast(`Project "${nameVal}" imported.`);
+
+        const scaffoldMsg = scaffoldResult.scaffoldedFiles && scaffoldResult.scaffoldedFiles.length > 0
+          ? ` CCC structure scaffolded (${scaffoldResult.scaffoldedFiles.length} files).`
+          : '';
+        showToast(`Project "${nameVal}" imported.${scaffoldMsg}`);
       } catch (err) {
         errorEl.textContent = 'Import failed: ' + (err.message || 'Unknown error');
         errorEl.classList.add('visible');

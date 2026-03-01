@@ -354,25 +354,42 @@ app.get('/api/projects/:id/versions', (req, res) => {
     const result = versions.scanVersions(found.absPath, found.project.name);
     result.activeVersion = found.project.activeVersion || null;
 
-    // Auto-clear evaluated flag when concept doc appears
+    // Auto-clear evaluated flag when a real (non-template) concept doc appears
     if (found.project.evaluated === false) {
-      const hasConceptDoc = result.versions.some(v =>
-        v.files && v.files.some(f => f.endsWith('_concept.md'))
-      );
-      // Also check flat docs
-      const docsDir = path.join(found.absPath, 'docs');
-      let hasFlatConcept = false;
-      try {
-        if (fs.existsSync(docsDir)) {
-          const files = fs.readdirSync(docsDir);
-          hasFlatConcept = files.some(f => f.endsWith('_concept.md'));
+      // Find concept doc path from versioned folders
+      let conceptFilePath = null;
+      for (const v of result.versions) {
+        if (v.files) {
+          const conceptFile = v.files.find(f => f.endsWith('_concept.md'));
+          if (conceptFile) {
+            conceptFilePath = path.join(found.absPath, v.folder, conceptFile);
+            break;
+          }
         }
-      } catch (e) { /* ignore */ }
+      }
+      // Also check flat docs
+      if (!conceptFilePath) {
+        const docsDir = path.join(found.absPath, 'docs');
+        try {
+          if (fs.existsSync(docsDir)) {
+            const files = fs.readdirSync(docsDir);
+            const flatConcept = files.find(f => f.endsWith('_concept.md'));
+            if (flatConcept) {
+              conceptFilePath = path.join(docsDir, flatConcept);
+            }
+          }
+        } catch (e) { /* ignore */ }
+      }
 
-      if (hasConceptDoc || hasFlatConcept) {
-        projects.updateProject(req.params.id, { evaluated: true });
-        // Update the local reference so the response is fresh
-        found.project.evaluated = true;
+      if (conceptFilePath && fs.existsSync(conceptFilePath)) {
+        // Check if concept doc is a real doc or just the blank template
+        try {
+          const content = fs.readFileSync(conceptFilePath, 'utf8');
+          if (!content.includes('<!-- CCC_TEMPLATE:')) {
+            projects.updateProject(req.params.id, { evaluated: true });
+            found.project.evaluated = true;
+          }
+        } catch (e) { /* ignore read errors */ }
       }
     }
 
@@ -691,6 +708,112 @@ function generateTasklistMd(projectName) {
 `;
 }
 
+function generateImportClaudeMd(projectName, version) {
+  const majorMinor = version.split('.').slice(0, 2).join('.');
+  const vFolder = `v${majorMinor}`;
+  return `# CLAUDE.md — ${projectName}
+*Derived from: docs/${vFolder}/${projectName}_concept.md*
+
+---
+
+## Prime Directive
+
+> "An assumption is the first step in a major cluster fuck." — Marine Corps
+
+**Never assume. Always ask.** When in doubt about scope, intent, or next action — stop and ask. Do not proceed based on inference.
+
+---
+
+## What ${projectName} Is
+
+*Describe the project here. Read the concept doc for the full specification.*
+
+Read \`docs/${vFolder}/${projectName}_concept.md\` before starting any task. It is the single source of truth.
+
+---
+
+## Stage Gate Process
+
+Development proceeds in defined stages. See \`docs/${vFolder}/${projectName}_tasklist.md\` for the full breakdown.
+
+- Each stage has a defined set of tasks
+- Each stage ends with a Go/NoGo decision
+- **Never begin Stage N+1 without an explicit Go**
+`;
+}
+
+function generateImportConceptMd(projectName, version) {
+  const majorMinor = version.split('.').slice(0, 2).join('.');
+  return `<!-- CCC_TEMPLATE: Run /evaluate-import to populate this document -->
+# ${projectName} — Concept Document
+*Version: ${majorMinor}*
+
+---
+
+## The Problem
+
+*What problem does this project solve? Why does it need to exist?*
+
+---
+
+## The Vision
+
+*What does "done" look like? What is the end state?*
+
+---
+
+## Core Concepts
+
+*Key architectural ideas, domain model, or design principles.*
+
+---
+
+## Tech Stack
+
+*Technologies, libraries, infrastructure decisions.*
+
+---
+
+## Out of Scope
+
+*What this project explicitly does NOT do.*
+
+---
+
+*End of concept document.*
+`;
+}
+
+function generateImportTasklistMd(projectName, version) {
+  const majorMinor = version.split('.').slice(0, 2).join('.');
+  const vFolder = `v${majorMinor}`;
+  return `# ${projectName} — Tasklist
+*Derived from: docs/${vFolder}/${projectName}_concept.md*
+*Stage gate process: each stage ends with Go/NoGo before next stage begins*
+
+---
+
+## Stage 01 — *[Stage Name]*
+**Focus:** *[What this stage achieves]*
+**Goal:** *[What must be true when this stage is done]*
+
+### Tasks
+- [ ] *Task 1*
+- [ ] *Task 2*
+- [ ] *Task 3*
+
+### Go/NoGo Gate
+> *Gate question — what must be true to proceed?*
+
+**→ GO:** Proceed to Stage 02
+**→ NOGO:** Revise, re-evaluate — do not proceed
+
+---
+
+*"An assumption is the first step in a major cluster fuck." — Keep it sharp.*
+`;
+}
+
 function generateSlashCommand(type) {
   const commands = {
     'update-tasklist': `Update the project's tasklist with current progress.
@@ -849,6 +972,82 @@ app.post('/api/scaffold-project', (req, res) => {
   }
 });
 
+// --- Scaffold Import ---
+
+app.post('/api/scaffold-import', (req, res) => {
+  const { absPath, projectName, version } = req.body;
+
+  if (!absPath || !projectName || !version) {
+    return res.status(400).json({ error: 'absPath, projectName, and version are required' });
+  }
+
+  const resolved = path.resolve(absPath);
+  if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
+    return res.status(400).json({ error: 'absPath must be an existing directory' });
+  }
+
+  try {
+    const majorMinor = version.split('.').slice(0, 2).join('.');
+    const vFolder = path.join('docs', `v${majorMinor}`);
+    const absvFolder = path.join(resolved, vFolder);
+    const scaffoldedFiles = [];
+
+    // Create version folder if it doesn't exist
+    if (!fs.existsSync(absvFolder)) {
+      fs.mkdirSync(absvFolder, { recursive: true });
+    }
+
+    // Write concept doc if missing
+    const conceptPath = path.join(absvFolder, projectName + '_concept.md');
+    if (!fs.existsSync(conceptPath)) {
+      fs.writeFileSync(conceptPath, generateImportConceptMd(projectName, version), 'utf8');
+      scaffoldedFiles.push(path.join(vFolder, projectName + '_concept.md'));
+    }
+
+    // Write tasklist if missing
+    const tasklistPath = path.join(absvFolder, projectName + '_tasklist.md');
+    if (!fs.existsSync(tasklistPath)) {
+      fs.writeFileSync(tasklistPath, generateImportTasklistMd(projectName, version), 'utf8');
+      scaffoldedFiles.push(path.join(vFolder, projectName + '_tasklist.md'));
+    }
+
+    // Write CLAUDE.md if missing
+    const claudePath = path.join(resolved, 'CLAUDE.md');
+    if (!fs.existsSync(claudePath)) {
+      fs.writeFileSync(claudePath, generateImportClaudeMd(projectName, version), 'utf8');
+      scaffoldedFiles.push('CLAUDE.md');
+    }
+
+    // Create .claude/commands/ with slash commands if missing
+    const commandsDir = path.join(resolved, '.claude', 'commands');
+    if (!fs.existsSync(commandsDir)) {
+      fs.mkdirSync(commandsDir, { recursive: true });
+      const slashCommands = ['update-tasklist', 'review-concept', 'status'];
+      for (const cmd of slashCommands) {
+        const cmdPath = path.join(commandsDir, cmd + '.md');
+        fs.writeFileSync(cmdPath, generateSlashCommand(cmd), 'utf8');
+        scaffoldedFiles.push('.claude/commands/' + cmd + '.md');
+      }
+    }
+
+    // Create .ccc-project.json if missing
+    const cccMetaPath = path.join(resolved, '.ccc-project.json');
+    if (!fs.existsSync(cccMetaPath)) {
+      const cccMeta = {
+        createdAt: new Date().toISOString(),
+        template: 'import',
+        cccVersion: '1.0'
+      };
+      fs.writeFileSync(cccMetaPath, JSON.stringify(cccMeta, null, 2) + '\n', 'utf8');
+      scaffoldedFiles.push('.ccc-project.json');
+    }
+
+    res.json({ scaffoldedFiles });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to scaffold import: ' + err.message });
+  }
+});
+
 // --- Preflight Check ---
 
 app.get('/api/preflight', (req, res) => {
@@ -869,12 +1068,11 @@ app.get('/api/preflight', (req, res) => {
 const APP_VERSION = require('./package.json').version;
 let appBuild = null;
 
-// Extract highest stage number from commit messages at startup (non-blocking)
+// Count total commits in the repo at startup (non-blocking)
 const { execFile: execFileCb } = require('child_process');
-execFileCb('git', ['log', '--oneline', '--grep=^Stage', '--all'], { cwd: __dirname }, (err, stdout) => {
+execFileCb('git', ['rev-list', '--count', 'HEAD'], { cwd: __dirname }, (err, stdout) => {
   if (!err && stdout) {
-    const match = stdout.trim().split('\n')[0].match(/Stage\s+0*(\d+)/);
-    if (match) appBuild = match[1];
+    appBuild = stdout.trim();
   }
 });
 

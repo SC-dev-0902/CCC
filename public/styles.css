@@ -459,9 +459,14 @@ html, body {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--accent);
   flex-shrink: 0;
 }
+
+.version-active-dot.completed { background: var(--status-completed); }
+.version-active-dot.error { background: var(--status-error); }
+.version-active-dot.waiting { background: var(--status-waiting); }
+.version-active-dot.running { background: var(--status-running); }
+.version-active-dot.unknown { background: var(--status-unknown); }
 
 .version-status-dot {
   width: 7px;
@@ -885,7 +890,7 @@ html, body {
 }
 
 .evaluate-notice {
-  background: var(--status-orange);
+  background: var(--status-error);
   color: #000;
   padding: 10px 16px;
   border-radius: 6px;

@@ -35,6 +35,32 @@
         "tasklist": "docs/v1.0/PatchPilot_tasklist.md"
       },
       "activeVersion": "1.0"
+    },
+    {
+      "id": "9fcb1bc6-9ae3-4a1c-ac65-6e89114111af",
+      "name": "CC-Monitor",
+      "path": "CC-Monitor",
+      "group": "Parked",
+      "order": 1,
+      "coreFiles": {
+        "claude": "CLAUDE.md",
+        "concept": "docs/v1.0/CC-Monitor_concept.md",
+        "tasklist": "docs/v1.0/CC-Monitor_tasklist.md"
+      },
+      "activeVersion": "1.0"
+    },
+    {
+      "id": "625f025d-f6c0-48df-bbae-fe69c6801813",
+      "name": "PeuanRuamChan",
+      "path": "PeuanRuamChan",
+      "group": "Parked",
+      "order": 2,
+      "coreFiles": {
+        "claude": "CLAUDE.md",
+        "concept": "docs/v1.0/PeuanRuamChan_concept.md",
+        "tasklist": "docs/v1.0/PeuanRuamChan_tasklist.md"
+      },
+      "activeVersion": "1.0"
     }
   ]
 }

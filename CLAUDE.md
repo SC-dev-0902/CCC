@@ -24,7 +24,7 @@ Read the active version's concept doc before starting any task. It is the single
 - **Never hardcode the port.** Always read from `process.env.PORT`. Default is 3000, defined in `.env`.
 - **Never commit `.env`.** It is in `.gitignore`. The repo ships with `.env.example`.
 - **Never begin the next stage without an explicit Go from the developer.**
-- **Never modify files in an imported project directory.** CCC is read-only on the filesystem except for its own `projects.json` and `settings.json`.
+- **Import scaffolding is additive only.** When importing an existing project, CCC creates missing CCC structure (`docs/vX.Y/`, `CLAUDE.md`, `.claude/commands/`, `.ccc-project.json`) but never overwrites existing files. Outside of import, CCC only writes to its own `projects.json` and `settings.json`.
 - **Never write version numbers into filenames.** Version history lives in Git.
 - **Never use filesystem symlinks.** Active version is tracked in `projects.json`, not on the filesystem.
 - **Never use platform-specific APIs or hardcoded paths.** v1.0 targets macOS, Linux, and Windows. Use `path.join()` for all paths. No `/Users/`, no `~/Library/`, no `C:\Users\`, no assumptions about zsh.
@@ -140,6 +140,8 @@ The parser (`src/parser.js`) maps Claude Code output to exactly five states:
 | COMPLETED | 🟢 Green | Task done, awaiting next instruction |
 | ERROR | 🟠 Orange | Error state detected |
 | UNKNOWN | ⚫ Grey | No session or unrecognised output |
+
+The active version dot in the sidebar follows the same traffic light colours. Green means everything is in order. Orange means the project needs attention (e.g., unevaluated import). No session running defaults to green (all OK).
 
 ---
 
