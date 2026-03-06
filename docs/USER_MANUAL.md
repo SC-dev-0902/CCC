@@ -1,5 +1,5 @@
 # CCC User Manual
-*Claude Command Center — v1.0*
+*Claude Command Center — v1.0.1*
 
 ---
 
@@ -381,11 +381,53 @@ Click the gear icon at the bottom of the sidebar to open the Settings panel.
 
 **File Naming Patterns** — The default patterns for concept and tasklist filenames. Defaults are `docs/{PROJECT}_concept.md` and `docs/{PROJECT}_tasklist.md`. Most people never change these.
 
-**GitHub Token** — Optional. If you provide a personal access token and repo name, CCC will auto-file a GitHub issue if status detection breaks. See [Section 10](#10-parser--degradation) for details.
+**GitHub Token** — Optional. If you provide a personal access token and repo name, CCC will auto-file a GitHub issue if status detection breaks. See [Section 11](#11-parser--degradation) for details.
+
+**Recovery Auto-Save Interval** — How often CCC saves terminal scrollback as a safety net. Default is 5 minutes. Set to 0 to disable.
+
+**Claude Code Plan** — Your Anthropic plan tier (Pro, Max 5, Max 20). Used to calculate the 5-hour usage percentage in the status bar.
+
+**Weekly Token Budget** — Your self-set weekly token budget. Default is 500,000. The 7-day progress bar fills against this number.
+
+**Weekly Message Budget** — Your self-set weekly message budget. Default is 5,000.
 
 ---
 
-## 10. Parser & Degradation
+## 10. Usage Status Bar
+
+The bar at the bottom of the main panel shows your Claude Code usage at a glance.
+
+![Usage status bar](screenshots/18-usage-status-bar.png)
+
+### What It Shows
+
+The bar has two sections separated by a divider:
+
+**5h (billing window)** — Your usage within the current 5-hour Anthropic billing window. Shows a progress bar, percentage, time until window resets, and message count (e.g., `506/1000 msgs`). This is the number that matters for rate limiting.
+
+**7d (weekly)** — Your cumulative usage over the past 7 days, measured against the weekly budget you set in Settings. This is informational — it helps you track whether you're burning through usage faster than you'd like.
+
+### How It Works
+
+CCC reads the JSONL session files that Claude Code writes to `~/.claude/projects/`. It counts tokens and messages using the same algorithm as the `claude-monitor` tool: `input_tokens + output_tokens` only (cache tokens don't count toward the displayed total), deduplicated by message ID.
+
+The bar is always visible. It shows placeholder dashes until you start a session, then populates with real data. Updates arrive every 30 seconds via WebSocket.
+
+### Colour Thresholds
+
+The 5-hour progress bar changes colour as you approach your plan limit:
+
+- **Blue** — below 80%, you're fine
+- **Amber** — 80% or above, pace yourself
+- **Red** — 95% or above, you're about to hit the limit
+
+### Configuring
+
+Open Settings to change your plan tier and weekly budgets. The 5-hour limit is fixed by Anthropic per plan. The weekly budget is entirely yours — set it to whatever makes sense for your usage patterns.
+
+---
+
+## 11. Parser & Degradation
 
 ### How Status Detection Works
 
@@ -414,7 +456,7 @@ Keep working. The terminal is fine. Check the project's GitHub issues page to se
 
 ---
 
-## 11. Global CLAUDE.md
+## 12. Global CLAUDE.md
 
 This isn't a CCC feature exactly, but it's something every Claude Code user should know about.
 
@@ -457,7 +499,7 @@ The file lives at `~/.claude/CLAUDE.md` — create it once, and every Claude Cod
 
 ---
 
-## 12. Platform Support
+## 13. Platform Support
 
 CCC v1.0 is developed and tested on **macOS**. That's the primary platform and the one where everything is verified.
 
@@ -465,7 +507,7 @@ CCC v1.0 is developed and tested on **macOS**. That's the primary platform and t
 
 ---
 
-## 13. Troubleshooting
+## 14. Troubleshooting
 
 ### "Port 3000 is already in use"
 
@@ -505,7 +547,7 @@ CCC checks for the `claude` CLI at startup. If it can't find it:
 Grey means "unknown state" — either no session is running, or the parser can't determine what's happening. Common causes:
 
 - No terminal session is active for that project (expected — start one)
-- Claude Code's output format has changed (see [Section 10](#10-parser--degradation))
+- Claude Code's output format has changed (see [Section 11](#11-parser--degradation))
 - The session is idle (no output to parse — also expected)
 
 If all dots go grey simultaneously and a warning banner appears, that's parser degradation. Keep working and check for updates.

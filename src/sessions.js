@@ -11,6 +11,7 @@ const sessions = new Map();
 // Track whether we've already filed a degraded issue this session
 let degradedIssueFiled = false;
 
+
 function getDefaultShell() {
   if (os.platform() === 'win32') {
     return process.env.COMSPEC || 'powershell.exe';
@@ -88,7 +89,7 @@ function createSession(projectId, projectPath, command) {
         });
         // Auto-file GitHub issue (optional, requires token)
         autoFileGitHubIssue(info);
-      }
+      },
     });
     // Degradation monitor disabled in v1.0 — false positives on streaming output.
     // Redesign deferred to v1.1. See parser.js comment at feed().

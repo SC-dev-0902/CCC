@@ -9,6 +9,7 @@ const WebSocket = require('ws');
 const projects = require('./src/projects');
 const sessions = require('./src/sessions');
 const versions = require('./src/versions');
+const { scanUsage, scanWeeklyUsage, PLAN_LIMITS } = require('./src/usage');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -32,7 +33,11 @@ const SETTINGS_DEFAULTS = {
   shell: '',
   theme: 'dark',
   filePatterns: { concept: 'docs/{PROJECT}_concept.md', tasklist: 'docs/{PROJECT}_tasklist.md' },
-  githubToken: ''
+  githubToken: '',
+  recoveryInterval: 5,
+  usagePlan: 'max5',
+  weeklyTokenBudget: 500000,
+  weeklyMessageBudget: 5000
 };
 
 function readSettings() {
@@ -354,61 +359,7 @@ app.get('/api/projects/:id/versions', (req, res) => {
     const result = versions.scanVersions(found.absPath, found.project.name);
     result.activeVersion = found.project.activeVersion || null;
 
-    // Normalize evaluated flag: check concept doc on every version load
-    // until the project is explicitly marked as evaluated.
-    // - Real concept doc (no template marker) → evaluated: true (green)
-    // - Template/missing concept doc → evaluated: false (orange)
-    // This covers legacy imports (evaluated undefined) and new imports alike.
-    if (found.project.evaluated !== true) {
-      // Find concept doc path from versioned folders
-      let conceptFilePath = null;
-      for (const v of result.versions) {
-        if (v.files) {
-          const conceptFile = v.files.find(f => f.endsWith('_concept.md'));
-          if (conceptFile) {
-            conceptFilePath = path.join(found.absPath, v.folder, conceptFile);
-            break;
-          }
-        }
-      }
-      // Also check flat docs
-      if (!conceptFilePath) {
-        const docsDir = path.join(found.absPath, 'docs');
-        try {
-          if (fs.existsSync(docsDir)) {
-            const files = fs.readdirSync(docsDir);
-            const flatConcept = files.find(f => f.endsWith('_concept.md'));
-            if (flatConcept) {
-              conceptFilePath = path.join(docsDir, flatConcept);
-            }
-          }
-        } catch (e) { /* ignore */ }
-      }
-
-      if (conceptFilePath && fs.existsSync(conceptFilePath)) {
-        // Check if concept doc is a real doc or just the blank template
-        try {
-          const content = fs.readFileSync(conceptFilePath, 'utf8');
-          if (!content.includes('<!-- CCC_TEMPLATE:')) {
-            projects.updateProject(req.params.id, { evaluated: true });
-            found.project.evaluated = true;
-          } else {
-            // Template marker present — ensure flag is false (covers legacy imports)
-            if (found.project.evaluated !== false) {
-              projects.updateProject(req.params.id, { evaluated: false });
-              found.project.evaluated = false;
-            }
-          }
-        } catch (e) { /* ignore read errors */ }
-      } else {
-        // No concept doc at all — flag as unevaluated
-        if (found.project.evaluated !== false) {
-          projects.updateProject(req.params.id, { evaluated: false });
-          found.project.evaluated = false;
-        }
-      }
-    }
-
+    // Pass evaluated flag through — only cleared via POST /api/projects/:id/evaluated
     result.evaluated = found.project.evaluated;
     res.json(result);
   } catch (err) {
@@ -542,6 +493,21 @@ app.post('/api/projects/:id/migrate-versions', (req, res) => {
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: 'Failed to migrate: ' + err.message });
+  }
+});
+
+// --- Evaluated Flag ---
+
+// Called by /evaluate-import at completion to clear the unevaluated notice
+app.post('/api/projects/:id/evaluated', (req, res) => {
+  try {
+    const found = findProjectWithPath(req.params.id);
+    if (!found) return res.status(404).json({ error: 'Project not found' });
+
+    projects.updateProject(req.params.id, { evaluated: true });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update evaluated flag: ' + err.message });
   }
 });
 
@@ -991,7 +957,7 @@ app.post('/api/scaffold-project', (req, res) => {
 // --- Scaffold Import ---
 
 app.post('/api/scaffold-import', (req, res) => {
-  const { absPath, projectName, version } = req.body;
+  const { absPath, projectName, version, existingConcept, existingTasklist } = req.body;
 
   if (!absPath || !projectName || !version) {
     return res.status(400).json({ error: 'absPath, projectName, and version are required' });
@@ -1013,18 +979,22 @@ app.post('/api/scaffold-import', (req, res) => {
       fs.mkdirSync(absvFolder, { recursive: true });
     }
 
-    // Write concept doc if missing
-    const conceptPath = path.join(absvFolder, projectName + '_concept.md');
-    if (!fs.existsSync(conceptPath)) {
-      fs.writeFileSync(conceptPath, generateImportConceptMd(projectName, version), 'utf8');
-      scaffoldedFiles.push(path.join(vFolder, projectName + '_concept.md'));
+    // Write concept doc if missing — skip if scan already found one anywhere in the project
+    if (!existingConcept) {
+      const conceptPath = path.join(absvFolder, projectName + '_concept.md');
+      if (!fs.existsSync(conceptPath)) {
+        fs.writeFileSync(conceptPath, generateImportConceptMd(projectName, version), 'utf8');
+        scaffoldedFiles.push(path.join(vFolder, projectName + '_concept.md'));
+      }
     }
 
-    // Write tasklist if missing
-    const tasklistPath = path.join(absvFolder, projectName + '_tasklist.md');
-    if (!fs.existsSync(tasklistPath)) {
-      fs.writeFileSync(tasklistPath, generateImportTasklistMd(projectName, version), 'utf8');
-      scaffoldedFiles.push(path.join(vFolder, projectName + '_tasklist.md'));
+    // Write tasklist if missing — skip if scan already found one anywhere in the project
+    if (!existingTasklist) {
+      const tasklistPath = path.join(absvFolder, projectName + '_tasklist.md');
+      if (!fs.existsSync(tasklistPath)) {
+        fs.writeFileSync(tasklistPath, generateImportTasklistMd(projectName, version), 'utf8');
+        scaffoldedFiles.push(path.join(vFolder, projectName + '_tasklist.md'));
+      }
     }
 
     // Write CLAUDE.md if missing
@@ -1034,13 +1004,15 @@ app.post('/api/scaffold-import', (req, res) => {
       scaffoldedFiles.push('CLAUDE.md');
     }
 
-    // Create .claude/commands/ with slash commands if missing
+    // Create .claude/commands/ with slash commands — per-file checks
     const commandsDir = path.join(resolved, '.claude', 'commands');
     if (!fs.existsSync(commandsDir)) {
       fs.mkdirSync(commandsDir, { recursive: true });
-      const slashCommands = ['update-tasklist', 'review-concept', 'status'];
-      for (const cmd of slashCommands) {
-        const cmdPath = path.join(commandsDir, cmd + '.md');
+    }
+    const slashCommands = ['update-tasklist', 'review-concept', 'status'];
+    for (const cmd of slashCommands) {
+      const cmdPath = path.join(commandsDir, cmd + '.md');
+      if (!fs.existsSync(cmdPath)) {
         fs.writeFileSync(cmdPath, generateSlashCommand(cmd), 'utf8');
         scaffoldedFiles.push('.claude/commands/' + cmd + '.md');
       }
@@ -1286,6 +1258,7 @@ wss.on('connection', (ws, req) => {
     ws.send(JSON.stringify({ type: 'state', state: 'none' }));
   }
 
+
   ws.on('message', (msg) => {
     try {
       const parsed = JSON.parse(msg);
@@ -1314,6 +1287,49 @@ server.on('error', (err) => {
   }
   throw err;
 });
+
+// --- Usage Status Bar: REST endpoint + periodic scanner ---
+
+app.get('/api/usage', async (req, res) => {
+  try {
+    const settings = readSettings();
+    const plan = settings.usagePlan || 'max5';
+    const usage = await scanUsage(plan);
+    if (!usage) return res.json({ error: 'No usage data available' });
+    const weekly = await scanWeeklyUsage();
+    if (weekly) Object.assign(usage, weekly);
+    usage.weeklyTokenBudget = settings.weeklyTokenBudget || 500000;
+    usage.weeklyMessageBudget = settings.weeklyMessageBudget || 5000;
+    res.json(usage);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Broadcast usage to all WS clients every 30 seconds
+let lastUsageJson = null;
+setInterval(async () => {
+  try {
+    const settings = readSettings();
+    const plan = settings.usagePlan || 'max5';
+    const usage = await scanUsage(plan);
+    if (!usage) return;
+    const weekly = await scanWeeklyUsage();
+    if (weekly) Object.assign(usage, weekly);
+    usage.weeklyTokenBudget = settings.weeklyTokenBudget || 500000;
+    usage.weeklyMessageBudget = settings.weeklyMessageBudget || 5000;
+    const json = JSON.stringify({ type: 'usage', usage });
+    if (json === lastUsageJson) return; // No change
+    lastUsageJson = json;
+    wss.clients.forEach(ws => {
+      if (ws.readyState === 1) {
+        ws.send(json);
+      }
+    });
+  } catch (e) {
+    // Silent — usage scanning is optional
+  }
+}, 30000);
 
 server.listen(PORT, () => {
   console.log(`CCC running on http://localhost:${PORT}`);

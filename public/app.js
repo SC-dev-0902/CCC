@@ -72,13 +72,26 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () 
   if (settings.theme === 'system') applyTheme('system');
 });
 
+// Warn before closing browser when active sessions exist
+// Warn before closing browser when active sessions exist
+// Note: Safari and Edge on macOS suppress this dialog by policy.
+// Recovery auto-save (every 5 min) is the primary safety net.
+window.addEventListener('beforeunload', (e) => {
+  const hasActiveSessions = Array.from(terminalInstances.values()).some(inst => inst.state === 'active');
+  if (hasActiveSessions) {
+    e.preventDefault();
+    e.returnValue = 'Active Claude Code sessions are running. Close anyway?';
+    return e.returnValue;
+  }
+});
+
 // --- Version Loading ---
 
 async function loadProjectVersions(projectId) {
   const data = await api('GET', `/api/projects/${projectId}/versions`);
   projectVersions.set(projectId, data);
 
-  // Sync evaluated status back to project object (auto-clear detection)
+  // Sync evaluated status back to project object
   if (data.evaluated !== undefined) {
     const project = findProject(projectId);
     if (project) project.evaluated = data.evaluated;
@@ -256,8 +269,19 @@ function connectTerminal(projectId) {
         renderTabBar();
       } else if (msg.type === 'claudeStatus') {
         instance.claudeStatus = msg.status;
+        // Auto-inject /continue when Claude Code is ready and SHP/recovery exists
+        if (instance.pendingContinue && (msg.status === 'WAITING_FOR_INPUT' || msg.status === 'COMPLETED')) {
+          instance.pendingContinue = false;
+          setTimeout(() => {
+            if (instance.ws && instance.ws.readyState === WebSocket.OPEN) {
+              instance.ws.send(JSON.stringify({ type: 'input', data: '/continue\r' }));
+            }
+          }, 500);
+        }
         renderTreeView();
         renderTabBar();
+      } else if (msg.type === 'usage') {
+        updateUsageBar(msg.usage);
       } else if (msg.type === 'degraded') {
         instance.degraded = true;
         renderTreeView();
@@ -327,11 +351,33 @@ async function startSession(projectId, command) {
       return;
     }
 
+    // Check if SHP or recovery file exists — auto-inject /continue for Claude sessions
+    if (command === 'claude' && proj) {
+      const shpPath = `docs/${proj.name}_shp.md`;
+      const recoveryPath = `docs/${proj.name}_recovery.txt`;
+      try {
+        const shpCheck = await api('GET', `/api/file/${projectId}?filePath=${encodeURIComponent(shpPath)}`);
+        if (!shpCheck.error) {
+          instance.pendingContinue = true;
+        } else {
+          const recoveryCheck = await api('GET', `/api/file/${projectId}?filePath=${encodeURIComponent(recoveryPath)}`);
+          if (!recoveryCheck.error) {
+            instance.pendingContinue = true;
+          }
+        }
+      } catch (e) {
+        // Silent — don't block session start if check fails
+      }
+    }
+
     // Connect WebSocket
     connectTerminal(projectId);
 
     // Render to show terminal
     renderTabContent();
+
+    // Trigger usage bar update
+    fetchUsage();
   } catch (err) {
     console.error('startSession error:', err);
     showToast('Error starting session: ' + err.message);
@@ -556,7 +602,8 @@ function renderTreeView() {
         const vData = projectVersions.get(project.id);
         if (vData && vData.versions) {
           for (const ver of vData.versions) {
-            renderVersionRow(versionsChildren, project, ver, vData.activeVersion);
+            const flatTests = (ver.version === vData.activeVersion) ? (vData.flatTestFiles || []) : [];
+            renderVersionRow(versionsChildren, project, ver, vData.activeVersion, flatTests);
           }
         }
 
@@ -586,23 +633,7 @@ function renderTreeView() {
         });
         filesEl.appendChild(shpEl);
 
-        // Flat test files (legacy — not inside version folders)
-        const vData2 = projectVersions.get(project.id);
-        if (vData2 && vData2.flatTestFiles) {
-          for (const testFile of vData2.flatTestFiles) {
-            const testFileName = testFile.name || testFile;
-            const testFilePath = 'docs/' + testFileName;
-            const badge = testFile.total ? ` <span class="test-progress-badge">[${testFile.checked}/${testFile.total}]</span>` : '';
-            const testEl = document.createElement('div');
-            testEl.className = 'tree-file';
-            testEl.innerHTML = `<span class="tree-file-icon">&#x1F4CB;</span><span class="tree-file-name">${escapeHtml(testFileName)}${badge}</span>`;
-            testEl.addEventListener('click', (e) => {
-              e.stopPropagation();
-              openFileTab(project.id, project.name, testFilePath);
-            });
-            filesEl.appendChild(testEl);
-          }
-        }
+
 
       } else {
         // --- Non-versioned project: show flat coreFiles ---
@@ -649,7 +680,7 @@ function clearDropIndicators() {
 
 // --- Version Tree Helpers ---
 
-function renderVersionRow(container, project, ver, activeVersion) {
+function renderVersionRow(container, project, ver, activeVersion, flatTestFiles) {
   const isActive = ver.version === activeVersion;
   const expandKey = project.id + ':' + ver.version;
   const isExpanded = expandedVersions.has(expandKey);
@@ -661,16 +692,33 @@ function renderVersionRow(container, project, ver, activeVersion) {
 
   const versionStatus = isActive ? getProjectStatus(project.id) : null;
 
+  // Compute next patch version for this version (e.g., 1.0 → 1.0.1, 1.0.1 → 1.0.2)
+  const verParts = ver.version.split('.');
+  let nextPatch;
+  if (verParts.length >= 3) {
+    nextPatch = verParts.slice(0, 2).join('.') + '.' + (parseInt(verParts[2], 10) + 1);
+  } else {
+    nextPatch = ver.version + '.1';
+  }
+
   row.innerHTML = `
     ${hasChildren ? '<span class="tree-version-chevron">&#x25B8;</span>' : '<span class="tree-version-chevron" style="visibility:hidden">&#x25B8;</span>'}
     <span class="version-active-dot ${isActive ? (versionStatus || 'completed') : ''}"></span>
     <span class="tree-version-name">v${escapeHtml(ver.version)}</span>
     <span class="tree-version-actions">
+      <span class="action-btn add-patch-btn" title="Create patch version (v${escapeHtml(nextPatch)})">+</span>
       ${isActive ? '<span class="action-btn mark-complete-btn" title="Mark complete (git tag)">&#x2713;</span>' : ''}
       ${!isActive ? '<span class="action-btn set-active-btn" title="Set as active version">&#x25C9;</span>' : ''}
       ${!isActive ? '<span class="action-btn remove-btn remove-version-btn" title="Remove version">&times;</span>' : ''}
     </span>
   `;
+
+  // Add patch version button
+  const addPatchBtn = row.querySelector('.add-patch-btn');
+  addPatchBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    showNewVersionModal(project, nextPatch, 'patch');
+  });
 
   // Remove version button
   const removeVerBtn = row.querySelector('.remove-version-btn');
@@ -755,10 +803,14 @@ function renderVersionRow(container, project, ver, activeVersion) {
     container.appendChild(versionFiles);
 
     // Testing sub-header (collapsible, nested under version — always visible)
+    // Merges versioned test files (docs/vX.Y/) with flat test files (docs/) for the active version
     {
       const testingKey = project.id + ':' + ver.version;
       const testingExpanded = expandedTestingSections.has(testingKey);
-      const testCount = (ver.testFiles && ver.testFiles.length) || 0;
+      const versionedTests = (ver.testFiles && ver.testFiles.length) ? ver.testFiles : [];
+      const extraFlatTests = flatTestFiles || [];
+      const allTests = [...versionedTests, ...extraFlatTests];
+      const testCount = allTests.length;
 
       const testingHeader = document.createElement('div');
       testingHeader.className = 'tree-testing-header' + (testingExpanded ? ' expanded' : '');
@@ -787,9 +839,24 @@ function renderVersionRow(container, project, ver, activeVersion) {
           emptyEl.textContent = 'No test files yet';
           testingFiles.appendChild(emptyEl);
         } else {
-          for (const testFile of ver.testFiles) {
+          // Versioned test files (path relative to version folder)
+          for (const testFile of versionedTests) {
             const testFileName = testFile.name || testFile;
             const testFilePath = ver.folder + '/' + testFileName;
+            const badge = testFile.total ? ` <span class="test-progress-badge">[${testFile.checked}/${testFile.total}]</span>` : '';
+            const testEl = document.createElement('div');
+            testEl.className = 'tree-file tree-testing-file';
+            testEl.innerHTML = `<span class="tree-file-icon">&#x1F4CB;</span><span class="tree-file-name">${escapeHtml(testFileName)}${badge}</span>`;
+            testEl.addEventListener('click', (e) => {
+              e.stopPropagation();
+              openFileTab(project.id, project.name, testFilePath);
+            });
+            testingFiles.appendChild(testEl);
+          }
+          // Flat test files (path relative to docs/)
+          for (const testFile of extraFlatTests) {
+            const testFileName = testFile.name || testFile;
+            const testFilePath = 'docs/' + testFileName;
             const badge = testFile.total ? ` <span class="test-progress-badge">[${testFile.checked}/${testFile.total}]</span>` : '';
             const testEl = document.createElement('div');
             testEl.className = 'tree-file tree-testing-file';
@@ -1148,7 +1215,7 @@ function renderSessionContent(container, project, projectId) {
 
     // Show evaluate-import notice for unevaluated projects (works in any group)
     const evalNotice = project.evaluated === false
-      ? `<div class="evaluate-notice">This project has no CCC documentation yet. Run <code>/evaluate-import</code> in your Claude Code session before starting work.</div>`
+      ? `<div class="evaluate-notice">Run <code>/evaluate-import</code> in your Claude Code session before starting work.</div>`
       : '';
 
     prompt.innerHTML = `
@@ -1255,8 +1322,8 @@ function renderSettings(container) {
   ).join('') + `<option value="__custom__" ${!isKnown ? 'selected' : ''}>-- Custom --</option>`;
 
   const panel = document.createElement('div');
+  panel.className = 'settings-panel';
   panel.innerHTML = `
-    <div class="settings-panel">
       <h2>Settings</h2>
       <div class="settings-group">
         <label>Project Root</label>
@@ -1296,6 +1363,30 @@ function renderSettings(container) {
         <input type="text" id="settingsTasklistPattern" value="${escapeHtml((settings.filePatterns || {}).tasklist || 'docs/{PROJECT}_tasklist.md')}" placeholder="docs/{PROJECT}_tasklist.md">
       </div>
       <div class="settings-group">
+        <label>Recovery Auto-Save Interval (minutes)</label>
+        <input type="number" id="settingsRecoveryInterval" value="${settings.recoveryInterval || 5}" min="1" max="60" step="1">
+        <span class="settings-hint">Terminal scrollback is saved periodically as insurance against browser close. Set to 0 to disable.</span>
+      </div>
+      <div class="settings-group">
+        <label>Claude Code Plan</label>
+        <div class="select-wrap"><select id="settingsUsagePlan">
+          <option value="pro" ${(settings.usagePlan || 'max5') === 'pro' ? 'selected' : ''}>Pro ($20/mo)</option>
+          <option value="max5" ${(settings.usagePlan || 'max5') === 'max5' ? 'selected' : ''}>Max 5 ($100/mo)</option>
+          <option value="max20" ${(settings.usagePlan || 'max5') === 'max20' ? 'selected' : ''}>Max 20 ($200/mo)</option>
+        </select><span class="select-arrow">&#9662;</span></div>
+        <span class="settings-hint">Used to calculate usage percentage in the status bar.</span>
+      </div>
+      <div class="settings-group">
+        <label>Weekly Token Budget</label>
+        <input type="number" id="settingsWeeklyTokenBudget" value="${settings.weeklyTokenBudget || 500000}" min="10000" step="10000">
+        <span class="settings-hint">Your self-set weekly token limit. Default: 500,000.</span>
+      </div>
+      <div class="settings-group">
+        <label>Weekly Message Budget</label>
+        <input type="number" id="settingsWeeklyMessageBudget" value="${settings.weeklyMessageBudget || 5000}" min="100" step="100">
+        <span class="settings-hint">Your self-set weekly message limit. Default: 5,000.</span>
+      </div>
+      <div class="settings-group">
         <label>GitHub Token (optional)</label>
         <input type="password" id="settingsGithubToken" value="${escapeHtml(settings.githubToken || '')}" placeholder="For auto-issue filing on parser degradation">
         <span class="settings-hint">Personal access token. Used for automatic GitHub issue filing when parser degrades.</span>
@@ -1304,7 +1395,6 @@ function renderSettings(container) {
         <button class="btn btn-primary" id="settingsSave">Save</button>
         <span id="settingsSaveStatus" style="font-size:12px; color:var(--status-completed); display:none;">Saved</span>
       </div>
-    </div>
   `;
   container.appendChild(panel);
 
@@ -1372,6 +1462,10 @@ function renderSettings(container) {
         concept: panel.querySelector('#settingsConceptPattern').value.trim(),
         tasklist: panel.querySelector('#settingsTasklistPattern').value.trim()
       },
+      recoveryInterval: parseInt(panel.querySelector('#settingsRecoveryInterval').value, 10) || 5,
+      usagePlan: panel.querySelector('#settingsUsagePlan').value,
+      weeklyTokenBudget: parseInt(panel.querySelector('#settingsWeeklyTokenBudget').value, 10) || 500000,
+      weeklyMessageBudget: parseInt(panel.querySelector('#settingsWeeklyMessageBudget').value, 10) || 5000,
       githubToken: panel.querySelector('#settingsGithubToken').value
     };
 
@@ -1382,11 +1476,114 @@ function renderSettings(container) {
       showToast('Failed to save settings: ' + result.error);
     } else {
       settings = result;
+      startRecoveryTimer();
+      fetchUsage();
       const status = panel.querySelector('#settingsSaveStatus');
       status.style.display = 'inline';
       setTimeout(() => { status.style.display = 'none'; }, 2000);
     }
   });
+}
+
+// --- Recovery Auto-Save ---
+
+let recoveryTimer = null;
+
+function getScrollbackText(terminal) {
+  const buffer = terminal.buffer.active;
+  const lines = [];
+  for (let i = 0; i < buffer.length; i++) {
+    const line = buffer.getLine(i);
+    if (line) lines.push(line.translateToString(true));
+  }
+  return lines.join('\n');
+}
+
+// --- Usage Status Bar ---
+
+function updateUsageBar(usage) {
+  if (!usage || usage.error) return;
+
+  const fill = document.getElementById('usageProgressFill');
+  const percentEl = document.getElementById('usagePercent');
+  const resetEl = document.getElementById('usageReset');
+  const msgEl = document.getElementById('usageMsgInfo');
+  const bar = document.getElementById('usageBar');
+
+  const pct = usage.tokenPercentRaw;
+  percentEl.textContent = pct + '%';
+  fill.style.width = Math.min(pct, 100) + '%';
+
+  // Colour thresholds
+  bar.classList.remove('usage-amber', 'usage-red');
+  if (pct >= 95) {
+    bar.classList.add('usage-red');
+  } else if (pct >= 80) {
+    bar.classList.add('usage-amber');
+  }
+
+  resetEl.textContent = 'resets in ' + usage.resetLabel;
+  msgEl.textContent = usage.messagesUsed + '/' + usage.messageLimit + ' msgs';
+
+  // Weekly totals with progress bar
+  if (usage.weeklyTokens != null) {
+    const weeklyFill = document.getElementById('usageWeeklyFill');
+    const weeklyPercentEl = document.getElementById('usageWeeklyPercent');
+    const weeklyEl = document.getElementById('usageWeekly');
+
+    const wBudget = usage.weeklyTokenBudget || 500000;
+    const wPct = Math.round(usage.weeklyTokens / wBudget * 100);
+    weeklyPercentEl.textContent = wPct + '%';
+    weeklyFill.style.width = Math.min(wPct, 100) + '%';
+
+    // Weekly colour thresholds
+    weeklyFill.classList.remove('weekly-amber', 'weekly-red');
+    if (wPct >= 95) weeklyFill.classList.add('weekly-red');
+    else if (wPct >= 80) weeklyFill.classList.add('weekly-amber');
+
+    const fmt = v => v >= 1000 ? Math.round(v / 1000) + 'K' : v;
+    weeklyEl.textContent = fmt(usage.weeklyTokens) + ' / ' + fmt(wBudget) + ' tokens · ' + usage.weeklyMessages + ' msgs';
+  }
+}
+
+async function fetchUsage() {
+  try {
+    const usage = await api('GET', '/api/usage');
+    updateUsageBar(usage);
+  } catch (e) { /* silent */ }
+}
+
+// --- Recovery Auto-Save ---
+
+function startRecoveryTimer() {
+  if (recoveryTimer) {
+    clearInterval(recoveryTimer);
+    recoveryTimer = null;
+  }
+  const minutes = settings.recoveryInterval || 5;
+  if (minutes <= 0) return;
+  recoveryTimer = setInterval(saveRecoveryFiles, minutes * 60 * 1000);
+}
+
+async function saveRecoveryFiles() {
+  for (const [projectId, instance] of terminalInstances) {
+    if (instance.state !== 'active') continue;
+    const project = findProject(projectId);
+    if (!project) continue;
+
+    const text = getScrollbackText(instance.terminal);
+    if (!text.trim()) continue;
+
+    const recoveryPath = `docs/${project.name}_recovery.txt`;
+    try {
+      await api('PUT', `/api/file/${projectId}`, {
+        filePath: recoveryPath,
+        content: text
+      });
+    } catch (e) {
+      // Silent fail — recovery is best-effort insurance
+    }
+  }
 }
 
 async function renderReadPanel(container, project, fileName) {
@@ -1628,6 +1825,28 @@ function renderTestItems(contentEl, parsed, markDirty, scheduleAutoSave, updateP
       const el = document.createElement('div');
       el.className = 'test-section-heading test-section-h' + item.level;
       el.textContent = item.text;
+      // Add "Check All" link for h3 test group headings
+      if (item.level === 3) {
+        const checkAll = document.createElement('span');
+        checkAll.className = 'test-check-all';
+        checkAll.textContent = 'Check All';
+        checkAll.addEventListener('click', () => {
+          // Find all checkboxes between this heading and the next heading (or end)
+          let sibling = el.nextElementSibling;
+          const checkboxes = [];
+          while (sibling && !sibling.classList.contains('test-section-heading')) {
+            const cb = sibling.querySelector('.test-checkbox');
+            if (cb) checkboxes.push({ cb, row: sibling });
+            sibling = sibling.nextElementSibling;
+          }
+          const allChecked = checkboxes.every(c => c.cb.checked);
+          checkboxes.forEach(c => {
+            c.cb.checked = !allChecked;
+            c.cb.dispatchEvent(new Event('change'));
+          });
+        });
+        el.appendChild(checkAll);
+      }
       contentEl.appendChild(el);
       continue;
     }
@@ -2363,7 +2582,9 @@ function showImportProjectModal(prefillPath) {
         const scaffoldResult = await api('POST', '/api/scaffold-import', {
           absPath: scanResult.absPath,
           projectName: nameVal,
-          version: versionVal
+          version: versionVal,
+          existingConcept: d.concept.found ? (conceptPath || true) : false,
+          existingTasklist: d.tasklist.found ? (tasklistPath || true) : false
         });
 
         if (scaffoldResult.error) {
@@ -2502,16 +2723,19 @@ function showRemoveConfirm(project) {
 
 // --- Version Modals ---
 
-function showNewVersionModal(project) {
+function showNewVersionModal(project, prefillVersion, prefillType) {
   // Determine smart default for next version
-  const vData = projectVersions.get(project.id);
-  let defaultVersion = '1.0';
-  if (vData && vData.versions && vData.versions.length > 0) {
-    const last = vData.versions[vData.versions.length - 1];
-    const parts = last.version.split('.').map(Number);
-    // Default to next minor
-    defaultVersion = parts[0] + '.' + (parts[1] + 1);
+  let defaultVersion = prefillVersion || '1.0';
+  if (!prefillVersion) {
+    const vData = projectVersions.get(project.id);
+    if (vData && vData.versions && vData.versions.length > 0) {
+      const last = vData.versions[vData.versions.length - 1];
+      const parts = last.version.split('.').map(Number);
+      // Default to next minor
+      defaultVersion = parts[0] + '.' + (parts[1] + 1);
+    }
   }
+  const defaultType = prefillType || 'minor';
 
   const body = `
     <div class="settings-group">
@@ -2520,15 +2744,15 @@ function showNewVersionModal(project) {
     </div>
     <div class="settings-group">
       <label>Type</label>
-      <div style="display:flex; gap:16px; margin-top:4px;">
-        <label style="display:flex; align-items:center; gap:4px; text-transform:none; font-weight:normal; font-size:13px;">
-          <input type="radio" name="versionType" value="major"> Major (X.0)
+      <div class="radio-group">
+        <label class="radio-label">
+          <input type="radio" name="versionType" value="major" ${defaultType === 'major' ? 'checked' : ''}> Major (X.0)
         </label>
-        <label style="display:flex; align-items:center; gap:4px; text-transform:none; font-weight:normal; font-size:13px;">
-          <input type="radio" name="versionType" value="minor" checked> Minor (x.Y)
+        <label class="radio-label">
+          <input type="radio" name="versionType" value="minor" ${defaultType === 'minor' ? 'checked' : ''}> Minor (x.Y)
         </label>
-        <label style="display:flex; align-items:center; gap:4px; text-transform:none; font-weight:normal; font-size:13px;">
-          <input type="radio" name="versionType" value="patch"> Patch (x.y.Z)
+        <label class="radio-label">
+          <input type="radio" name="versionType" value="patch" ${defaultType === 'patch' ? 'checked' : ''}> Patch (x.y.Z)
         </label>
       </div>
       <span class="settings-hint" id="versionTypeHint">Gets its own concept doc and tasklist.</span>
@@ -2748,6 +2972,7 @@ async function initApp() {
 
   await loadSettings();
   await loadProjects();
+  startRecoveryTimer();
 }
 
 document.getElementById('settingsEntry').addEventListener('click', openSettings);

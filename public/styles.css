@@ -94,6 +94,7 @@ html, body {
   width: 100vw;
 }
 
+
 /* --- Sidebar --- */
 
 .sidebar {
@@ -1024,6 +1025,37 @@ html, body {
   font-family: var(--font-ui);
 }
 
+.settings-group input[type="radio"],
+.settings-group input[type="checkbox"] {
+  width: auto;
+  max-width: none;
+  padding: 0;
+  background-color: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+.radio-group {
+  display: flex;
+  gap: 16px;
+  max-width: 400px;
+  padding: 8px 12px;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.settings-group .radio-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  text-transform: none;
+  font-weight: normal;
+  font-size: 13px;
+  margin-bottom: 0;
+  letter-spacing: 0;
+}
+
 .settings-group input:focus,
 .settings-group select:focus {
   outline: none;
@@ -1302,6 +1334,21 @@ html, body {
   font-weight: 600;
   margin-top: 20px;
   margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.test-check-all {
+  font-size: 11px;
+  font-weight: normal;
+  color: var(--accent);
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.test-check-all:hover {
+  opacity: 1;
 }
 
 .test-section-h1 { font-size: 22px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
@@ -1802,4 +1849,101 @@ html, body {
 
 .onboarding-retry {
   margin-top: 4px;
+}
+
+/* --- Usage Status Bar --- */
+
+.usage-bar {
+  height: var(--sidebar-footer-height);
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-shrink: 0;
+}
+
+.usage-bar-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  width: 100%;
+  height: 100%;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.usage-progress-wrap {
+  flex: 1;
+  max-width: 200px;
+  height: 8px;
+  background: var(--bg-input);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.usage-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.usage-amber .usage-progress-fill {
+  background: var(--status-running);
+}
+
+.usage-red .usage-progress-fill {
+  background: var(--status-waiting);
+}
+
+.usage-percent {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.usage-amber .usage-percent {
+  color: var(--status-running);
+}
+
+.usage-red .usage-percent {
+  color: var(--status-waiting);
+}
+
+.usage-sep {
+  color: var(--text-muted);
+}
+
+.usage-reset {
+  color: var(--text-secondary);
+}
+
+.usage-msg-info {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.weekly-amber {
+  background: var(--status-running) !important;
+}
+
+.weekly-red {
+  background: var(--status-waiting) !important;
+}
+
+.usage-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
+.usage-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.usage-weekly {
+  color: var(--text-muted);
+  font-size: 11px;
 }

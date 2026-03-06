@@ -445,6 +445,41 @@ async function closeModal(page) {
     await snap(page, '17-drag-drop-groups');
 
     // =============================================
+    // 15. USAGE STATUS BAR
+    // =============================================
+    console.log('15. Usage Status Bar');
+
+    // Fresh load for clean state
+    await page.goto(BASE_URL, { waitUntil: 'networkidle' });
+    await settle(page, 1000);
+
+    // Inject mock usage data to populate the bar
+    await page.evaluate(() => {
+      if (typeof updateUsageBar === 'function') {
+        updateUsageBar({
+          tokenPercentRaw: 53,
+          resetLabel: '3h 12m',
+          messagesUsed: 506,
+          messageLimit: 1000,
+          weeklyTokens: 279658,
+          weeklyTokenBudget: 500000,
+          weeklyMessages: 2263
+        });
+      }
+    });
+    await settle(page, 300);
+
+    // Capture just the usage bar area (bottom of main panel)
+    const usageBar = await page.$('#usageBar');
+    if (usageBar) {
+      await usageBar.screenshot({ path: path.join(SCREENSHOT_DIR, '18-usage-status-bar.png') });
+      console.log('  ✓ 18-usage-status-bar.png');
+    }
+
+    // Full page with populated usage bar
+    await snap(page, '19-dashboard-with-usage');
+
+    // =============================================
     // DONE
     // =============================================
     console.log(`\n✓ All screenshots saved to ${SCREENSHOT_DIR}`);
