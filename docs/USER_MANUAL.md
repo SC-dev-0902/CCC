@@ -409,9 +409,13 @@ The bar has two sections separated by a divider:
 
 ### How It Works
 
-CCC reads the JSONL session files that Claude Code writes to `~/.claude/projects/`. It counts tokens and messages using the same algorithm as the `claude-monitor` tool: `input_tokens + output_tokens` only (cache tokens don't count toward the displayed total), deduplicated by message ID.
+CCC reads the JSONL session files that Claude Code writes to `~/.claude/projects/`. It counts tokens and messages within a rolling 5-hour window: `input_tokens + output_tokens` only (cache tokens don't count toward the displayed total), deduplicated by message ID. The reset timer uses epoch-based windowing — each 5-hour window starts from the first message after the previous window expired.
 
-The bar is always visible. It shows placeholder dashes until you start a session, then populates with real data. Updates arrive every 30 seconds via WebSocket.
+The bar is always visible. It shows placeholder dashes until the first data fetch, then updates every 30 seconds. The reset countdown ticks every minute between fetches.
+
+### Safety Buffer
+
+Anthropic provides no API to query your actual rate limit status. CCC can only estimate usage from local JSONL files — it cannot see usage from the Claude.ai web interface or other API clients. To compensate, CCC applies a safety buffer: **+5 percentage points** on token/message usage and **-5 minutes** on the reset timer. Both are pessimistic — CCC will always show slightly more usage and slightly less time remaining than the raw calculation, so you don't get caught off guard by a rate limit.
 
 ### Colour Thresholds
 

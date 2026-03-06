@@ -731,12 +731,14 @@ function renderVersionRow(container, project, ver, activeVersion, flatTestFiles)
 
   // Chevron: toggle expand
   if (hasChildren) {
-    row.querySelector('.tree-version-chevron').addEventListener('click', (e) => {
+    row.querySelector('.tree-version-chevron').addEventListener('click', async (e) => {
       e.stopPropagation();
       if (expandedVersions.has(expandKey)) {
         expandedVersions.delete(expandKey);
       } else {
         expandedVersions.add(expandKey);
+        // Refresh version data to pick up new files/test files
+        await loadProjectVersions(project.id);
       }
       renderTreeView();
     });
@@ -745,17 +747,7 @@ function renderVersionRow(container, project, ver, activeVersion, flatTestFiles)
   // Row click: if active → toggle expand; if not active → set as active
   row.addEventListener('click', async (e) => {
     if (e.target.closest('.action-btn')) return;
-    if (e.target.closest('.tree-version-chevron')) {
-      // Chevron always toggles expand
-      e.stopPropagation();
-      if (expandedVersions.has(expandKey)) {
-        expandedVersions.delete(expandKey);
-      } else {
-        expandedVersions.add(expandKey);
-      }
-      renderTreeView();
-      return;
-    }
+    if (e.target.closest('.tree-version-chevron')) return; // handled above
     e.stopPropagation();
     if (isActive) {
       // Active version — open session tab
@@ -819,12 +811,14 @@ function renderVersionRow(container, project, ver, activeVersion, flatTestFiles)
         <span>Testing</span>
         <span class="tree-testing-count">${testCount}</span>
       `;
-      testingHeader.addEventListener('click', (e) => {
+      testingHeader.addEventListener('click', async (e) => {
         e.stopPropagation();
         if (expandedTestingSections.has(testingKey)) {
           expandedTestingSections.delete(testingKey);
         } else {
           expandedTestingSections.add(testingKey);
+          // Refresh version data to pick up new test files
+          await loadProjectVersions(project.id);
         }
         renderTreeView();
       });
@@ -980,12 +974,14 @@ function renderPatchRow(container, project, patch, activeVersion) {
         <span>Testing</span>
         <span class="tree-testing-count">${testCount}</span>
       `;
-      testingHeader.addEventListener('click', (e) => {
+      testingHeader.addEventListener('click', async (e) => {
         e.stopPropagation();
         if (expandedTestingSections.has(testingKey)) {
           expandedTestingSections.delete(testingKey);
         } else {
           expandedTestingSections.add(testingKey);
+          // Refresh version data to pick up new test files
+          await loadProjectVersions(project.id);
         }
         renderTreeView();
       });
@@ -1378,12 +1374,12 @@ function renderSettings(container) {
       </div>
       <div class="settings-group">
         <label>Weekly Token Budget</label>
-        <input type="number" id="settingsWeeklyTokenBudget" value="${settings.weeklyTokenBudget || 500000}" min="10000" step="10000">
+        <input type="number" id="settingsWeeklyTokenBudget" value="${settings.weeklyTokenBudget || 6500000}" min="10000" step="10000">
         <span class="settings-hint">Your self-set weekly token limit. Default: 500,000.</span>
       </div>
       <div class="settings-group">
         <label>Weekly Message Budget</label>
-        <input type="number" id="settingsWeeklyMessageBudget" value="${settings.weeklyMessageBudget || 5000}" min="100" step="100">
+        <input type="number" id="settingsWeeklyMessageBudget" value="${settings.weeklyMessageBudget || 45000}" min="100" step="100">
         <span class="settings-hint">Your self-set weekly message limit. Default: 5,000.</span>
       </div>
       <div class="settings-group">
@@ -1501,6 +1497,23 @@ function getScrollbackText(terminal) {
 
 // --- Usage Status Bar ---
 
+let usageResetTime = null; // ISO string — counts down locally between fetches
+let usageCountdownTimer = null;
+
+function formatResetLabel(ms) {
+  const minutes = Math.max(0, Math.round(ms / 60000));
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function tickResetCountdown() {
+  if (!usageResetTime) return;
+  const ms = new Date(usageResetTime) - Date.now();
+  const resetEl = document.getElementById('usageReset');
+  if (resetEl) resetEl.textContent = 'resets in ' + formatResetLabel(ms);
+}
+
 function updateUsageBar(usage) {
   if (!usage || usage.error) return;
 
@@ -1522,7 +1535,15 @@ function updateUsageBar(usage) {
     bar.classList.add('usage-amber');
   }
 
-  resetEl.textContent = 'resets in ' + usage.resetLabel;
+  // Store reset time for local countdown
+  if (usage.resetTime) {
+    usageResetTime = usage.resetTime;
+    if (!usageCountdownTimer) {
+      usageCountdownTimer = setInterval(tickResetCountdown, 60000);
+    }
+  }
+  tickResetCountdown();
+
   msgEl.textContent = usage.messagesUsed + '/' + usage.messageLimit + ' msgs';
 
   // Weekly totals with progress bar
@@ -1531,7 +1552,7 @@ function updateUsageBar(usage) {
     const weeklyPercentEl = document.getElementById('usageWeeklyPercent');
     const weeklyEl = document.getElementById('usageWeekly');
 
-    const wBudget = usage.weeklyTokenBudget || 500000;
+    const wBudget = usage.weeklyTokenBudget || 6500000;
     const wPct = Math.round(usage.weeklyTokens / wBudget * 100);
     weeklyPercentEl.textContent = wPct + '%';
     weeklyFill.style.width = Math.min(wPct, 100) + '%';
@@ -1548,7 +1569,7 @@ function updateUsageBar(usage) {
 
 async function fetchUsage() {
   try {
-    const usage = await api('GET', '/api/usage');
+    const usage = await api('GET', `/api/usage?_=${Date.now()}`);
     updateUsageBar(usage);
   } catch (e) { /* silent */ }
 }
@@ -1825,8 +1846,8 @@ function renderTestItems(contentEl, parsed, markDirty, scheduleAutoSave, updateP
       const el = document.createElement('div');
       el.className = 'test-section-heading test-section-h' + item.level;
       el.textContent = item.text;
-      // Add "Check All" link for h3 test group headings
-      if (item.level === 3) {
+      // Add "Check All" link for test group headings (h2 and h3)
+      if (item.level === 2 || item.level === 3) {
         const checkAll = document.createElement('span');
         checkAll.className = 'test-check-all';
         checkAll.textContent = 'Check All';
@@ -2973,6 +2994,9 @@ async function initApp() {
   await loadSettings();
   await loadProjects();
   startRecoveryTimer();
+  fetchUsage();
+  // Poll usage every 30s as fallback (WS broadcast may be dedup-skipped)
+  setInterval(fetchUsage, 30000);
 }
 
 document.getElementById('settingsEntry').addEventListener('click', openSettings);

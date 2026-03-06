@@ -17,9 +17,9 @@ const readline = require('readline');
 
 // Plan limits per 5-hour window
 const PLAN_LIMITS = {
-  pro:   { tokens: 19000,  messages: 250,  label: 'Pro' },
-  max5:  { tokens: 88000,  messages: 1000, label: 'Max 5' },
-  max20: { tokens: 220000, messages: 2000, label: 'Max 20' }
+  pro:   { tokens: 45000,  messages: 250,  label: 'Pro' },
+  max5:  { tokens: 220000, messages: 1000, label: 'Max 5' },
+  max20: { tokens: 550000, messages: 2000, label: 'Max 20' }
 };
 
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
@@ -34,8 +34,10 @@ async function scanUsage(plan) {
   const now = new Date();
   const windowMs = 5 * 60 * 60 * 1000; // 5 hours
 
-  // Collect all JSONL files modified in last 6 hours (buffer)
+  // Collect all JSONL files modified in last 11 hours (two full 5h windows + 1h buffer)
+  // Needs two windows so the epoch walker can find the correct active window boundary
   const jsonlFiles = [];
+  const fileMaxAge = windowMs * 2 + 3600000; // 11h
   try {
     const dirs = fs.readdirSync(CLAUDE_PROJECTS_DIR);
     for (const dir of dirs) {
@@ -46,7 +48,7 @@ async function scanUsage(plan) {
         if (!file.endsWith('.jsonl')) continue;
         const filePath = path.join(dirPath, file);
         const stat = fs.statSync(filePath);
-        if (now - stat.mtimeMs < windowMs + 3600000) { // 5h + 1h buffer
+        if (now - stat.mtimeMs < fileMaxAge) {
           jsonlFiles.push(filePath);
         }
       }
@@ -70,20 +72,16 @@ async function scanUsage(plan) {
   // Sort by timestamp
   allEntries.sort((a, b) => a.ts - b.ts);
 
-  // Determine block start: round first entry's hour down
-  const firstTs = allEntries[0].ts;
-  const blockStart = new Date(firstTs);
-  blockStart.setMinutes(0, 0, 0);
-  const blockEnd = new Date(blockStart.getTime() + windowMs);
+  // Rolling window for token/message counting (last 5h from now)
+  const windowStart = new Date(now.getTime() - windowMs);
 
-  // Filter to block window, deduplicate by message_id:request_id (first wins)
   const seen = new Set();
   let inputTokens = 0;
   let outputTokens = 0;
   let messageCount = 0;
 
   for (const entry of allEntries) {
-    if (entry.ts < blockStart || entry.ts > blockEnd) continue;
+    if (entry.ts < windowStart) continue;
 
     const key = entry.key;
     if (key && seen.has(key)) continue;
@@ -95,16 +93,35 @@ async function scanUsage(plan) {
   }
 
   const tokensUsed = inputTokens + outputTokens;
-  const tokenPercent = limits.tokens > 0 ? Math.round(tokensUsed / limits.tokens * 100) : 0;
-  const messagePercent = limits.messages > 0 ? Math.round(messageCount / limits.messages * 100) : 0;
+  // +5pp safety buffer — CCC can't see web/API usage, so pad to avoid surprise rate limits
+  const SAFETY_BUFFER = 5;
+  const tokenPercent = limits.tokens > 0 ? Math.round(tokensUsed / limits.tokens * 100) + SAFETY_BUFFER : 0;
+  const messagePercent = limits.messages > 0 ? Math.round(messageCount / limits.messages * 100) + SAFETY_BUFFER : 0;
 
-  // Reset time
-  const resetTime = blockEnd;
-  const resetMs = resetTime - now;
-  const resetMinutes = Math.max(0, Math.round(resetMs / 60000));
+  // Epoch-based reset timer: walk forward through windows to find the one
+  // containing now. Each new window starts at the first message after the
+  // previous window expired.
+  let epochIdx = 0;
+  let blockStart = allEntries[0].ts;
+  let blockEnd = new Date(blockStart.getTime() + windowMs);
+
+  while (blockEnd < now && epochIdx < allEntries.length) {
+    while (epochIdx < allEntries.length && allEntries[epochIdx].ts < blockEnd) {
+      epochIdx++;
+    }
+    if (epochIdx >= allEntries.length) break;
+    blockStart = allEntries[epochIdx].ts;
+    blockEnd = new Date(blockStart.getTime() + windowMs);
+  }
+
+  // Subtract 5min safety buffer — show less time remaining to avoid surprise rate limits
+  const resetMs = Math.max(0, blockEnd - now - 5 * 60000);
+  const resetMinutes = Math.round(resetMs / 60000);
   const resetH = Math.floor(resetMinutes / 60);
   const resetM = resetMinutes % 60;
   const resetLabel = resetH > 0 ? `${resetH}h ${resetM}m` : `${resetM}m`;
+  // resetTime sent to client for countdown — also buffered
+  const resetTimeISO = new Date(blockEnd.getTime() - 5 * 60000).toISOString();
 
   return {
     tokensUsed,
@@ -116,7 +133,7 @@ async function scanUsage(plan) {
     messagePercent: Math.min(messagePercent, 100),
     messagePercentRaw: messagePercent,
     resetLabel,
-    resetTime: resetTime.toISOString(),
+    resetTime: resetTimeISO,
     plan: limits.label
   };
 }
