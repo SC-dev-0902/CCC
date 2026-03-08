@@ -32,7 +32,7 @@ const SETTINGS_DEFAULTS = {
   editor: '',
   shell: '',
   theme: 'dark',
-  filePatterns: { concept: 'docs/{PROJECT}_concept.md', tasklist: 'docs/{PROJECT}_tasklist.md' },
+  filePatterns: { concept: 'docs/v{VERSION}/{PROJECT}_concept_v{VERSION}.md', tasklist: 'docs/v{VERSION}/{PROJECT}_tasklist_v{VERSION}.md' },
   githubToken: '',
   recoveryInterval: 5,
   usagePlan: 'max5',
@@ -291,6 +291,11 @@ app.put('/api/file/:projectId', (req, res) => {
   }
 
   try {
+    // Ensure parent directory exists (e.g. docs/handoff/ for recovery files)
+    const parentDir = path.dirname(fullPath);
+    if (!fs.existsSync(parentDir)) {
+      fs.mkdirSync(parentDir, { recursive: true });
+    }
     fs.writeFileSync(fullPath, content, 'utf8');
     res.json({ ok: true });
   } catch (err) {
@@ -428,12 +433,10 @@ app.delete('/api/projects/:id/versions/:version', (req, res) => {
     const found = findProjectWithPath(req.params.id);
     if (!found) return res.status(404).json({ error: 'Project not found' });
 
-    // Prevent deleting the active version
-    if (found.project.activeVersion === req.params.version) {
-      return res.status(400).json({ error: 'Cannot delete the active version. Switch to a different version first.' });
-    }
+    const deletingVersion = req.params.version;
+    const isActive = found.project.activeVersion === deletingVersion;
 
-    const folder = versions.getVersionFolder(req.params.version);
+    const folder = versions.getVersionFolder(deletingVersion);
     const absFolder = path.join(found.absPath, folder);
 
     if (!fs.existsSync(absFolder)) {
@@ -445,8 +448,39 @@ app.delete('/api/projects/:id/versions/:version', (req, res) => {
       return res.status(403).json({ error: 'Access denied: path outside project directory' });
     }
 
+    // If deleting the active version, fall back to parent/previous version
+    let fallbackVersion = null;
+    if (isActive) {
+      const parsed = versions.parseVersionString(deletingVersion);
+      if (parsed.patch !== null) {
+        // Patch → fall back to parent minor (e.g. 1.0.3 → 1.0)
+        fallbackVersion = `${parsed.major}.${parsed.minor}`;
+      } else {
+        // Minor/major → fall back to nearest remaining version
+        const versionData = versions.scanVersions(found.absPath, found.project.name);
+        const remaining = versionData.versions
+          .map(v => v.version)
+          .filter(v => v !== deletingVersion);
+        if (remaining.length > 0) {
+          fallbackVersion = remaining[remaining.length - 1];
+        }
+      }
+
+      if (!fallbackVersion) {
+        return res.status(400).json({ error: 'Cannot delete the only version. At least one version must remain.' });
+      }
+
+      // Verify fallback version folder exists
+      const fallbackFolder = path.join(found.absPath, versions.getVersionFolder(fallbackVersion));
+      if (!fs.existsSync(fallbackFolder)) {
+        return res.status(400).json({ error: 'Fallback version folder does not exist: v' + fallbackVersion });
+      }
+
+      projects.updateProject(req.params.id, { activeVersion: fallbackVersion });
+    }
+
     fs.rmSync(absFolder, { recursive: true, force: true });
-    res.json({ ok: true, deleted: folder });
+    res.json({ ok: true, deleted: folder, fallbackVersion });
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete version: ' + err.message });
   }
@@ -592,7 +626,7 @@ const WIZARD_TEMPLATES = {
 function generateClaudeMd(projectName, templateKey) {
   const template = WIZARD_TEMPLATES[templateKey] || WIZARD_TEMPLATES['blank'];
   return `# CLAUDE.md — ${projectName}
-*Derived from: docs/v1.0/${projectName}_concept.md*
+*Derived from: docs/v1.0/${projectName}_concept_v1.0.md*
 
 ---
 
@@ -608,13 +642,13 @@ function generateClaudeMd(projectName, templateKey) {
 
 *Describe the project here. Read the concept doc for the full specification.*
 
-Read \`docs/v1.0/${projectName}_concept.md\` before starting any task. It is the single source of truth.
+Read \`docs/v1.0/${projectName}_concept_v1.0.md\` before starting any task. It is the single source of truth.
 ${template.sections}
 ---
 
 ## Stage Gate Process
 
-Development proceeds in defined stages. See \`docs/v1.0/${projectName}_tasklist.md\` for the full breakdown.
+Development proceeds in defined stages. See \`docs/v1.0/${projectName}_tasklist_v1.0.md\` for the full breakdown.
 
 - Each stage has a defined set of tasks
 - Each stage ends with a Go/NoGo decision
@@ -664,7 +698,7 @@ function generateConceptMd(projectName) {
 
 function generateTasklistMd(projectName) {
   return `# ${projectName} — Tasklist
-*Derived from: docs/v1.0/${projectName}_concept.md*
+*Derived from: docs/v1.0/${projectName}_concept_v1.0.md*
 *Stage gate process: each stage ends with Go/NoGo before next stage begins*
 
 ---
@@ -694,7 +728,7 @@ function generateImportClaudeMd(projectName, version) {
   const majorMinor = version.split('.').slice(0, 2).join('.');
   const vFolder = `v${majorMinor}`;
   return `# CLAUDE.md — ${projectName}
-*Derived from: docs/${vFolder}/${projectName}_concept.md*
+*Derived from: docs/${vFolder}/${projectName}_concept_v${majorMinor}.md*
 
 ---
 
@@ -710,13 +744,13 @@ function generateImportClaudeMd(projectName, version) {
 
 *Describe the project here. Read the concept doc for the full specification.*
 
-Read \`docs/${vFolder}/${projectName}_concept.md\` before starting any task. It is the single source of truth.
+Read \`docs/${vFolder}/${projectName}_concept_v${majorMinor}.md\` before starting any task. It is the single source of truth.
 
 ---
 
 ## Stage Gate Process
 
-Development proceeds in defined stages. See \`docs/${vFolder}/${projectName}_tasklist.md\` for the full breakdown.
+Development proceeds in defined stages. See \`docs/${vFolder}/${projectName}_tasklist_v${majorMinor}.md\` for the full breakdown.
 
 - Each stage has a defined set of tasks
 - Each stage ends with a Go/NoGo decision
@@ -770,7 +804,7 @@ function generateImportTasklistMd(projectName, version) {
   const majorMinor = version.split('.').slice(0, 2).join('.');
   const vFolder = `v${majorMinor}`;
   return `# ${projectName} — Tasklist
-*Derived from: docs/${vFolder}/${projectName}_concept.md*
+*Derived from: docs/${vFolder}/${projectName}_concept_v${majorMinor}.md*
 *Stage gate process: each stage ends with Go/NoGo before next stage begins*
 
 ---
@@ -833,6 +867,32 @@ Instructions:
   return commands[type] || '';
 }
 
+function generateProjectMapMd(projectName, version) {
+  const majorMinor = version.split('.').slice(0, 2).join('.');
+  const vFolder = `v${majorMinor}`;
+  return `# Project Map — ${projectName}
+
+## Key Files
+- \`CLAUDE.md\` — behavioural instructions for Claude Code
+- \`docs/${vFolder}/${projectName}_concept_v${majorMinor}.md\` — active version concept
+- \`docs/${vFolder}/${projectName}_tasklist_v${majorMinor}.md\` — active version tasklist
+
+## Documentation
+- \`docs/${vFolder}/\` — version-specific (concept, tasklist, test files)
+- \`docs/discussion/\` — brainstorming and idea exploration
+- \`docs/architecture/\` — system structure and component diagrams
+- \`docs/spec/\` — implementation contracts
+- \`docs/adr/\` — architectural decision records
+- \`docs/context/\` — persistent project knowledge
+- \`docs/handoff/\` — SHP and recovery file
+
+## Source
+- \`src/\` — application source code
+- \`tests/\` — test files
+- \`tools/\` — automation scripts
+`;
+}
+
 // Scaffold a new project
 app.post('/api/scaffold-project', (req, res) => {
   const { name, parentDir, template, group } = req.body;
@@ -879,6 +939,12 @@ app.post('/api/scaffold-project', (req, res) => {
     fs.mkdirSync(path.join(projectDir, 'docs', 'v1.0'), { recursive: true });
     fs.mkdirSync(path.join(projectDir, '.claude', 'commands'), { recursive: true });
 
+    // Create topic-based documentation folders
+    const topicFolders = ['discussion', 'architecture', 'spec', 'adr', 'context', 'handoff'];
+    for (const folder of topicFolders) {
+      fs.mkdirSync(path.join(projectDir, 'docs', folder), { recursive: true });
+    }
+
     // Write files
     const scaffoldedFiles = [];
 
@@ -887,15 +953,20 @@ app.post('/api/scaffold-project', (req, res) => {
     fs.writeFileSync(claudePath, generateClaudeMd(safeName, template), 'utf8');
     scaffoldedFiles.push('CLAUDE.md');
 
-    // Concept doc
-    const conceptPath = path.join(projectDir, 'docs', 'v1.0', safeName + '_concept.md');
-    fs.writeFileSync(conceptPath, generateConceptMd(safeName), 'utf8');
-    scaffoldedFiles.push('docs/v1.0/' + safeName + '_concept.md');
+    // PROJECT_MAP.md
+    const projectMapPath = path.join(projectDir, 'PROJECT_MAP.md');
+    fs.writeFileSync(projectMapPath, generateProjectMapMd(safeName, '1.0'), 'utf8');
+    scaffoldedFiles.push('PROJECT_MAP.md');
 
-    // Tasklist
-    const tasklistPath = path.join(projectDir, 'docs', 'v1.0', safeName + '_tasklist.md');
+    // Concept doc (versioned filename)
+    const conceptPath = path.join(projectDir, 'docs', 'v1.0', safeName + '_concept_v1.0.md');
+    fs.writeFileSync(conceptPath, generateConceptMd(safeName), 'utf8');
+    scaffoldedFiles.push('docs/v1.0/' + safeName + '_concept_v1.0.md');
+
+    // Tasklist (versioned filename)
+    const tasklistPath = path.join(projectDir, 'docs', 'v1.0', safeName + '_tasklist_v1.0.md');
     fs.writeFileSync(tasklistPath, generateTasklistMd(safeName), 'utf8');
-    scaffoldedFiles.push('docs/v1.0/' + safeName + '_tasklist.md');
+    scaffoldedFiles.push('docs/v1.0/' + safeName + '_tasklist_v1.0.md');
 
     // Slash commands
     const slashCommands = ['update-tasklist', 'review-concept', 'status'];
@@ -936,13 +1007,13 @@ app.post('/api/scaffold-project', (req, res) => {
       group: group.trim(),
       coreFiles: {
         claude: 'CLAUDE.md',
-        concept: path.join(versionFolder, safeName + '_concept.md'),
-        tasklist: path.join(versionFolder, safeName + '_tasklist.md')
+        concept: path.join(versionFolder, safeName + '_concept_v1.0.md'),
+        tasklist: path.join(versionFolder, safeName + '_tasklist_v1.0.md')
       }
     });
 
-    // Set activeVersion
-    projects.updateProject(project.id, { activeVersion: '1.0' });
+    // Set activeVersion and mark as evaluated (scaffolded projects have all docs)
+    projects.updateProject(project.id, { activeVersion: '1.0', evaluated: true });
 
     res.status(201).json({
       project,
@@ -979,21 +1050,30 @@ app.post('/api/scaffold-import', (req, res) => {
       fs.mkdirSync(absvFolder, { recursive: true });
     }
 
+    // Create topic-based documentation folders (non-destructive)
+    const topicFolders = ['discussion', 'architecture', 'spec', 'adr', 'context', 'handoff'];
+    for (const folder of topicFolders) {
+      const topicDir = path.join(resolved, 'docs', folder);
+      if (!fs.existsSync(topicDir)) {
+        fs.mkdirSync(topicDir, { recursive: true });
+      }
+    }
+
     // Write concept doc if missing — skip if scan already found one anywhere in the project
     if (!existingConcept) {
-      const conceptPath = path.join(absvFolder, projectName + '_concept.md');
+      const conceptPath = path.join(absvFolder, projectName + '_concept_v' + majorMinor + '.md');
       if (!fs.existsSync(conceptPath)) {
         fs.writeFileSync(conceptPath, generateImportConceptMd(projectName, version), 'utf8');
-        scaffoldedFiles.push(path.join(vFolder, projectName + '_concept.md'));
+        scaffoldedFiles.push(path.join(vFolder, projectName + '_concept_v' + majorMinor + '.md'));
       }
     }
 
     // Write tasklist if missing — skip if scan already found one anywhere in the project
     if (!existingTasklist) {
-      const tasklistPath = path.join(absvFolder, projectName + '_tasklist.md');
+      const tasklistPath = path.join(absvFolder, projectName + '_tasklist_v' + majorMinor + '.md');
       if (!fs.existsSync(tasklistPath)) {
         fs.writeFileSync(tasklistPath, generateImportTasklistMd(projectName, version), 'utf8');
-        scaffoldedFiles.push(path.join(vFolder, projectName + '_tasklist.md'));
+        scaffoldedFiles.push(path.join(vFolder, projectName + '_tasklist_v' + majorMinor + '.md'));
       }
     }
 
@@ -1002,6 +1082,13 @@ app.post('/api/scaffold-import', (req, res) => {
     if (!fs.existsSync(claudePath)) {
       fs.writeFileSync(claudePath, generateImportClaudeMd(projectName, version), 'utf8');
       scaffoldedFiles.push('CLAUDE.md');
+    }
+
+    // Write PROJECT_MAP.md if missing
+    const projectMapPath = path.join(resolved, 'PROJECT_MAP.md');
+    if (!fs.existsSync(projectMapPath)) {
+      fs.writeFileSync(projectMapPath, generateProjectMapMd(projectName, version), 'utf8');
+      scaffoldedFiles.push('PROJECT_MAP.md');
     }
 
     // Create .claude/commands/ with slash commands — per-file checks
@@ -1328,6 +1415,34 @@ setInterval(async () => {
     // Silent — usage scanning is optional
   }
 }, 30000);
+
+// --- Startup Migration: ensure topic folders + evaluated flag for all registered projects ---
+(function startupMigration() {
+  const TOPIC_FOLDERS = ['discussion', 'architecture', 'spec', 'adr', 'context', 'handoff'];
+  try {
+    const registry = projects.getAllProjects();
+    for (const proj of registry.projects) {
+      const absPath = projects.resolveProjectPath(proj.path);
+      const docsDir = path.join(absPath, 'docs');
+      if (!fs.existsSync(docsDir)) continue;
+
+      // Ensure topic folders exist
+      for (const folder of TOPIC_FOLDERS) {
+        const folderPath = path.join(docsDir, folder);
+        if (!fs.existsSync(folderPath)) {
+          fs.mkdirSync(folderPath, { recursive: true });
+        }
+      }
+
+      // Backfill evaluated flag for projects that pre-date the flag
+      if (proj.evaluated === undefined) {
+        projects.updateProject(proj.id, { evaluated: true });
+      }
+    }
+  } catch (e) {
+    // Non-fatal — migration is best-effort
+  }
+})();
 
 server.listen(PORT, () => {
   console.log(`CCC running on http://localhost:${PORT}`);

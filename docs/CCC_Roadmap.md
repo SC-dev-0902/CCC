@@ -65,6 +65,7 @@
 | Degradation detection | Redesign — current approach triggers false positives on idle and decorative output |
 | Polish | UI refinements, performance, edge cases |
 | README | Polished with GIF/screen recording |
+| Integrated Claude chat panel | Claude.ai chat alongside terminal — keeps entire workflow inside CCC. Moved from v2.0: PatchPilot integration creates bug-to-patch pipeline. Open questions: API key cost, no embeddable SDK yet. |
 | Promotion campaign | Show HN, Reddit (r/ClaudeAI, r/cursor), X/Twitter thread, blog post |
 
 ### Promotion strategy
@@ -97,7 +98,6 @@ All promotion material should highlight: **v1.0 supports macOS natively. Linux a
 | Searchable history | Full-text search across all stored SHPs per project |
 | Context layering | Yesterday's SHP in full + compressed digest of prior history |
 | User manual | CCC as infrastructure — must be running before Claude Code |
-| Claude.ai API integration | Optional API key for in-CCC document generation |
 | Global slash commands | `~/.claude/commands/` for universal workflow commands |
 
 ### Design questions for v2.0 (to be resolved before development)

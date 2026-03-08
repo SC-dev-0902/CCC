@@ -15,18 +15,19 @@
       "name": "CCC",
       "path": "CCC",
       "group": "Active",
-      "order": 0,
+      "order": 3,
       "coreFiles": {
         "claude": "CLAUDE.md",
-        "concept": "docs/v1.0/CCC_concept.md",
-        "tasklist": "docs/v1.0/CCC_tasklist.md"
+        "concept": "docs/v1.0/v1.0.1/CCC_concept.md",
+        "tasklist": "docs/v1.0/v1.0.1/CCC_tasklist.md"
       },
-      "activeVersion": "1.0"
+      "activeVersion": "1.0",
+      "evaluated": true
     },
     {
       "id": "329a8f5d-fd8a-42ec-ad03-7400c60dc74b",
       "name": "PatchPilot",
-      "path": "PatchPilot",
+      "path": "Projects/PatchPilot",
       "group": "Parked",
       "order": 1,
       "coreFiles": {
@@ -40,7 +41,7 @@
     {
       "id": "9fcb1bc6-9ae3-4a1c-ac65-6e89114111af",
       "name": "CC-Monitor",
-      "path": "CC-Monitor",
+      "path": "Projects/CC-Monitor",
       "group": "Parked",
       "order": 2,
       "coreFiles": {
@@ -48,12 +49,13 @@
         "concept": "docs/v1.0/CC-Monitor_concept.md",
         "tasklist": "docs/v1.0/CC-Monitor_tasklist.md"
       },
-      "activeVersion": "1.0"
+      "activeVersion": "1.0",
+      "evaluated": true
     },
     {
       "id": "625f025d-f6c0-48df-bbae-fe69c6801813",
       "name": "PeuanRuamChan",
-      "path": "PeuanRuamChan",
+      "path": "Projects/PeuanRuamChan",
       "group": "Parked",
       "order": 0,
       "coreFiles": {
@@ -65,15 +67,85 @@
       "evaluated": true
     },
     {
-      "id": "73c6f8f5-1786-436b-8f2f-b74f13876cb7",
-      "name": "LedgerNest",
-      "path": "LedgerNest",
+      "id": "9140cb0d-c938-4357-a4c7-9e9c74a04b33",
+      "name": "SC-Web",
+      "path": "Projects/SC-Web",
+      "group": "Active",
+      "order": 2,
+      "coreFiles": {
+        "claude": "CLAUDE.md",
+        "concept": "docs/v1.0/SC-Web_concept.md",
+        "tasklist": "docs/v1.0/SC-Web_tasklist.md"
+      },
+      "activeVersion": "1.0",
+      "evaluated": true
+    },
+    {
+      "id": "fa924dd0-aff4-46ad-af4d-a534a0df1be4",
+      "name": "Pactum - Core",
+      "path": "Projects/Pactum - Core",
       "group": "Parked",
       "order": 3,
       "coreFiles": {
         "claude": "CLAUDE.md",
-        "concept": "docs/v1.0/LedgerNest_concept.md",
-        "tasklist": "docs/v1.0/LedgerNest_tasklist.md"
+        "concept": "docs/v1.0/Pactum - Core_concept.md",
+        "tasklist": "docs/v1.0/Pactum - Core_tasklist.md"
+      },
+      "activeVersion": "1.0",
+      "evaluated": true
+    },
+    {
+      "id": "bfa7cfaf-8a26-4a79-bf3f-0a3ac067c547",
+      "name": "Concorda",
+      "path": "Projects/Concorda",
+      "group": "Parked",
+      "order": 4,
+      "coreFiles": {
+        "claude": "CLAUDE.md",
+        "concept": "docs/v1.0/Concorda_concept.md",
+        "tasklist": "docs/v1.0/Concorda_tasklist.md"
+      },
+      "activeVersion": "1.0",
+      "evaluated": true
+    },
+    {
+      "id": "ef5738d5-c18d-407d-86ce-79621ccf59b7",
+      "name": "LedgerNest",
+      "path": "Projects/LedgerNest",
+      "group": "Active",
+      "order": 1,
+      "coreFiles": {
+        "claude": "CLAUDE.md",
+        "concept": "docs/v1.0/_LedgerNest_concept.md",
+        "tasklist": "docs/v1.0/_LedgerNest_tasklist.md"
+      },
+      "activeVersion": "1.0",
+      "evaluated": true
+    },
+    {
+      "id": "38bde3c3-973e-4acb-82a1-2618672b0dff",
+      "name": "Jarvis",
+      "path": "Projects/Jarvis",
+      "group": "Parked",
+      "order": 5,
+      "coreFiles": {
+        "claude": "CLAUDE.md",
+        "concept": "docs/v1.0/Jarvis_concept.md",
+        "tasklist": "docs/v1.0/Jarvis_tasklist.md"
+      },
+      "activeVersion": "1.0",
+      "evaluated": true
+    },
+    {
+      "id": "bb04c9bd-abcd-4640-9f62-aa26c4a921d3",
+      "name": "TradingMaster",
+      "path": "Projects/TradingMaster",
+      "group": "Parked",
+      "order": 6,
+      "coreFiles": {
+        "claude": "CLAUDE.md",
+        "concept": "docs/Trading_project_concept.md",
+        "tasklist": "docs/v1.0/TradingMaster_tasklist.md"
       },
       "activeVersion": "1.0",
       "evaluated": false

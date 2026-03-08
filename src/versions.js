@@ -148,9 +148,44 @@ function countTestCheckboxes(filePath) {
 }
 
 /**
+ * Count completed vs total stages in a tasklist file.
+ * A stage starts at a `## Stage` heading. A stage is complete when it has
+ * at least one checkbox and all checkboxes are checked.
+ * Returns { completed: number, total: number }
+ */
+function countCompletedStages(filePath) {
+  try {
+    const content = fs.readFileSync(filePath, 'utf8');
+    const lines = content.split('\n');
+    const stages = [];
+    let current = null;
+
+    for (const line of lines) {
+      if (/^##\s+Stage\s/i.test(line)) {
+        if (current) stages.push(current);
+        current = { checked: 0, unchecked: 0 };
+      } else if (current) {
+        if (/^\s*- \[x\]/i.test(line)) current.checked++;
+        else if (/^\s*- \[ \]/.test(line)) current.unchecked++;
+      }
+    }
+    if (current) stages.push(current);
+
+    let completed = 0;
+    for (const s of stages) {
+      if (s.checked > 0 && s.unchecked === 0) completed++;
+    }
+    return { completed, total: stages.length };
+  } catch {
+    return { completed: 0, total: 0 };
+  }
+}
+
+/**
  * Scan a version directory for core files and test files.
- * Returns { files: string[], testFiles: { name, checked, total }[] }
+ * Returns { files: (string|object)[], testFiles: { name, checked, total }[] }
  * Test files match {projectName}_test_stage\d+\.md
+ * Tasklist files get stage progress counts: { name, stagesCompleted, stagesTotal }
  */
 function scanVersionFiles(dirPath, projectName) {
   const result = { files: [], testFiles: [] };
@@ -166,6 +201,9 @@ function scanVersionFiles(dirPath, projectName) {
       if (testPattern.test(name)) {
         const counts = countTestCheckboxes(fullPath);
         result.testFiles.push({ name, checked: counts.checked, total: counts.total });
+      } else if (/_tasklist/.test(name)) {
+        const stageCounts = countCompletedStages(fullPath);
+        result.files.push({ name, stagesCompleted: stageCounts.completed, stagesTotal: stageCounts.total });
       } else {
         result.files.push(name);
       }
@@ -202,11 +240,11 @@ function createVersion(projectAbsPath, projectName, version, type, previousConce
 
   fs.mkdirSync(absFolder, { recursive: true });
 
-  // Scaffold tasklist (always)
-  const tasklistContent = `# ${projectName}_tasklist.md — v${version}\n*Derived from: ${projectName}_concept.md*\n*Stage gate process: each stage ends with Go/NoGo before next stage begins*\n\n---\n\n## Stage 01 — [Stage Name]\n**Focus:** [Description]\n\n### Tasks\n- [ ] Task 1\n\n### Go/NoGo Gate\n> [Gate question]\n\n**→ GO:** Proceed to Stage 02\n**→ NOGO:** Revise, re-evaluate\n\n---\n`;
-  fs.writeFileSync(path.join(absFolder, `${projectName}_tasklist.md`), tasklistContent, 'utf8');
+  // Scaffold tasklist (always — versioned filename)
+  const tasklistContent = `# ${projectName}_tasklist_v${version}.md — v${version}\n*Derived from: ${projectName}_concept_v${version}.md*\n*Stage gate process: each stage ends with Go/NoGo before next stage begins*\n\n---\n\n## Stage 01 — [Stage Name]\n**Focus:** [Description]\n\n### Tasks\n- [ ] Task 1\n\n### Go/NoGo Gate\n> [Gate question]\n\n**→ GO:** Proceed to Stage 02\n**→ NOGO:** Revise, re-evaluate\n\n---\n`;
+  fs.writeFileSync(path.join(absFolder, `${projectName}_tasklist_v${version}.md`), tasklistContent, 'utf8');
 
-  // Scaffold concept doc (all version types — seeded from previous if available)
+  // Scaffold concept doc (all version types — seeded from previous if available, versioned filename)
   let conceptContent;
   if (previousConceptContent) {
     conceptContent = previousConceptContent.replace(
@@ -216,7 +254,7 @@ function createVersion(projectAbsPath, projectName, version, type, previousConce
   } else {
     conceptContent = `# ${projectName}\n**Concept Document v${version}**\n\n---\n\n## Overview\n\n[Describe the goals and scope of this version]\n\n---\n\n## Changes from Previous Version\n\n[What's new or different in v${version}]\n\n---\n`;
   }
-  fs.writeFileSync(path.join(absFolder, `${projectName}_concept.md`), conceptContent, 'utf8');
+  fs.writeFileSync(path.join(absFolder, `${projectName}_concept_v${version}.md`), conceptContent, 'utf8');
 
   return { folder, version, type };
 }

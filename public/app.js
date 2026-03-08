@@ -352,19 +352,23 @@ async function startSession(projectId, command) {
     }
 
     // Check if SHP or recovery file exists — auto-inject /continue for Claude sessions
+    // Check new paths (docs/handoff/) first, fall back to old paths (docs/) for unmigrated projects
     if (command === 'claude' && proj) {
-      const shpPath = `docs/${proj.name}_shp.md`;
-      const recoveryPath = `docs/${proj.name}_recovery.txt`;
+      const shpPaths = [`docs/handoff/${proj.name}_shp.md`, `docs/${proj.name}_shp.md`];
+      const recoveryPaths = [`docs/handoff/${proj.name}_recovery.md`, `docs/${proj.name}_recovery.txt`];
       try {
-        const shpCheck = await api('GET', `/api/file/${projectId}?filePath=${encodeURIComponent(shpPath)}`);
-        if (!shpCheck.error) {
-          instance.pendingContinue = true;
-        } else {
-          const recoveryCheck = await api('GET', `/api/file/${projectId}?filePath=${encodeURIComponent(recoveryPath)}`);
-          if (!recoveryCheck.error) {
-            instance.pendingContinue = true;
+        let found = false;
+        for (const shpPath of shpPaths) {
+          const shpCheck = await api('GET', `/api/file/${projectId}?filePath=${encodeURIComponent(shpPath)}`);
+          if (!shpCheck.error) { found = true; break; }
+        }
+        if (!found) {
+          for (const recoveryPath of recoveryPaths) {
+            const recoveryCheck = await api('GET', `/api/file/${projectId}?filePath=${encodeURIComponent(recoveryPath)}`);
+            if (!recoveryCheck.error) { found = true; break; }
           }
         }
+        if (found) instance.pendingContinue = true;
       } catch (e) {
         // Silent — don't block session start if check fails
       }
@@ -709,7 +713,7 @@ function renderVersionRow(container, project, ver, activeVersion, flatTestFiles)
       <span class="action-btn add-patch-btn" title="Create patch version (v${escapeHtml(nextPatch)})">+</span>
       ${isActive ? '<span class="action-btn mark-complete-btn" title="Mark complete (git tag)">&#x2713;</span>' : ''}
       ${!isActive ? '<span class="action-btn set-active-btn" title="Set as active version">&#x25C9;</span>' : ''}
-      ${!isActive ? '<span class="action-btn remove-btn remove-version-btn" title="Remove version">&times;</span>' : ''}
+      <span class="action-btn remove-btn remove-version-btn" title="Remove version">&times;</span>
     </span>
   `;
 
@@ -780,11 +784,13 @@ function renderVersionRow(container, project, ver, activeVersion, flatTestFiles)
     const versionFiles = document.createElement('div');
     versionFiles.className = 'tree-version-files expanded';
 
-    for (const fileName of ver.files) {
+    for (const file of ver.files) {
+      const fileName = typeof file === 'string' ? file : file.name;
+      const stageBadge = (file.stagesTotal) ? ` <span class="test-progress-badge">[${file.stagesCompleted}/${file.stagesTotal}]</span>` : '';
       const fileEl = document.createElement('div');
       fileEl.className = 'tree-file';
       const filePath = ver.folder + '/' + fileName;
-      fileEl.innerHTML = `<span class="tree-file-icon">&#x1F4C4;</span><span class="tree-file-name">${escapeHtml(fileName)}</span>`;
+      fileEl.innerHTML = `<span class="tree-file-icon">&#x1F4C4;</span><span class="tree-file-name">${escapeHtml(fileName)}${stageBadge}</span>`;
       fileEl.addEventListener('click', (e) => {
         e.stopPropagation();
         openFileTab(project.id, project.name, filePath);
@@ -891,7 +897,7 @@ function renderPatchRow(container, project, patch, activeVersion) {
     <span class="tree-version-actions">
       ${isActive ? '<span class="action-btn mark-complete-btn" title="Mark complete (git tag)">&#x2713;</span>' : ''}
       ${!isActive ? '<span class="action-btn set-active-btn" title="Set as active version">&#x25C9;</span>' : ''}
-      ${!isActive ? '<span class="action-btn remove-btn remove-version-btn" title="Remove version">&times;</span>' : ''}
+      <span class="action-btn remove-btn remove-version-btn" title="Remove version">&times;</span>
     </span>
   `;
 
@@ -947,11 +953,13 @@ function renderPatchRow(container, project, patch, activeVersion) {
     const patchFiles = document.createElement('div');
     patchFiles.className = 'tree-patch-files expanded';
 
-    for (const fileName of patch.files) {
+    for (const file of patch.files) {
+      const fileName = typeof file === 'string' ? file : file.name;
+      const stageBadge = (file.stagesTotal) ? ` <span class="test-progress-badge">[${file.stagesCompleted}/${file.stagesTotal}]</span>` : '';
       const fileEl = document.createElement('div');
       fileEl.className = 'tree-file';
       const filePath = patch.folder + '/' + fileName;
-      fileEl.innerHTML = `<span class="tree-file-icon">&#x1F4C4;</span><span class="tree-file-name">${escapeHtml(fileName)}</span>`;
+      fileEl.innerHTML = `<span class="tree-file-icon">&#x1F4C4;</span><span class="tree-file-name">${escapeHtml(fileName)}${stageBadge}</span>`;
       fileEl.addEventListener('click', (e) => {
         e.stopPropagation();
         openFileTab(project.id, project.name, filePath);
@@ -1351,12 +1359,12 @@ function renderSettings(container) {
       </div>
       <div class="settings-group">
         <label>Concept File Pattern</label>
-        <input type="text" id="settingsConceptPattern" value="${escapeHtml((settings.filePatterns || {}).concept || 'docs/{PROJECT}_concept.md')}" placeholder="docs/{PROJECT}_concept.md">
-        <span class="settings-hint">{PROJECT} is replaced by the project folder name.</span>
+        <input type="text" id="settingsConceptPattern" value="${escapeHtml((settings.filePatterns || {}).concept || 'docs/v{VERSION}/{PROJECT}_concept_v{VERSION}.md')}" placeholder="docs/v{VERSION}/{PROJECT}_concept_v{VERSION}.md">
+        <span class="settings-hint">{PROJECT} = project folder name, {VERSION} = version number (e.g. 1.0).</span>
       </div>
       <div class="settings-group">
         <label>Tasklist File Pattern</label>
-        <input type="text" id="settingsTasklistPattern" value="${escapeHtml((settings.filePatterns || {}).tasklist || 'docs/{PROJECT}_tasklist.md')}" placeholder="docs/{PROJECT}_tasklist.md">
+        <input type="text" id="settingsTasklistPattern" value="${escapeHtml((settings.filePatterns || {}).tasklist || 'docs/v{VERSION}/{PROJECT}_tasklist_v{VERSION}.md')}" placeholder="docs/v{VERSION}/{PROJECT}_tasklist_v{VERSION}.md">
       </div>
       <div class="settings-group">
         <label>Recovery Auto-Save Interval (minutes)</label>
@@ -1595,7 +1603,7 @@ async function saveRecoveryFiles() {
     const text = getScrollbackText(instance.terminal);
     if (!text.trim()) continue;
 
-    const recoveryPath = `docs/${project.name}_recovery.txt`;
+    const recoveryPath = `docs/handoff/${project.name}_recovery.md`;
     try {
       await api('PUT', `/api/file/${projectId}`, {
         filePath: recoveryPath,
@@ -2140,7 +2148,7 @@ function showNewProjectWizard() {
         <div class="settings-group">
           <label>Location</label>
           <div class="input-with-btn" style="max-width:100%;">
-            <input type="text" id="wizardLocation" value="${escapeHtml(settings.projectRoot || '')}" placeholder="/path/to/parent/directory">
+            <input type="text" id="wizardLocation" value="${escapeHtml(settings.projectRoot ? settings.projectRoot + '/Projects' : '')}" placeholder="/path/to/parent/directory">
             <button class="btn browse-btn" id="wizardBrowse">Browse</button>
           </div>
         </div>
@@ -2839,8 +2847,13 @@ function showMarkCompleteModal(project, version) {
 }
 
 function showRemoveVersionConfirm(project, version) {
+  const isActive = project.activeVersion === version;
+  const activeWarning = isActive
+    ? '<p style="margin-top:8px; font-size:12px; color:var(--status-error);">This is the active version. The active version will fall back to the parent or previous version.</p>'
+    : '';
   const body = `
     <p>Delete version <strong>v${escapeHtml(version)}</strong> and all its files?</p>
+    ${activeWarning}
     <p style="margin-top:8px; font-size:12px; color:var(--status-waiting);">This will permanently delete the version folder from disk. This cannot be undone.</p>
   `;
 
@@ -2851,9 +2864,14 @@ function showRemoveVersionConfirm(project, version) {
       return;
     }
 
+    // If active version was deleted, update local project data with fallback
+    if (result.fallbackVersion) {
+      project.activeVersion = result.fallbackVersion;
+    }
+
     await loadProjectVersions(project.id);
     renderTreeView();
-    showToast('Version v' + version + ' deleted.');
+    showToast('Version v' + version + ' deleted.' + (result.fallbackVersion ? ' Active version set to v' + result.fallbackVersion + '.' : ''));
   });
 }
 

@@ -25,7 +25,7 @@ Read the active version's concept doc before starting any task. It is the single
 - **Never commit `.env`.** It is in `.gitignore`. The repo ships with `.env.example`.
 - **Never begin the next stage without an explicit Go from the developer.**
 - **Import scaffolding is additive only.** When importing an existing project, CCC creates missing CCC structure (`docs/vX.Y/`, `CLAUDE.md`, `.claude/commands/`, `.ccc-project.json`) but never overwrites existing files. Outside of import, CCC only writes to its own `projects.json` and `settings.json`.
-- **Never write version numbers into filenames.** Version history lives in Git.
+- **Version numbers in filenames are forward-only.** New files use `{Name}_concept_v{X.Y}.md` convention. Existing files without version numbers are left as-is — do not rename retroactively.
 - **Never use filesystem symlinks.** Active version is tracked in `projects.json`, not on the filesystem.
 - **Never use platform-specific APIs or hardcoded paths.** v1.0 targets macOS, Linux, and Windows. Use `path.join()` for all paths. No `/Users/`, no `~/Library/`, no `C:\Users\`, no assumptions about zsh.
 - **Parser module is sacred.** All Claude Code output parsing lives exclusively in `src/parser.js`. Nothing else touches raw output interpretation.
@@ -37,6 +37,7 @@ Read the active version's concept doc before starting any task. It is the single
 ```
 CCC/
 ├── CLAUDE.md                  ← this file (project root)
+├── PROJECT_MAP.md             ← filesystem table of contents for CC orientation
 ├── LICENSE                    ← Elastic License 2.0
 ├── README.md
 ├── CHANGELOG.md
@@ -68,8 +69,14 @@ CCC/
 │   └── screenshot.js          ← Playwright screenshot script
 └── docs/
     ├── CCC_Roadmap.md         ← version plan (v1.0, v1.1, v2.0)
-    ├── CCC_shp.md             ← Session Handover Pack (overwritten each /eod)
-    ├── screenshots/            ← Playwright-captured images
+    ├── handoff/               ← SHP + recovery files
+    │   └── CCC_shp.md        ← Session Handover Pack (overwritten each /eod)
+    ├── discussion/            ← design discussions, meeting notes
+    ├── architecture/          ← architecture decisions, diagrams
+    ├── spec/                  ← specifications, interface contracts
+    ├── adr/                   ← architecture decision records
+    ├── context/               ← background research, reference material
+    ├── screenshots/           ← Playwright-captured images
     └── v1.0/                  ← active version
         ├── CCC_concept.md
         ├── CCC_tasklist.md
@@ -85,8 +92,8 @@ CCC models project evolution through explicit versions. Each version is a full d
 - **A version is a container** — it has its own concept doc, tasklist, stage progression, and Go/NoGo gates.
 - **Major (X.0) and Minor (x.Y) versions** get their own concept doc and tasklist.
 - **Patch versions (x.y.Z)** get their own concept doc (seeded from parent minor version) and their own tasklist.
-- **Version documents live in `docs/vX.Y/`** — e.g., `docs/v1.1/CCC_concept.md`.
-- **Patch version documents nest inside their parent** — e.g., `docs/v1.1/v1.1.1/CCC_concept.md` and `CCC_tasklist.md`.
+- **Version documents live in `docs/vX.Y/`** — e.g., `docs/v1.1/CCC_concept_v1.1.md`.
+- **Patch version documents nest inside their parent** — e.g., `docs/v1.1/v1.1.1/CCC_concept_v1.1.1.md` and `CCC_tasklist_v1.1.1.md`.
 - **The active version is tracked in `projects.json`** via the `activeVersion` field. Never use filesystem symlinks.
 - **CLAUDE.md stays at the project root** and is always derived from the active version's concept doc.
 - **When a version's final stage receives a Go**, prompt for a Git tag matching the version number.
@@ -99,7 +106,7 @@ Read `docs/v1.0/CCC_concept.md` → Project Versioning section for the full spec
 
 CCC gives Claude Code session continuity through file-based SHP (Session Handover Pack) storage.
 
-- **SHPs are stored as a single file** per project: `docs/{ProjectName}_shp.md` (overwritten each `/eod`, Git provides history).
+- **SHPs are stored as a single file** per project: `docs/handoff/{ProjectName}_shp.md` (overwritten each `/eod`, Git provides history).
 - **Six global slash commands** drive the workflow:
 - **`/start-project`** — reads CLAUDE.md, concept, tasklist. Generates tasklist if missing. Asks comprehension questions. Works without CCC.
 - **`/continue`** — CCC feeds the most recent SHP to Claude Code. Requires CCC to be running.
@@ -206,7 +213,7 @@ Before writing a single word, Claude Code re-reads all four documents:
 - `CLAUDE.md`
 - `docs/v1.0/CCC_concept.md`
 - `docs/v1.0/CCC_tasklist.md`
-- `docs/CCC_shp.md`
+- `docs/handoff/CCC_shp.md`
 
 Manual structure is proposed and confirmed with Phet before writing begins.
 
