@@ -18,7 +18,7 @@
       "order": 3,
       "coreFiles": {
         "claude": "CLAUDE.md",
-        "concept": "docs/v1.0/v1.0.1/CCC_concept.md",
+        "concept": "docs/v1.0/v1.0.1/CCC_concept_v1.0.1.md",
         "tasklist": "docs/v1.0/v1.0.1/CCC_tasklist.md"
       },
       "activeVersion": "1.0",
@@ -116,8 +116,8 @@
       "order": 1,
       "coreFiles": {
         "claude": "CLAUDE.md",
-        "concept": "docs/v1.0/_LedgerNest_concept.md",
-        "tasklist": "docs/v1.0/_LedgerNest_tasklist.md"
+        "concept": "docs/v1.0/LedgerNest_concept.md",
+        "tasklist": "docs/v1.0/LedgerNest_tasklist.md"
       },
       "activeVersion": "1.0",
       "evaluated": true
