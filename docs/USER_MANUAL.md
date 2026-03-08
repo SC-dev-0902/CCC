@@ -1,5 +1,5 @@
 # CCC User Manual
-*Claude Command Center — v1.0.1*
+*Claude Command Center — v1.0.2*
 
 ---
 
@@ -203,9 +203,11 @@ The wizard walks you through four steps:
 
 CCC creates the folder and scaffolds everything:
 - `CLAUDE.md` pre-filled from your chosen template
-- `docs/{Name}_concept.md` with section headers
-- `docs/{Name}_tasklist.md` with a stage-gate skeleton
+- `docs/v1.0/{Name}_concept_v1.0.md` with section headers
+- `docs/v1.0/{Name}_tasklist_v1.0.md` with a stage-gate skeleton
+- `PROJECT_MAP.md` — a filesystem table of contents for Claude Code orientation
 - `.claude/commands/` with starter slash commands
+- Topic-based documentation folders: `docs/discussion/`, `docs/architecture/`, `docs/spec/`, `docs/adr/`, `docs/context/`, `docs/handoff/`
 
 ### Importing Existing Projects
 
@@ -219,10 +221,12 @@ The import wizard asks for a **version number** (defaults to `1.0.0`). This dete
 
 **What CCC scaffolds on import:** CCC creates the CCC folder structure inside the imported project — but only for files that don't already exist:
 
-- `docs/vX.Y/` — version folder with a concept doc template and tasklist template
+- `docs/vX.Y/` — version folder with a concept doc template and tasklist template (versioned filenames)
 - `CLAUDE.md` — project-level Claude Code instructions
+- `PROJECT_MAP.md` — filesystem table of contents
 - `.claude/commands/` — starter slash commands
 - `.ccc-project.json` — project marker file
+- Topic-based documentation folders: `docs/discussion/`, `docs/architecture/`, `docs/spec/`, `docs/adr/`, `docs/context/`, `docs/handoff/`
 
 Existing files are never overwritten. If the project already has a `CLAUDE.md` or a `docs/v1.0/` folder with content, CCC leaves them untouched.
 
@@ -284,7 +288,7 @@ When a version's final stage gets a Go, CCC offers to create a Git tag matching 
 
 ### Deleting a Version
 
-Non-active versions can be deleted from the sidebar (hover and click the trash icon). The active version can't be deleted — switch to a different version first. Deletion removes the folder from disk, so be sure.
+Versions can be deleted from the sidebar (hover and click the trash icon). If you delete the active version, CCC automatically falls back to the parent version (for patches) or the previous version (for minor/major). The last remaining version cannot be deleted. Deletion removes the folder from disk, so be sure.
 
 ---
 
@@ -297,6 +301,8 @@ CCC has a built-in test runner for managing pre-release checklists. It's designe
 Test files follow the naming convention `{ProjectName}_test_stageXX.md` and live inside version folders (e.g., `docs/v1.0/CCC_test_stage01.md`).
 
 In the sidebar, they appear under a collapsible **Testing** sub-header inside each version. The Testing section is always visible — even for new projects with no test files yet, so you always know where to find it. Each test file shows a progress badge like `[6/30]` — how many items are checked off out of the total.
+
+Tasklist files also show a stage progress badge like `[2/4]` — how many stages are fully completed out of the total number of stages.
 
 ### The Interactive Test Runner
 
@@ -329,7 +335,7 @@ Every Claude Code session starts from scratch — it doesn't remember what happe
 
 An SHP is a Markdown file that captures where a project stands at the end of a work session: what was done, what decisions were made, what's open, what's next. Think of it as a briefing document for tomorrow's Claude.
 
-Each project has one SHP file: `docs/{ProjectName}_shp.md`. It gets overwritten at the end of every session, and Git captures the full history of changes.
+Each project has one SHP file: `docs/handoff/{ProjectName}_shp.md`. It gets overwritten at the end of every session, and Git captures the full history of changes.
 
 ### The Three Commands
 
@@ -379,11 +385,11 @@ Click the gear icon at the bottom of the sidebar to open the Settings panel.
 
 **Default Shell** — The shell binary CCC uses when you choose "Open Shell". Defaults to your system shell (`$SHELL` on macOS/Linux, PowerShell on Windows).
 
-**File Naming Patterns** — The default patterns for concept and tasklist filenames. Defaults are `docs/{PROJECT}_concept.md` and `docs/{PROJECT}_tasklist.md`. Most people never change these.
+**File Naming Patterns** — The default patterns for concept and tasklist filenames. Defaults are `docs/v{VERSION}/{PROJECT}_concept_v{VERSION}.md` and `docs/v{VERSION}/{PROJECT}_tasklist_v{VERSION}.md`. `{PROJECT}` is replaced by the project folder name, `{VERSION}` by the version number.
 
 **GitHub Token** — Optional. If you provide a personal access token and repo name, CCC will auto-file a GitHub issue if status detection breaks. See [Section 11](#11-parser--degradation) for details.
 
-**Recovery Auto-Save Interval** — How often CCC saves terminal scrollback as a safety net. Default is 5 minutes. Set to 0 to disable.
+**Recovery Auto-Save Interval** — How often CCC saves terminal scrollback to `docs/handoff/{ProjectName}_recovery.md` as a safety net. Default is 5 minutes. Set to 0 to disable.
 
 **Claude Code Plan** — Your Anthropic plan tier (Pro, Max 5, Max 20). Used to calculate the 5-hour usage percentage in the status bar.
 
@@ -505,7 +511,7 @@ The file lives at `~/.claude/CLAUDE.md` — create it once, and every Claude Cod
 
 ## 13. Platform Support
 
-CCC v1.0 is developed and tested on **macOS**. That's the primary platform and the one where everything is verified.
+CCC v1.0.x is developed and tested on **macOS**. That's the primary platform and the one where everything is verified.
 
 **Linux** and **Windows** support is code-complete: shell spawning, editor launch, path handling, and installer scripts are all platform-aware. However, manual testing on Linux and Windows hasn't happened yet (no target hardware available). If you're running CCC on Linux or Windows and encounter issues, please file a bug — the code is there, it just needs real-world validation.
 
