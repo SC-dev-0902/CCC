@@ -1378,12 +1378,17 @@ function renderSettings(container) {
           <option value="max5" ${(settings.usagePlan || 'max5') === 'max5' ? 'selected' : ''}>Max 5 ($100/mo)</option>
           <option value="max20" ${(settings.usagePlan || 'max5') === 'max20' ? 'selected' : ''}>Max 20 ($200/mo)</option>
         </select><span class="select-arrow">&#9662;</span></div>
-        <span class="settings-hint">Used to calculate usage percentage in the status bar.</span>
+        <span class="settings-hint">Used for message limit calculation in the status bar.</span>
+      </div>
+      <div class="settings-group">
+        <label>5h Token Budget</label>
+        <input type="number" id="settingsTokenBudget5h" value="${settings.tokenBudget5h || 1000000}" min="100000" step="100000">
+        <span class="settings-hint">Token budget per 5h window (incl. cache creation). CLI-only — shared pool usage from Claude Desktop is not visible. Default: 1,000,000.</span>
       </div>
       <div class="settings-group">
         <label>Weekly Token Budget</label>
-        <input type="number" id="settingsWeeklyTokenBudget" value="${settings.weeklyTokenBudget || 6500000}" min="10000" step="10000">
-        <span class="settings-hint">Your self-set weekly token limit. Default: 500,000.</span>
+        <input type="number" id="settingsWeeklyTokenBudget" value="${settings.weeklyTokenBudget || 20000000}" min="100000" step="1000000">
+        <span class="settings-hint">Weekly token budget (incl. cache creation). Default: 20,000,000.</span>
       </div>
       <div class="settings-group">
         <label>Weekly Message Budget</label>
@@ -1468,6 +1473,7 @@ function renderSettings(container) {
       },
       recoveryInterval: parseInt(panel.querySelector('#settingsRecoveryInterval').value, 10) || 5,
       usagePlan: panel.querySelector('#settingsUsagePlan').value,
+      tokenBudget5h: parseInt(panel.querySelector('#settingsTokenBudget5h').value, 10) || 1000000,
       weeklyTokenBudget: parseInt(panel.querySelector('#settingsWeeklyTokenBudget').value, 10) || 500000,
       weeklyMessageBudget: parseInt(panel.querySelector('#settingsWeeklyMessageBudget').value, 10) || 5000,
       githubToken: panel.querySelector('#settingsGithubToken').value
@@ -1506,28 +1512,62 @@ function getScrollbackText(terminal) {
 // --- Usage Status Bar ---
 
 let usageResetTime = null; // ISO string — counts down locally between fetches
-let usageCountdownTimer = null;
+let usageTickTimer = null; // single 1s interval for countdown + "last updated" + staleness
+let usageLastRefreshMs = 0; // Date.now() of last successful data refresh
 
 function formatResetLabel(ms) {
-  const minutes = Math.max(0, Math.round(ms / 60000));
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  if (ms <= 0) return 'resetting\u2026';
+  const totalSeconds = Math.floor(ms / 1000);
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
 }
 
-function tickResetCountdown() {
-  if (!usageResetTime) return;
-  const ms = new Date(usageResetTime) - Date.now();
-  const resetEl = document.getElementById('usageReset');
-  if (resetEl) resetEl.textContent = 'resets in ' + formatResetLabel(ms);
+function formatUpdatedAgo(ms) {
+  const sec = Math.floor(ms / 1000);
+  if (sec < 60) return `updated ${sec}s ago`;
+  const min = Math.floor(sec / 60);
+  return `updated ${min}m ago`;
+}
+
+function tickUsageBar() {
+  // Countdown
+  if (usageResetTime) {
+    const ms = new Date(usageResetTime) - Date.now();
+    const resetEl = document.getElementById('usageReset');
+    if (resetEl) resetEl.textContent = 'resets in ' + formatResetLabel(ms);
+  }
+
+  // "Last updated" indicator
+  const updatedEl = document.getElementById('usageUpdated');
+  if (updatedEl && usageLastRefreshMs > 0) {
+    const ago = Date.now() - usageLastRefreshMs;
+    updatedEl.textContent = formatUpdatedAgo(ago);
+
+    // Staleness: only flag when a session is active and data stops flowing
+    const bar = document.getElementById('usageBar');
+    const hasActiveSessions = Array.from(terminalInstances.values()).some(inst => inst.state === 'active');
+    if (hasActiveSessions && ago > 60000) {
+      bar.classList.add('usage-stale');
+      updatedEl.classList.add('usage-updated-stale');
+    } else {
+      bar.classList.remove('usage-stale');
+      updatedEl.classList.remove('usage-updated-stale');
+    }
+  }
 }
 
 function updateUsageBar(usage) {
   if (!usage || usage.error) return;
 
+  // Record successful refresh
+  usageLastRefreshMs = Date.now();
+
   const fill = document.getElementById('usageProgressFill');
   const percentEl = document.getElementById('usagePercent');
-  const resetEl = document.getElementById('usageReset');
   const msgEl = document.getElementById('usageMsgInfo');
   const bar = document.getElementById('usageBar');
 
@@ -1536,23 +1576,36 @@ function updateUsageBar(usage) {
   fill.style.width = Math.min(pct, 100) + '%';
 
   // Colour thresholds
-  bar.classList.remove('usage-amber', 'usage-red');
+  bar.classList.remove('usage-amber', 'usage-red', 'usage-stale');
   if (pct >= 95) {
     bar.classList.add('usage-red');
   } else if (pct >= 80) {
     bar.classList.add('usage-amber');
   }
 
+  // Clear staleness immediately
+  const updatedEl = document.getElementById('usageUpdated');
+  if (updatedEl) updatedEl.classList.remove('usage-updated-stale');
+
   // Store reset time for local countdown
   if (usage.resetTime) {
     usageResetTime = usage.resetTime;
-    if (!usageCountdownTimer) {
-      usageCountdownTimer = setInterval(tickResetCountdown, 60000);
-    }
   }
-  tickResetCountdown();
+  // Start the single 1s tick timer (countdown + updated + staleness)
+  if (!usageTickTimer) {
+    usageTickTimer = setInterval(tickUsageBar, 1000);
+  }
+  tickUsageBar();
 
   msgEl.textContent = usage.messagesUsed + '/' + usage.messageLimit + ' msgs';
+
+  // Pulse the bar briefly to show data refreshed
+  const inner = document.getElementById('usageBarInner');
+  if (inner) {
+    inner.classList.remove('usage-pulse');
+    void inner.offsetWidth;
+    inner.classList.add('usage-pulse');
+  }
 
   // Weekly totals with progress bar
   if (usage.weeklyTokens != null) {
@@ -1560,7 +1613,7 @@ function updateUsageBar(usage) {
     const weeklyPercentEl = document.getElementById('usageWeeklyPercent');
     const weeklyEl = document.getElementById('usageWeekly');
 
-    const wBudget = usage.weeklyTokenBudget || 6500000;
+    const wBudget = usage.weeklyTokenBudget || 20000000;
     const wPct = Math.round(usage.weeklyTokens / wBudget * 100);
     weeklyPercentEl.textContent = wPct + '%';
     weeklyFill.style.width = Math.min(wPct, 100) + '%';

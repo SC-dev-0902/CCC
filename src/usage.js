@@ -4,10 +4,11 @@
  * Reads ~/.claude/projects/ JSONL session files to calculate
  * real-time token and message usage within the 5-hour window.
  *
- * Token counting matches claude-monitor's algorithm:
- * - totalTokens = input_tokens + output_tokens (no cache tokens)
+ * Token counting:
+ * - totalTokens = input_tokens + cache_creation_input_tokens + output_tokens
+ * - cache_read_input_tokens excluded (Anthropic: "cached content doesn't count against limits when reused")
  * - Deduplicated by message_id:request_id (first occurrence only)
- * - 5-hour window rounded down to the nearest hour
+ * - Rolling 5-hour window from now
  */
 
 const fs = require('fs');
@@ -15,11 +16,12 @@ const path = require('path');
 const os = require('os');
 const readline = require('readline');
 
-// Plan limits per 5-hour window
+// Message limits per 5-hour window (per plan)
+// Token budget is user-configurable in Settings — not hardcoded here
 const PLAN_LIMITS = {
-  pro:   { tokens: 45000,  messages: 250,  label: 'Pro' },
-  max5:  { tokens: 220000, messages: 1000, label: 'Max 5' },
-  max20: { tokens: 550000, messages: 2000, label: 'Max 20' }
+  pro:   { messages: 250,  label: 'Pro' },
+  max5:  { messages: 1000, label: 'Max 5' },
+  max20: { messages: 2000, label: 'Max 20' }
 };
 
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
@@ -27,17 +29,17 @@ const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 /**
  * Scan all JSONL session files and calculate current usage.
  * @param {string} plan - Plan key: 'pro', 'max5', or 'max20'
+ * @param {number} tokenBudget - User-configured 5h token budget
  * @returns {Promise<object>} Usage data
  */
-async function scanUsage(plan) {
+async function scanUsage(plan, tokenBudget) {
   const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.max5;
   const now = new Date();
   const windowMs = 5 * 60 * 60 * 1000; // 5 hours
 
-  // Collect all JSONL files modified in last 11 hours (two full 5h windows + 1h buffer)
-  // Needs two windows so the epoch walker can find the correct active window boundary
+  // Collect all JSONL files modified in last 6 hours (5h window + 1h buffer)
   const jsonlFiles = [];
-  const fileMaxAge = windowMs * 2 + 3600000; // 11h
+  const fileMaxAge = windowMs + 3600000; // 6h
   try {
     const dirs = fs.readdirSync(CLAUDE_PROJECTS_DIR);
     for (const dir of dirs) {
@@ -78,7 +80,9 @@ async function scanUsage(plan) {
   const seen = new Set();
   let inputTokens = 0;
   let outputTokens = 0;
+  let cacheCreateTokens = 0;
   let messageCount = 0;
+  let oldestInWindow = null;
 
   for (const entry of allEntries) {
     if (entry.ts < windowStart) continue;
@@ -89,43 +93,39 @@ async function scanUsage(plan) {
 
     inputTokens += entry.input;
     outputTokens += entry.output;
+    cacheCreateTokens += entry.cacheCreate;
     messageCount++;
+
+    if (!oldestInWindow) oldestInWindow = entry;
   }
 
-  const tokensUsed = inputTokens + outputTokens;
-  // +5pp safety buffer — CCC can't see web/API usage, so pad to avoid surprise rate limits
+  // Token total: input + cache_creation + output (cache_read excluded)
+  const tokensUsed = inputTokens + cacheCreateTokens + outputTokens;
+  // +5pp safety buffer — CCC only sees CLI usage, shared pool (Desktop/web) is invisible
   const SAFETY_BUFFER = 5;
-  const tokenPercent = limits.tokens > 0 ? Math.round(tokensUsed / limits.tokens * 100) + SAFETY_BUFFER : 0;
+  const tokenPercent = tokenBudget > 0 ? Math.round(tokensUsed / tokenBudget * 100) + SAFETY_BUFFER : 0;
   const messagePercent = limits.messages > 0 ? Math.round(messageCount / limits.messages * 100) + SAFETY_BUFFER : 0;
 
-  // Epoch-based reset timer: walk forward through windows to find the one
-  // containing now. Each new window starts at the first message after the
-  // previous window expired.
-  let epochIdx = 0;
-  let blockStart = allEntries[0].ts;
-  let blockEnd = new Date(blockStart.getTime() + windowMs);
-
-  while (blockEnd < now && epochIdx < allEntries.length) {
-    while (epochIdx < allEntries.length && allEntries[epochIdx].ts < blockEnd) {
-      epochIdx++;
-    }
-    if (epochIdx >= allEntries.length) break;
-    blockStart = allEntries[epochIdx].ts;
-    blockEnd = new Date(blockStart.getTime() + windowMs);
+  // Rolling window reset: oldest counted entry ages out at oldest.ts + 5h
+  // Subtract 30min safety buffer (10% of 5h window) — CCC only sees CLI,
+  // shared pool activity (Desktop/web) may have started the window earlier
+  const TIMER_BUFFER_MS = 30 * 60000;
+  let resetMs = 0;
+  if (oldestInWindow) {
+    const resetTime = new Date(oldestInWindow.ts.getTime() + windowMs);
+    resetMs = Math.max(0, resetTime - now - TIMER_BUFFER_MS);
   }
-
-  // Subtract 5min safety buffer — show less time remaining to avoid surprise rate limits
-  const resetMs = Math.max(0, blockEnd - now - 5 * 60000);
+  const resetTimeISO = oldestInWindow
+    ? new Date(oldestInWindow.ts.getTime() + windowMs - TIMER_BUFFER_MS).toISOString()
+    : new Date(now.getTime() + windowMs).toISOString();
   const resetMinutes = Math.round(resetMs / 60000);
   const resetH = Math.floor(resetMinutes / 60);
   const resetM = resetMinutes % 60;
   const resetLabel = resetH > 0 ? `${resetH}h ${resetM}m` : `${resetM}m`;
-  // resetTime sent to client for countdown — also buffered
-  const resetTimeISO = new Date(blockEnd.getTime() - 5 * 60000).toISOString();
 
   return {
     tokensUsed,
-    tokenLimit: limits.tokens,
+    tokenLimit: tokenBudget,
     tokenPercent: Math.min(tokenPercent, 100),
     tokenPercentRaw: tokenPercent,
     messagesUsed: messageCount,
@@ -158,7 +158,8 @@ function parseJsonlFile(filePath) {
         const usage = msg.usage;
         const input = usage.input_tokens || 0;
         const output = usage.output_tokens || 0;
-        if (input === 0 && output === 0) return;
+        const cacheCreate = usage.cache_creation_input_tokens || 0;
+        if (input === 0 && output === 0 && cacheCreate === 0) return;
 
         const tsStr = obj.timestamp;
         if (!tsStr) return;
@@ -168,7 +169,7 @@ function parseJsonlFile(filePath) {
         const requestId = obj.requestId || '';
         const key = (messageId && requestId) ? `${messageId}:${requestId}` : null;
 
-        entries.push({ ts, input, output, key });
+        entries.push({ ts, input, output, cacheCreate, key });
       } catch (e) {
         // Skip malformed lines
       }
@@ -213,6 +214,7 @@ async function scanWeeklyUsage() {
   const seen = new Set();
   let inputTokens = 0;
   let outputTokens = 0;
+  let cacheCreateTokens = 0;
   let messageCount = 0;
 
   for (const filePath of jsonlFiles) {
@@ -224,12 +226,13 @@ async function scanWeeklyUsage() {
       if (key) seen.add(key);
       inputTokens += entry.input;
       outputTokens += entry.output;
+      cacheCreateTokens += entry.cacheCreate;
       messageCount++;
     }
   }
 
   return {
-    weeklyTokens: inputTokens + outputTokens,
+    weeklyTokens: inputTokens + cacheCreateTokens + outputTokens,
     weeklyMessages: messageCount
   };
 }

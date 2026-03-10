@@ -1,5 +1,5 @@
 # CLAUDE.md — Claude Command Center (CCC)
-*Derived from: docs/v1.0/CCC_concept.md*
+*Derived from: docs/v1.0/CCC_concept_v1.0.md*
 
 ---
 
@@ -15,7 +15,7 @@
 
 CCC is a local web application (Node.js + Express + xterm.js) that serves as a unified dashboard for managing multiple simultaneous Claude Code sessions. It replaces terminal sprawl with a single window: tree view of projects on the left, tab-based terminal sessions on the right, live colour-coded status indicators per project.
 
-Read the active version's concept doc before starting any task. It is the single source of truth. The current active version is v1.0 — read `docs/v1.0/CCC_concept.md`.
+Read the active version's concept doc before starting any task. It is the single source of truth. The current active version is v1.0 — read `docs/v1.0/CCC_concept_v1.0.md`.
 
 ---
 
@@ -78,7 +78,7 @@ CCC/
     ├── context/               ← background research, reference material
     ├── screenshots/           ← Playwright-captured images
     └── v1.0/                  ← active version
-        ├── CCC_concept.md
+        ├── CCC_concept_v1.0.md
         ├── CCC_tasklist.md
         └── CCC_test_stage*.md ← pre-GoNoGo test files (one per stage)
 ```
@@ -98,7 +98,7 @@ CCC models project evolution through explicit versions. Each version is a full d
 - **CLAUDE.md stays at the project root** and is always derived from the active version's concept doc.
 - **When a version's final stage receives a Go**, prompt for a Git tag matching the version number.
 
-Read `docs/v1.0/CCC_concept.md` → Project Versioning section for the full specification.
+Read `docs/v1.0/CCC_concept_v1.0.md` → Project Versioning section for the full specification.
 
 ---
 
@@ -117,7 +117,7 @@ CCC gives Claude Code session continuity through file-based SHP (Session Handove
 - **SHP files are human-readable Markdown** — Git-friendly, openable in any editor.
 - **Never store SHPs in the database.** v1.0 uses file-based storage. SQLite is a v2.0 upgrade.
 
-Read `docs/v1.0/CCC_concept.md` → Project Memory section for the full specification.
+Read `docs/v1.0/CCC_concept_v1.0.md` → Project Memory section for the full specification.
 
 ---
 
@@ -211,7 +211,7 @@ The same Playwright script is extended to produce an animated GIF of live status
 ### Stage 13 Start
 Before writing a single word, Claude Code re-reads all four documents:
 - `CLAUDE.md`
-- `docs/v1.0/CCC_concept.md`
+- `docs/v1.0/CCC_concept_v1.0.md`
 - `docs/v1.0/CCC_tasklist.md`
 - `docs/handoff/CCC_shp.md`
 

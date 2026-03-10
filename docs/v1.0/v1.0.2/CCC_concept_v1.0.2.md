@@ -308,13 +308,11 @@ The following CCC internals are untouched in v1.0.2:
 9. **Update `settings.json` file patterns** — concept and tasklist patterns include version placeholder
 10. **Verify `projects.json` paths** — already updated (projects now under `Projects/`)
 
-### Global CLAUDE.md Update (manual, by Phet)
+### Global CLAUDE.md Update (manual, by Phet) — DONE
 
-The global `~/.claude/CLAUDE.md` must be updated to v0.7:
-- SHP path: `docs/{ProjectName}_shp.md` → `docs/handoff/{ProjectName}_shp.md`
-- Add PROJECT_MAP.md to the document hierarchy
-- Update test file path references if needed
-- Note the version-in-filename convention
+The global `~/.claude/CLAUDE.md` has been updated to v0.8:
+- v0.7: SHP path updated, versioned filenames, PROJECT_MAP.md, pre-GoNoGo test file rule, `/create-tasklist` save path
+- v0.8: Server restart rule added to §1.5
 
 ---
 

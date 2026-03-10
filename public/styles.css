@@ -1947,3 +1947,27 @@ html, body {
   color: var(--text-muted);
   font-size: 11px;
 }
+
+.usage-updated {
+  color: var(--text-muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.usage-updated-stale {
+  color: var(--status-running);
+  font-weight: 600;
+}
+
+.usage-stale .usage-bar-inner {
+  opacity: 0.75;
+}
+
+.usage-pulse {
+  animation: usagePulse 0.4s ease-out;
+}
+
+@keyframes usagePulse {
+  0%   { opacity: 0.5; }
+  100% { opacity: 1; }
+}

@@ -36,7 +36,8 @@ const SETTINGS_DEFAULTS = {
   githubToken: '',
   recoveryInterval: 5,
   usagePlan: 'max5',
-  weeklyTokenBudget: 6500000,
+  tokenBudget5h: 1000000,
+  weeklyTokenBudget: 20000000,
   weeklyMessageBudget: 45000
 };
 
@@ -1381,11 +1382,12 @@ app.get('/api/usage', async (req, res) => {
   try {
     const settings = readSettings();
     const plan = settings.usagePlan || 'max5';
-    const usage = await scanUsage(plan);
+    const tokenBudget = settings.tokenBudget5h || 1000000;
+    const usage = await scanUsage(plan, tokenBudget);
     if (!usage) return res.json({ error: 'No usage data available' });
     const weekly = await scanWeeklyUsage();
     if (weekly) Object.assign(usage, weekly);
-    usage.weeklyTokenBudget = settings.weeklyTokenBudget || 6500000;
+    usage.weeklyTokenBudget = settings.weeklyTokenBudget || 20000000;
     usage.weeklyMessageBudget = settings.weeklyMessageBudget || 45000;
     res.json(usage);
   } catch (err) {
@@ -1399,11 +1401,12 @@ setInterval(async () => {
     if (wss.clients.size === 0) return;
     const settings = readSettings();
     const plan = settings.usagePlan || 'max5';
-    const usage = await scanUsage(plan);
+    const tokenBudget = settings.tokenBudget5h || 1000000;
+    const usage = await scanUsage(plan, tokenBudget);
     if (!usage) return;
     const weekly = await scanWeeklyUsage();
     if (weekly) Object.assign(usage, weekly);
-    usage.weeklyTokenBudget = settings.weeklyTokenBudget || 6500000;
+    usage.weeklyTokenBudget = settings.weeklyTokenBudget || 20000000;
     usage.weeklyMessageBudget = settings.weeklyMessageBudget || 45000;
     const json = JSON.stringify({ type: 'usage', usage });
     wss.clients.forEach(ws => {

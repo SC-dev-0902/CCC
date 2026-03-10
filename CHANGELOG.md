@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.0.3
+- Fixed: Usage status bar now counts cache creation tokens — previously showed <1% of actual usage
+- Fixed: Reset timer counts down second-by-second (was updating once per minute)
+- Fixed: Reset time now uses rolling window calculation aligned with Claude Desktop
+- Fixed: Weekly token budget default updated for cache-inclusive counting
+- Added: "Last updated" indicator shows when data was last refreshed
+- Added: Subtle pulse animation when usage data refreshes
+- Added: Staleness detection — bar dims when data stops flowing during active sessions
+- Added: Configurable 5-hour token budget in Settings
+- Changed: Status bar labelled "5h CLI" to clarify it shows local Claude Code usage only
+- Changed: Safety buffers on all values — CCC now errs on the pessimistic side
+
+## v1.0.2
+- Fixed: Workspace compatibility for projects using underscore-prefixed filenames
+- Added: Versioned filename convention for concept docs and tasklists
+- Added: Topic folder scaffolding for all registered projects at startup
+- Added: Active version delete with auto-fallback
+- Changed: SHP and recovery paths moved to docs/handoff/
+- Changed: New Project Wizard defaults location to project root's Projects/ subfolder
+
 ## v1.0.1
 - Fixed: Import scaffolding no longer overwrites existing project files
 - Fixed: Imported projects now match wizard-created project structure
