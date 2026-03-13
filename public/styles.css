@@ -100,7 +100,7 @@ html, body {
 .sidebar {
   width: var(--sidebar-width);
   min-width: 200px;
-  max-width: 400px;
+  max-width: 50vw;
   background: var(--bg-sidebar);
   border-right: 1px solid var(--border);
   display: flex;
@@ -562,6 +562,19 @@ html, body {
   font-weight: 400;
 }
 
+.tree-testing-refresh {
+  margin-left: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+.tree-testing-refresh:hover {
+  opacity: 1;
+  color: var(--text-primary);
+}
+
 .tree-testing-file {
   padding-left: 100px;
 }
@@ -790,6 +803,42 @@ html, body {
   padding: 0 4px;
 }
 
+.unresponsive-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 16px;
+  background: #3d1500;
+  border-bottom: 1px solid var(--status-waiting);
+  color: var(--status-waiting);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.unresponsive-restart {
+  padding: 2px 10px;
+  background: var(--status-waiting);
+  color: #000;
+  border: none;
+  border-radius: 3px;
+  font-size: 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.unresponsive-restart:hover {
+  opacity: 0.85;
+}
+
+.unresponsive-dismiss {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
 .degraded-dismiss:hover {
   color: var(--text-primary);
 }
@@ -885,6 +934,7 @@ html, body {
   background: var(--bg-terminal);
   padding: 4px;
   overflow: hidden;
+  position: relative;
 }
 
 .terminal-container .xterm {

@@ -22,25 +22,20 @@ It runs locally, requires no cloud account, and is fully distributable via Git s
 
 ### Document Naming & Location Convention
 
-Document names are always derived from the **project folder name** — no versioning in filenames, ever. Version history lives in Git.
+Document names are always derived from the **project folder name**. For versioned projects, concept docs and tasklists include the version number: `{Name}_concept_v{X.Y}.md`, `{Name}_tasklist_v{X.Y}.md`. This eliminates ambiguity when referencing documents across versions.
 
 ```
 CCC/
 ├── CLAUDE.md                  ← project root (Claude Code requires this location)
 └── docs/
-    ├── CCC_concept.md         ← concept document
-    └── CCC_tasklist.md        ← tasklist
-
-TradingMaster/
-├── CLAUDE.md
-└── docs/
-    ├── TradingMaster_concept.md
-    └── TradingMaster_tasklist.md
+    └── v1.0/
+        ├── CCC_concept_v1.0.md    ← versioned concept document
+        └── CCC_tasklist_v1.0.md   ← versioned tasklist
 ```
 
-The pattern is always: `{ProjectFolderName}_concept.md` and `{ProjectFolderName}_tasklist.md`, stored in `/docs/`. `CLAUDE.md` always lives at the project root — this is required by Claude Code.
+The pattern is: `{ProjectFolderName}_concept_v{X.Y}.md` and `{ProjectFolderName}_tasklist_v{X.Y}.md`, stored in `docs/v{X.Y}/`. `CLAUDE.md` always lives at the project root — this is required by Claude Code.
 
-**Note:** For versioned projects, concept and tasklist files live inside version subdirectories within `docs/`. See **Project Versioning** for the full folder structure. The naming convention (`{ProjectFolderName}_concept.md`, `{ProjectFolderName}_tasklist.md`) remains the same — only the directory changes.
+**Version numbers in filenames are forward-only.** New files use the versioned naming convention. Existing files without version numbers are left as-is — do not rename retroactively.
 
 ---
 
@@ -63,7 +58,7 @@ CLAUDE.md
 
 **`*_concept.md`** is the foundation of the project. Everything else is derived from it. If the concept changes, CLAUDE.md and the tasklist may need updating too.
 
-**Filename versioning rule:** The concept doc filename never changes. There is always exactly one `*_concept.md` per project — no `_v0.5`, no `_v0.6` in the filename. Version history lives in Git, not in filenames. Claude Code always reads one file with one known name, and it is always the current version. The version number lives inside the document header for human reference only.
+**Filename versioning rule:** For versioned projects, concept docs and tasklists include the version number in the filename (`{Name}_concept_v{X.Y}.md`). Each version folder contains exactly one concept doc and one tasklist. Version numbers in filenames are forward-only — do not rename existing files retroactively.
 
 **`CLAUDE.md`** is never written from scratch independently. It is always generated from the concept doc. It contains Claude Code's instructions, constraints, and behavioural rules specific to this project.
 
@@ -111,21 +106,21 @@ Version documents live in versioned subdirectories inside `docs/`:
 
 ```
 CCC/
-├── CLAUDE.md                       ← project root (always current version)
+├── CLAUDE.md                              ← project root (always current version)
 ├── .env
 └── docs/
     ├── v1.0/
-    │   ├── CCC_concept.md          ← v1.0 concept
-    │   └── CCC_tasklist.md         ← v1.0 tasklist
+    │   ├── CCC_concept_v1.0.md            ← v1.0 concept
+    │   └── CCC_tasklist_v1.0.md           ← v1.0 tasklist
     ├── v1.1/
-    │   ├── CCC_concept.md          ← v1.1 concept (expanded or new)
-    │   ├── CCC_tasklist.md         ← v1.1 tasklist
+    │   ├── CCC_concept_v1.1.md            ← v1.1 concept (expanded or new)
+    │   ├── CCC_tasklist_v1.1.md           ← v1.1 tasklist
     │   └── v1.1.1/
-    │       ├── CCC_concept.md     ← bugfix concept (seeded from v1.1 concept)
-    │       └── CCC_tasklist.md    ← bugfix tasklist
+    │       ├── CCC_concept_v1.1.1.md      ← bugfix concept (seeded from v1.1 concept)
+    │       └── CCC_tasklist_v1.1.1.md     ← bugfix tasklist
     └── v2.0/
-        ├── CCC_concept.md          ← v2.0 concept (major revision)
-        └── CCC_tasklist.md         ← v2.0 tasklist
+        ├── CCC_concept_v2.0.md            ← v2.0 concept (major revision)
+        └── CCC_tasklist_v2.0.md           ← v2.0 tasklist
 ```
 
 The `docs/` folder becomes the versioned knowledge base of the project. Open it in Finder and the full lineage is visible at a glance.
@@ -134,7 +129,7 @@ The `docs/` folder becomes the versioned knowledge base of the project. Open it 
 
 #### Active Version Pointer
 
-The active version is tracked in `projects.json` via an `activeVersion` field per project — not via filesystem symlinks. Symlinks are fragile across platforms (Windows requires elevated permissions, Git stores them as text files) and add unnecessary filesystem complexity. The JSON pointer is explicit, portable, and already part of CCC's persistence model.
+The active version is tracked in `projects.json` via an `activeVersion` field per project — not via filesystem symlinks. The pointer tracks **major.minor only** (e.g., `"1.0"`). Patch versions live as subfolders within the active version folder (e.g., `docs/v1.0/v1.0.4/`) — the pointer does not change for patches. Symlinks are fragile across platforms (Windows requires elevated permissions, Git stores them as text files) and add unnecessary filesystem complexity. The JSON pointer is explicit, portable, and already part of CCC's persistence model.
 
 When a new version is created, CCC updates `activeVersion` in `projects.json` and regenerates or prompts for an updated CLAUDE.md derived from the new version's concept doc.
 
@@ -410,6 +405,29 @@ All development proceeds in defined stages. Each stage has:
 - A Go/NoGo decision at the end before Stage N+1 begins
 - Claude Code never begins the next stage without an explicit Go from the developer
 
+### Pre-GoNoGo Test File (mandatory — all projects)
+
+Before requesting a Go/NoGo decision, Claude Code **MUST** generate a test checklist file for the completed stage. This is not optional — no test file, no Go/NoGo gate.
+
+**Naming convention (strict — CCC treeview depends on this regex):**
+```
+docs/v{X.Y}/{ProjectName}_test_stage{XX}.md
+```
+
+**Example:**
+```
+docs/v1.0/MyProject_test_stage01.md
+```
+
+**Rules:**
+- The file MUST use `_test_stage` in the name — not `_test_batch`, not `_test_`, not any other variation
+- `{XX}` is the two-digit stage number matching the tasklist (01, 02, ... 14)
+- The file contains a markdown checklist (`- [ ]` / `- [x]`) covering every acceptance criterion from the stage's Go/NoGo gate
+- Generate the test file as the **last task** of every stage, before asking for Go/NoGo
+- CCC's treeview regex: `/_test_stage\d+\.md$/` — any other naming pattern is invisible to CCC
+
+This rule applies to **every CCC-managed project**. It is enforced via the global `~/.claude/CLAUDE.md` (§1.5 Stage-Gate Methodology), which all Claude Code sessions inherit. Individual project CLAUDE.md files do not need to repeat the `_test_stage` convention.
+
 ---
 
 | Concern         | Technology                          |
@@ -552,28 +570,29 @@ CCC captures an end-of-day Session Handover Pack per project and stores it as a 
 
 #### Storage Structure
 
-Each project gets one SHP file: `docs/{ProjectName}_shp.md`. The file is overwritten each `/eod` — Git history serves as the archive.
+Each project gets one SHP file: `docs/handoff/{ProjectName}_shp.md`. The file is overwritten each `/eod` — Git history serves as the archive.
 
 ```
 CCC/
 └── docs/
+    ├── handoff/
+    │   └── CCC_shp.md
     ├── v1.0/
     │   ├── CCC_concept.md
     │   └── CCC_tasklist.md
-    └── CCC_shp.md
 ```
 
 The SHP file is a standard Markdown document — human-readable, Git-friendly, openable in CotEditor or any editor.
 
 #### Slash Commands
 
-Three global slash commands power the workflow. These belong in `~/.claude/commands/` (global, not per-project) because every project benefits from the same lifecycle:
+Global slash commands power the workflow. These belong in `~/.claude/commands/` (global) because every project benefits from the same lifecycle. Project-level commands (scaffolded by the New Project Wizard) live in `.claude/commands/` inside each project directory:
 
 | Command | When | What it does |
 |---------|------|-------------|
 | `/start-project` | First session on a new project | Claude Code reads CLAUDE.md, concept doc. If tasklist exists, reads it and asks comprehension questions. If tasklist does NOT exist, generates it from concept doc, saves it, presents for review. Waits for instruction. |
-| `/continue` | Every returning session | CCC reads the current SHP (`docs/{ProjectName}_shp.md`) and feeds it to Claude Code. Picks up where yesterday left off. |
-| `/eod` | End of project day | Claude Code writes the SHP — what was done, decided, what's open, what's next. CCC overwrites `docs/{ProjectName}_shp.md`. |
+| `/continue` | Every returning session | CCC reads the current SHP (`docs/handoff/{ProjectName}_shp.md`) and feeds it to Claude Code. Picks up where yesterday left off. |
+| `/eod` | End of project day | Claude Code writes the SHP — what was done, decided, what's open, what's next. CCC overwrites `docs/handoff/{ProjectName}_shp.md`. |
 | `/create-tasklist` | Manual trigger | Reads concept doc, generates stage-gated tasklist, saves it. Use when tasklist needs regeneration or doesn't exist. |
 | `/reload-docs` | After documentation changes | Re-reads all project documentation. Reports what changed. |
 | `/evaluate-import` | After importing a non-CCC project | Reads existing code/docs, interviews developer, generates CCC-compliant concept doc, CLAUDE.md, and tasklist. |

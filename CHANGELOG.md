@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.0.4
+- Fixed: Project rename now propagates to all files, folders, references, and coreFiles paths
+- Fixed: Duplicate terminal input after WebSocket reconnect
+- Fixed: File drops no longer navigate browser away from CCC
+- Fixed: 10 documentation contradictions, gaps, and ambiguities across project docs
+- Added: Session unresponsive detection — banner appears after 30s of no output, with restart option
+- Added: WebSocket auto-reconnect on connection loss
+- Added: Testing refresh button in treeview
+- Changed: Treeview items sorted alphabetically
+- Changed: Splitter max-width increased to 50vw
+
 ## v1.0.3
 - Fixed: Usage status bar now counts cache creation tokens — previously showed <1% of actual usage
 - Fixed: Reset timer counts down second-by-second (was updating once per minute)

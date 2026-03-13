@@ -1,64 +1,66 @@
 # Session Handover Pack — CCC
-*Generated: 2026-03-08 | Version: v1.0.2 | Commit: fca4a1a*
+*Generated: 2026-03-10 | Version: v1.0.3 | Commit: 5b5cbb4*
 
 ---
 
 ## Project
 
 - **Name:** Claude Command Center (CCC)
-- **Version:** v1.0.2 (tagged, shipped)
+- **Version:** v1.0.3 (tagged, pushed to GitHub)
 - **Active version in projects.json:** 1.0
-- **Stage:** v1.0.2 complete — all 4 stages GO
+- **Stage:** v1.0.3 complete — all stages GO
 - **Status:** Pushed to GitHub. Forgejo pending (offline): `git push origin main --tags`
 
 ---
 
 ## What Was Done This Session
 
-### v1.0.2 — Workspace Compatibility + Documentation Model
+### v1.0.3 — Usage Status Bar Fix
 
-**Stage 01: Scaffolding Updates**
-- New Project Wizard: versioned filenames (`{Name}_concept_v{X.Y}.md`), topic folders, PROJECT_MAP.md
-- Import Wizard: non-destructive topic folder scaffolding, PROJECT_MAP.md if missing
-- New Version action: versioned filenames for concept + tasklist
-- `scanVersionFiles()`: detects both old-style and new-style filenames
-- Active version delete with auto-fallback (patch→parent, minor/major→previous, last version blocked)
-- Tasklist stage progress badge `[x/y]` via `countCompletedStages()`
+**Root cause investigation:**
+- JSONL entries contain `cache_creation_input_tokens` and `cache_read_input_tokens` — CCC only counted `input_tokens + output_tokens`
+- CCC was showing <1% of actual token usage across all projects
+- Anthropic confirms: cache reads don't count toward limits, cache creation does
+- Usage pool is shared across Claude Desktop + Claude Code — CCC can only see CLI sessions
+- Epoch walker reset timer algorithm was wrong — replaced with rolling window
 
-**Stage 02: Path Migration**
-- Recovery auto-save: `docs/handoff/${name}_recovery.md` (was `docs/${name}_recovery.txt`)
-- Auto-inject `/continue`: checks new paths first, falls back to old paths
-- Updated `~/.claude/commands/continue.md` to check `docs/handoff/` first
+**Backend fixes (`src/usage.js`, `server.js`):**
+- Token counting: `input_tokens + cache_creation_input_tokens + output_tokens` (cache_read excluded)
+- Same fix applied to `scanWeeklyUsage()`
+- Epoch walker replaced with rolling-window reset: `oldest_entry_in_window + 5h - now`
+- Safety buffers: +5pp on percentages, -30min on reset timer (CCC only sees CLI, shared pool invisible)
+- `scanUsage()` now accepts `tokenBudget` parameter (user-configurable, not hardcoded)
+- `PLAN_LIMITS` stripped of token values — only message limits remain per plan
+- File collection window reduced from 11h to 6h (no longer need two windows for epoch walker)
 
-**Stage 03: CCC Self-Migration**
-- Created topic folders for CCC: discussion/, architecture/, spec/, adr/, context/, handoff/
-- Moved `docs/CCC_shp.md` → `docs/handoff/CCC_shp.md`
-- Updated CLAUDE.md: filename convention (forward-only), project structure, SHP paths
-- Created PROJECT_MAP.md
-- Startup migration: creates topic folders + backfills `evaluated` for all registered projects
+**Frontend fixes (`app.js`, `index.html`, `styles.css`):**
+- Reset countdown ticks every 1s (was 60s), format: `Xh Ym Zs`
+- `formatResetLabel(ms)` shows seconds at all ranges; returns "resetting…" when expired
+- "Last updated" indicator: `updated Xs ago` / `updated Xm ago`, ticks every second
+- Pulse animation: 0.4s opacity flash on `usageBarInner` each data refresh
+- Staleness detection: session-aware (only triggers with active `terminalInstances`), dims bar at 0.75 opacity after 60s, amber on "updated" text
+- Single unified 1s timer (`usageTickTimer`) for countdown + updated + staleness
+- Status bar labelled "5h CLI" to clarify local-only usage
 
-**Stage 04: Settings, Verification & Ship**
-- Settings defaults: versioned filename patterns with `{VERSION}` placeholder
-- Wizard location defaults to `{projectRoot}/Projects`
-- Scaffold wizard sets `evaluated: true`
-- All 11 project paths verified OK
-- Import test deferred (no project available)
+**Settings changes:**
+- Added `tokenBudget5h` field (default 1,000,000) — 5h window token budget
+- Updated `weeklyTokenBudget` default from 6,500,000 to 20,000,000 (cache-inclusive)
+- Plan selector retained for message limits only
 
-**Post-patch:**
-- Version bumped to 1.0.2 in package.json
-- USER_MANUAL.md + PDF updated (new `tools/manual-pdf.js`)
-- Fixed coreFiles: LedgerNest underscore prefix, CCC concept filename
+**Changelog:** Added v1.0.2 and v1.0.3 entries.
 
 ---
 
 ## Decisions Made
 
-- **Versioned filenames forward-only**: new files get `_v{X.Y}` suffix, existing files never renamed
-- **Topic folders for ALL projects at startup**: not just new/imported — startup migration ensures it
-- **`evaluated` backfill**: undefined → true at startup (except genuine unevaluated imports)
-- **Wizard defaults to Projects/**: `{projectRoot}/Projects` instead of `{projectRoot}`
-- **Active version delete allowed**: auto-fallback logic, last version cannot be deleted
-- **`/continue` slash command updated**: checks `docs/handoff/` first with old-path fallback
+- **Cache reads excluded from counting**: Anthropic help center confirms "cached content doesn't count against your limits when reused"
+- **Cache creation included**: These are the dominant token type (~97-99% of real usage) and DO count toward limits
+- **Token budget configurable, not hardcoded**: Can't determine Anthropic's exact limit since it's undocumented; user calibrates against Claude Desktop
+- **30min timer safety buffer**: 5% of 5h was insufficient (coworker on Desktop starts the shared window before CLI activity); 30min covers typical gap
+- **5pp percentage safety buffer**: Compensates for invisible Desktop/web usage on shared pool
+- **Session-aware staleness**: Only dims when `terminalInstances` has active sessions; no dimming when idle (coworker's fix)
+- **Stale opacity 0.75**: 0.45 was unreadable (coworker's fix)
+- **Default weekly budget 20M**: Calibrated against Desktop's 25% at ~5M weekly CLI tokens
 
 ---
 
@@ -85,8 +87,9 @@
 | `2a76917` | Version bump, manual update | 2026-03-08 |
 | `5ed00f7` | PDF regenerated, manual-pdf.js | 2026-03-08 |
 | `fca4a1a` | Fix coreFiles paths | 2026-03-08 |
+| `5b5cbb4` | **v1.0.3** — usage bar fix: cache tokens, timer, refresh | 2026-03-10 |
 
-Tags: `v1.0.0` on `a30a71d`, `v1.0.1` on `0a9f1ce`, `v1.0.2` on `5ed00f7`.
+Tags: `v1.0.0` on `a30a71d`, `v1.0.1` on `0a9f1ce`, `v1.0.2` on `5ed00f7`, `v1.0.3` on `5b5cbb4`.
 
 ---
 
@@ -94,17 +97,17 @@ Tags: `v1.0.0` on `a30a71d`, `v1.0.1` on `0a9f1ce`, `v1.0.2` on `5ed00f7`.
 
 | File | Purpose |
 |---|---|
-| `server.js` | Express entry point. All REST endpoints, WebSocket, PTY lifecycle, scaffolding, startup migration. |
+| `server.js` | Express entry point. All REST endpoints, WebSocket, PTY lifecycle, scaffolding, startup migration. Passes `tokenBudget5h` to usage scanner. |
 | `src/parser.js` | **Sacred.** Claude Code output → 5-state machine. `startDegradeMonitor()` disabled. |
 | `src/sessions.js` | PTY session management. Env sanitization (clears `CLAUDECODE` + `CLAUDE_CODE_ENTRYPOINT`). |
 | `src/projects.js` | Project registry CRUD. JSON persistence. `resolveProjectPath()` uses `settings.projectRoot`. |
-| `src/versions.js` | Version management. `scanVersionFiles()` returns files + testFiles + stage counts for tasklists. `countCompletedStages()` for badge. |
-| `src/usage.js` | JSONL scanner. Rolling 5h window for tokens, epoch-based reset timer. +5pp/−5min safety buffer. |
-| `public/app.js` | Frontend SPA. Tree view, tabs, terminals, read panel, settings, wizards, test runner, usage bar, recovery auto-save. |
-| `public/styles.css` | Dark/light themes via CSS variables. |
-| `public/index.html` | Shell HTML. Vendor libs (xterm, marked). |
+| `src/versions.js` | Version management. `scanVersionFiles()` returns files + testFiles + stage counts for tasklists. |
+| `src/usage.js` | JSONL scanner. Counts `input_tokens + cache_creation_input_tokens + output_tokens`. Rolling 5h window. +5pp/−30min safety buffers. Token budget from Settings. |
+| `public/app.js` | Frontend SPA. Tree view, tabs, terminals, read panel, settings, wizards, test runner, usage bar with 1s tick timer, staleness detection, recovery auto-save. |
+| `public/styles.css` | Dark/light themes via CSS variables. Usage bar pulse animation, staleness styles. |
+| `public/index.html` | Shell HTML. Vendor libs (xterm, marked). Status bar with "5h CLI" label and "last updated" element. |
 | `data/projects.json` | Project registry. Committed. Relative paths to `settings.projectRoot`. |
-| `data/settings.json` | User settings. Gitignored. |
+| `data/settings.json` | User settings. Gitignored. Now includes `tokenBudget5h`. |
 | `tools/screenshot.js` | Playwright screenshot automation. |
 | `tools/manual-pdf.js` | Playwright PDF generation with embedded screenshots. |
 | `tools/build-release.sh` | OS-specific release archives. |
@@ -140,7 +143,7 @@ Tags: `v1.0.0` on `a30a71d`, `v1.0.1` on `0a9f1ce`, `v1.0.2` on `5ed00f7`.
 | POST | `/api/scaffold-project` | New Project Wizard |
 | POST | `/api/scaffold-import` | Import existing project |
 | GET | `/api/editor/open/:projectId` | Open file in external editor |
-| GET | `/api/usage` | Current usage stats |
+| GET | `/api/usage` | Current usage stats (passes tokenBudget5h to scanner) |
 | WS | `/` | Terminal I/O, status updates, usage broadcasts (30s) |
 
 ---
@@ -154,6 +157,9 @@ Tags: `v1.0.0` on `a30a71d`, `v1.0.1` on `0a9f1ce`, `v1.0.2` on `5ed00f7`.
 - `expandedProjects`, `expandedVersions`, `expandedTestingSections` — Sets
 - `projectVersions` — Map<projectId, versionData> (lazy-loaded, refreshed on expand)
 - `recoveryTimer` — setInterval for recovery auto-save to `docs/handoff/`
+- `usageResetTime` — ISO string for countdown target
+- `usageTickTimer` — single 1s setInterval for countdown + "last updated" + staleness
+- `usageLastRefreshMs` — Date.now() of last successful data refresh
 - Tab IDs: `projectId::session` (session), `projectId:filePath` (file)
 
 ---
@@ -170,7 +176,16 @@ Tags: `v1.0.0` on `a30a71d`, `v1.0.1` on `0a9f1ce`, `v1.0.2` on `5ed00f7`.
 
 **Startup migration:** Creates topic folders for all registered projects. Backfills `evaluated: true` for projects missing the flag.
 
-**Usage scanner:** Rolling 5h window for tokens, epoch-based reset timer, +5pp/−5min safety buffer. Plan limits: Pro=45K, Max5=220K, Max20=550K.
+**Usage scanner (v1.0.3):**
+- Tokens: `input_tokens + cache_creation_input_tokens + output_tokens` (cache_read excluded per Anthropic docs)
+- Rolling 5h window from `now`. File collection: 6h window (5h + 1h buffer).
+- Reset timer: `oldest_entry_in_window.ts + 5h - now - 30min`
+- Safety: +5pp on percentages, -30min on timer
+- Token budget from `settings.tokenBudget5h` (default 1M), message limits from `PLAN_LIMITS[plan]`
+- Weekly: same cache-inclusive counting, default budget 20M
+- Dedup: `message_id:request_id` key, first occurrence only
+
+**Staleness:** Session-aware — only triggers when `terminalInstances` has an active session. >60s without data refresh → bar dims (0.75 opacity), "updated" text turns amber. Clears immediately on fresh data.
 
 ---
 
@@ -200,10 +215,12 @@ Tags: `v1.0.0` on `a30a71d`, `v1.0.1` on `0a9f1ce`, `v1.0.2` on `5ed00f7`.
 7. **Settings need browser refresh** — recovery interval, theme don't hot-reload
 8. **CCC cannot be developed via CCC** — restart kills your own session
 9. **`data/settings.json` gitignored** — persisted values override defaults
-10. **Usage tokens** — `input_tokens + output_tokens` only, no cache tokens
-11. **Usage file collection** — must be 11h window for epoch walker
-12. **Push to both remotes** — origin (Forgejo) + github (GitHub)
-13. **Test files in version folders** — `docs/vX.Y/{Name}_test_stageXX.md`
+10. **Usage tokens** — `input_tokens + cache_creation_input_tokens + output_tokens` only, cache_read excluded
+11. **Usage shared pool** — CCC sees CLI only; Desktop/web usage invisible. Safety buffers compensate.
+12. **Usage file collection** — 6h window (5h + 1h buffer)
+13. **Push to both remotes** — origin (Forgejo) + github (GitHub)
+14. **Test files in version folders** — `docs/vX.Y/{Name}_test_stageXX.md`
+15. **Default budgets changed in v1.0.3** — tokenBudget5h=1M, weeklyTokenBudget=20M (cache-inclusive)
 
 ---
 
@@ -212,12 +229,11 @@ Tags: `v1.0.0` on `a30a71d`, `v1.0.1` on `0a9f1ce`, `v1.0.2` on `5ed00f7`.
 - Forgejo push pending: `git push origin main --tags`
 - Import wizard test deferred (no project available)
 - Onboarding screenshot missing from PDF (not capturable once set up)
-- Changelog update for v1.0.2 (ask Phet first)
+- Colour threshold tests deferred (amber 80%, red 95%) — will trigger naturally at higher usage
 
 ---
 
 ## Next Actions
 
 1. Push to Forgejo when back online
-2. Changelog update for v1.0.2 (ask Phet)
-3. Roadmap review — v1.1 scope TBD
+2. Roadmap review — v1.1 scope TBD

@@ -105,6 +105,18 @@ app.put('/api/projects/:id', (req, res) => {
   }
 });
 
+// Rename a project (full propagation — files, coreFiles, CLAUDE.md)
+app.post('/api/projects/:id/rename', (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
+    const result = projects.renameProject(req.params.id, name.trim());
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Remove a project
 app.delete('/api/projects/:id', (req, res) => {
   try {

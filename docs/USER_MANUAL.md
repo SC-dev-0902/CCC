@@ -1,5 +1,5 @@
 # CCC User Manual
-*Claude Command Center — v1.0.2*
+*Claude Command Center — v1.0.4*
 
 ---
 
@@ -151,6 +151,20 @@ When you switch to a different project tab, the session you were looking at does
 
 Switch back to the tab and everything is exactly where you left it.
 
+### Session Resilience
+
+CCC monitors session health automatically:
+
+- **Auto-reconnect** — If your network drops briefly (wifi blip, laptop lid close), the WebSocket reconnects automatically when the connection restores. The terminal resumes normally.
+- **Unresponsive detection** — If you send input and get no response for 30 seconds, CCC shows a red banner: *"Session may be unresponsive."* The banner offers a **Restart Session** button (kills the stuck session so you can start fresh) and a dismiss button (if you want to keep waiting).
+- **Auto-clear** — If Claude responds while the banner is showing, it clears automatically.
+
+### File Drops — Known Limitation
+
+Browser security prevents CCC from reading the full filesystem path when you drag a file from Finder onto the terminal. Unlike the native Terminal.app (where dropping a file pastes its path), web-based terminals only receive the filename — not the full path.
+
+**Workaround:** Right-click the file in Finder, hold Option, and click **Copy as Pathname** (or press Option+Cmd+C). Then paste into the CCC terminal with Cmd+V.
+
 ### When a Session Ends
 
 If Claude Code finishes or the session closes, CCC shows the prompt again so you can start a new session. It doesn't try to auto-restart anything — you decide what happens next.
@@ -243,6 +257,8 @@ For best results, when evaluating an imported project, only the CCC concept temp
 ### Editing & Removing Projects
 
 Hover over a project in the sidebar and you'll see action buttons — pencil to edit (rename, change group), trash to remove. Removing a project from CCC doesn't delete any files on disk unless you explicitly choose that option.
+
+**Renaming a project** propagates fully: CCC renames the project folder on disk, all `{ProjectName}_*` files across all version folders (concept docs, tasklists, test files, SHP, recovery files), updates internal references in CLAUDE.md, and fixes the `coreFiles` paths in `projects.json`. Git sees these as renames, preserving history.
 
 ### Drag & Drop
 

@@ -118,7 +118,7 @@ function getProjectFiles(project) {
 function projectsInGroup(groupName) {
   return projectsList
     .filter(p => p.group === groupName)
-    .sort((a, b) => (a.order || 0) - (b.order || 0));
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 }
 
 function escapeHtml(str) {
@@ -183,6 +183,71 @@ function showDegradedBanner() {
   mainPanel.insertBefore(banner, mainPanel.firstChild);
 }
 
+// --- Session Unresponsive Detection ---
+
+const UNRESPONSIVE_THRESHOLD_MS = 30000; // 30s after input with no output
+
+function showUnresponsiveBanner(projectId) {
+  const bannerId = 'unresponsiveBanner-' + projectId;
+  if (document.getElementById(bannerId)) return;
+
+  const banner = document.createElement('div');
+  banner.id = bannerId;
+  banner.className = 'unresponsive-banner';
+  banner.innerHTML = `
+    <span>Session may be unresponsive — no output received for 30s after input.</span>
+    <button class="unresponsive-restart">Restart Session</button>
+    <button class="unresponsive-dismiss" title="Dismiss">&times;</button>
+  `;
+  banner.querySelector('.unresponsive-restart').addEventListener('click', async () => {
+    banner.remove();
+    await restartSession(projectId);
+  });
+  banner.querySelector('.unresponsive-dismiss').addEventListener('click', () => {
+    banner.remove();
+    const instance = terminalInstances.get(projectId);
+    if (instance) instance.unresponsive = false;
+  });
+
+  const mainPanel = document.querySelector('.main-panel');
+  mainPanel.insertBefore(banner, mainPanel.firstChild);
+}
+
+function hideUnresponsiveBanner(projectId) {
+  const banner = document.getElementById('unresponsiveBanner-' + projectId);
+  if (banner) banner.remove();
+}
+
+async function restartSession(projectId) {
+  const instance = terminalInstances.get(projectId);
+  if (instance) {
+    if (instance.ws) instance.ws.close();
+    instance.terminal.dispose();
+    if (instance.container.parentNode) instance.container.remove();
+    terminalInstances.delete(projectId);
+  }
+  // Kill the server-side PTY
+  await api('DELETE', `/api/sessions/${projectId}`);
+  // Re-render to show start prompt
+  renderTabContent();
+}
+
+// Periodically check all active sessions for unresponsiveness
+setInterval(() => {
+  const now = Date.now();
+  terminalInstances.forEach((instance, projectId) => {
+    if (instance.state !== 'active') return;
+    if (instance.unresponsive) return; // already showing banner
+    if (instance.lastInputAt === 0) return; // no input sent yet
+    // Only trigger if input was sent after the last output
+    if (instance.lastInputAt > instance.lastOutputAt &&
+        now - instance.lastInputAt > UNRESPONSIVE_THRESHOLD_MS) {
+      instance.unresponsive = true;
+      showUnresponsiveBanner(projectId);
+    }
+  });
+}, 5000);
+
 // --- Terminal Management ---
 
 function createTerminal(projectId) {
@@ -232,8 +297,34 @@ function createTerminal(projectId) {
     container,
     state: 'none',       // none, active, exited
     claudeStatus: null,  // null (shell), or: waiting, running, completed, error, unknown
-    degraded: false
+    degraded: false,
+    lastOutputAt: 0,     // timestamp of last PTY output received
+    lastInputAt: 0,      // timestamp of last user input sent
+    unresponsive: false,  // true when unresponsive banner is showing
+    _onDataDisposable: null,   // xterm onData handler (dispose before re-registering)
+    _onResizeDisposable: null  // xterm onResize handler
   };
+
+  // Handle file drops: extract path and paste into terminal (like native terminals)
+  container.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  });
+  container.addEventListener('drop', (e) => {
+    e.preventDefault();
+    instance.lastInputAt = Date.now();
+
+    // Try to extract file path from the drop
+    const uri = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('URL');
+    let filePath = '';
+    if (uri && uri.startsWith('file://')) {
+      filePath = decodeURIComponent(new URL(uri).pathname);
+    }
+    // Send file path as text input to PTY
+    if (filePath && instance.ws && instance.ws.readyState === WebSocket.OPEN) {
+      instance.ws.send(JSON.stringify({ type: 'input', data: filePath + ' ' }));
+    }
+  });
 
   terminalInstances.set(projectId, instance);
   return instance;
@@ -242,6 +333,16 @@ function createTerminal(projectId) {
 function connectTerminal(projectId) {
   const instance = terminalInstances.get(projectId);
   if (!instance) return;
+
+  // Dispose old terminal event handlers to prevent duplicate input
+  if (instance._onDataDisposable) {
+    instance._onDataDisposable.dispose();
+    instance._onDataDisposable = null;
+  }
+  if (instance._onResizeDisposable) {
+    instance._onResizeDisposable.dispose();
+    instance._onResizeDisposable = null;
+  }
 
   // Close existing WebSocket if any
   if (instance.ws) {
@@ -262,13 +363,20 @@ function connectTerminal(projectId) {
       const msg = JSON.parse(event.data);
 
       if (msg.type === 'output') {
+        instance.lastOutputAt = Date.now();
         instance.terminal.write(msg.data);
+        // Clear unresponsive state on any output
+        if (instance.unresponsive) {
+          instance.unresponsive = false;
+          hideUnresponsiveBanner(projectId);
+        }
       } else if (msg.type === 'state') {
         instance.state = msg.state;
         renderTreeView();
         renderTabBar();
       } else if (msg.type === 'claudeStatus') {
         instance.claudeStatus = msg.status;
+        instance.lastOutputAt = Date.now();
         // Auto-inject /continue when Claude Code is ready and SHP/recovery exists
         if (instance.pendingContinue && (msg.status === 'WAITING_FOR_INPUT' || msg.status === 'COMPLETED')) {
           instance.pendingContinue = false;
@@ -277,6 +385,11 @@ function connectTerminal(projectId) {
               instance.ws.send(JSON.stringify({ type: 'input', data: '/continue\r' }));
             }
           }, 500);
+        }
+        // Clear unresponsive state on status change
+        if (instance.unresponsive) {
+          instance.unresponsive = false;
+          hideUnresponsiveBanner(projectId);
         }
         renderTreeView();
         renderTabBar();
@@ -291,6 +404,8 @@ function connectTerminal(projectId) {
         instance.state = 'exited';
         instance.claudeStatus = null;
         instance.degraded = false;
+        instance.unresponsive = false;
+        hideUnresponsiveBanner(projectId);
         renderTreeView();
         renderTabBar();
         renderTabContent();
@@ -302,21 +417,30 @@ function connectTerminal(projectId) {
 
   ws.onclose = () => {
     instance.ws = null;
+    // Auto-reconnect if session is still active (not exited)
+    if (instance.state === 'active') {
+      setTimeout(() => {
+        if (instance.state === 'active' && !instance.ws) {
+          connectTerminal(projectId);
+        }
+      }, 2000);
+    }
   };
 
   instance.ws = ws;
 
-  // Forward terminal input to WebSocket
-  instance.terminal.onData((data) => {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'input', data }));
+  // Forward terminal input to WebSocket (store disposable for cleanup on reconnect)
+  instance._onDataDisposable = instance.terminal.onData((data) => {
+    if (instance.ws && instance.ws.readyState === WebSocket.OPEN) {
+      instance.lastInputAt = Date.now();
+      instance.ws.send(JSON.stringify({ type: 'input', data }));
     }
   });
 
   // Forward resize events
-  instance.terminal.onResize(({ cols, rows }) => {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'resize', cols, rows }));
+  instance._onResizeDisposable = instance.terminal.onResize(({ cols, rows }) => {
+    if (instance.ws && instance.ws.readyState === WebSocket.OPEN) {
+      instance.ws.send(JSON.stringify({ type: 'resize', cols, rows }));
     }
   });
 }
@@ -423,7 +547,7 @@ function renderTreeView() {
   const container = document.getElementById('treeView');
   container.innerHTML = '';
 
-  groups.forEach(group => {
+  [...groups].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })).forEach(group => {
     const isCollapsed = collapsedGroups.has(group.name);
     const groupProjects = projectsInGroup(group.name);
 
@@ -784,7 +908,12 @@ function renderVersionRow(container, project, ver, activeVersion, flatTestFiles)
     const versionFiles = document.createElement('div');
     versionFiles.className = 'tree-version-files expanded';
 
-    for (const file of ver.files) {
+    const sortedFiles = [...ver.files].sort((a, b) => {
+      const nameA = typeof a === 'string' ? a : a.name;
+      const nameB = typeof b === 'string' ? b : b.name;
+      return nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
+    });
+    for (const file of sortedFiles) {
       const fileName = typeof file === 'string' ? file : file.name;
       const stageBadge = (file.stagesTotal) ? ` <span class="test-progress-badge">[${file.stagesCompleted}/${file.stagesTotal}]</span>` : '';
       const fileEl = document.createElement('div');
@@ -816,9 +945,16 @@ function renderVersionRow(container, project, ver, activeVersion, flatTestFiles)
         <span class="tree-testing-chevron">&#x25B8;</span>
         <span>Testing</span>
         <span class="tree-testing-count">${testCount}</span>
+        <span class="tree-testing-refresh" title="Refresh test files">&#x21bb;</span>
       `;
+      testingHeader.querySelector('.tree-testing-refresh').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await loadProjectVersions(project.id);
+        renderTreeView();
+      });
       testingHeader.addEventListener('click', async (e) => {
         e.stopPropagation();
+        if (e.target.classList.contains('tree-testing-refresh')) return;
         if (expandedTestingSections.has(testingKey)) {
           expandedTestingSections.delete(testingKey);
         } else {
@@ -981,9 +1117,16 @@ function renderPatchRow(container, project, patch, activeVersion) {
         <span class="tree-testing-chevron">&#x25B8;</span>
         <span>Testing</span>
         <span class="tree-testing-count">${testCount}</span>
+        <span class="tree-testing-refresh" title="Refresh test files">&#x21bb;</span>
       `;
+      testingHeader.querySelector('.tree-testing-refresh').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await loadProjectVersions(project.id);
+        renderTreeView();
+      });
       testingHeader.addEventListener('click', async (e) => {
         e.stopPropagation();
+        if (e.target.classList.contains('tree-testing-refresh')) return;
         if (expandedTestingSections.has(testingKey)) {
           expandedTestingSections.delete(testingKey);
         } else {
@@ -2749,7 +2892,19 @@ function showEditModal(project) {
       return;
     }
 
-    await api('PUT', `/api/projects/${project.id}`, { name, group });
+    // If name changed, use rename endpoint (full file propagation)
+    if (name !== project.name) {
+      const result = await api('POST', `/api/projects/${project.id}/rename`, { name });
+      if (result && result.error) {
+        showWarning('Rename failed: ' + result.error);
+        return;
+      }
+    }
+
+    // Update group if changed
+    if (group !== project.group) {
+      await api('PUT', `/api/projects/${project.id}`, { group });
+    }
     await loadProjects();
   });
 }
@@ -2976,7 +3131,7 @@ function initResize() {
 
   document.addEventListener('mousemove', (e) => {
     if (!isResizing) return;
-    const newWidth = Math.min(Math.max(e.clientX, 200), 400);
+    const newWidth = Math.min(Math.max(e.clientX, 200), window.innerWidth * 0.5);
     sidebar.style.width = newWidth + 'px';
   });
 
@@ -3080,6 +3235,11 @@ document.getElementById('refreshBtn').addEventListener('click', async () => {
 });
 initResize();
 initWindowResize();
+
+// Prevent browser from navigating away when files are dropped outside terminal areas
+document.addEventListener('dragover', (e) => e.preventDefault());
+document.addEventListener('drop', (e) => e.preventDefault());
+
 initApp();
 
 // Load version info

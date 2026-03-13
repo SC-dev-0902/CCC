@@ -40,7 +40,11 @@ The backend data is correct — CCC shows the same numbers as Claude Desktop (ve
 
 The developer cannot distinguish between "the data is current and unchanged" and "the bar is broken."
 
-**Root cause:** This is a frontend feedback problem, not a data problem.
+**Additional observation (2026-03-11):** The reset timer shows "resets in 44m 33s" but the actual reset happened within ~10 minutes in real time. This suggests the countdown calculation itself may be wrong — not just the tick interval. The displayed remaining time is roughly 4x the actual remaining time. Investigate whether the reset time is being computed from stale data or whether the 5h window start point is incorrect.
+
+**Additional observation (2026-03-11, later):** The status bar now shows the text "Resets in resetting..." — the countdown logic is falling through to some fallback string instead of computing a proper `Xh Ym Zs` value. This confirms the countdown formatter is broken, not just drifting. Likely the `resetTime` value passed to the formatter is invalid, expired, or the formatter doesn't handle edge cases (e.g., negative remaining time, undefined input, or a reset that already happened).
+
+**Root cause:** Primarily a frontend feedback problem, but the timer drift and broken formatter string above indicate the reset countdown logic has multiple issues: calculation drift AND string formatting failure.
 
 ---
 

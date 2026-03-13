@@ -14,7 +14,7 @@
 
 ## v1.0 — The Foundation
 
-**Status:** In development
+**Status:** Shipped
 **Platform:** macOS, Linux, Windows
 **Theme:** Dashboard + Project Memory. CCC manages Claude Code sessions and gives them continuity.
 
@@ -48,6 +48,28 @@
 ### Version lock
 
 **v1.0 is locked.** No additional features will be added. The scope above is final.
+
+---
+
+## v1.0.4 — Project Rename, Testing Refresh & Documentation Audit
+
+**Status:** Shipped
+**Prerequisite:** v1.0.3 shipped
+**Theme:** Fix project rename propagation, resolve documentation contradictions accumulated across v1.0–v1.0.3.
+
+### What ships in v1.0.4
+
+| Area | Scope |
+|------|-------|
+| Project rename (full propagation) | When renaming a project in CCC, rename ALL references — not just `projects.json` display name. This includes: concept doc filenames (`{ProjectName}_concept.md`), tasklist filenames (`{ProjectName}_tasklist.md`), test file filenames (`{ProjectName}_test_stage*.md`), CLAUDE.md internal references, `coreFiles` paths in `projects.json`, SHP/handoff filenames. Currently only the treeview display name changes — everything else stays under the old name, breaking test file detection (`scanVersionFiles` regex) and other name-dependent features. |
+| Testing refresh button | Add a refresh/rescan button next to the "Testing" sub-header in the treeview so new test files are picked up on demand without requiring collapse/expand |
+| Splitter max-width removal | The divider between treeview and reading panel has a max-width constraint that prevents the treeview from being resized wider. Remove the cap or increase it significantly so users with long project names or deep nesting can expand the treeview as needed |
+| Treeview alphabetical sorting | All items in the treeview (projects, groups, files) must be sorted alphabetically. Currently the order depends on insertion order in `projects.json` / filesystem scan order, which makes it hard to find things as the list grows |
+| "Waiting for action" red dot missing | When CCC detects the session is waiting for user action (e.g., Claude asks a yes/no question), the status should show a red dot in both the treeview and the tab bar. Currently neither location shows a red dot — the user has no visual cue that a project needs attention. Verify the status detection for "waiting" state and ensure the red dot renders in both treeview node and tab |
+| **Documentation audit — contradictions** | Fix the following contradictions between CLAUDE.md and `CCC_concept_v1.0.md`: **(1) SHP path:** CLAUDE.md says `docs/handoff/{ProjectName}_shp.md`, concept says `docs/{ProjectName}_shp.md`. Reality is `docs/handoff/`. Align both docs to `docs/handoff/`. **(2) User Manual stage number:** CLAUDE.md says Stage 13, concept says Stage 16. Pick one and align. **(3) Filename versioning convention:** Concept says "no versioning in filenames, ever" and shows `CCC_concept.md`. CLAUDE.md says "New files use `{Name}_concept_v{X.Y}.md`". Actual files on disk use versioned names. The concept doc rule is stale — update it to match reality. **(4) Slash commands scope:** Concept says commands belong in `~/.claude/commands/` (global). Reality is project-level `.claude/commands/`. Update concept to match. |
+| **Documentation audit — gaps** | **(5) `src/usage.js` missing from Project Structure:** CLAUDE.md's tree doesn't list it — add it. **(6) Roadmap v1.0 status:** Says "In development" but v1.0 is shipped. Update to "Shipped". **(7) Anti-AI-Look rule 8 (border-radius):** Says "4px–6px max" but leadsieve-service UI kit mandates 0px. Make the rule project-agnostic: "Use sharp or minimal border-radius — follow the project's UI kit." **(8) Anti-AI-Look rule 4 (palette):** Says "Avoid Navy + teal + slate grey" but CCC's own UI uses that palette. Reword to be about avoiding *generic/default* combinations without naming specific colours that CCC itself uses. |
+| **Documentation audit — ambiguities** | **(9) Test file requirement propagation:** The `_test_stage` naming convention is only documented in CCC's own CLAUDE.md and concept. Other project CLAUDE.md files reference stage gates but not the test file regex. Either propagate the rule to all project CLAUDE.md files or accept it as CCC-only. **(10) `activeVersion` pointer vs. patch versions:** When CCC is at v1.0.3, `projects.json` shows `"activeVersion": "1.0"`. Clarify whether the pointer tracks major.minor or major.minor.patch. |
+| **CC session unresponsive / frozen prompt** | CC inside CCC frequently becomes unresponsive — the prompt freezes and the user cannot type or interact. This has happened repeatedly. Investigate root cause: is it a resource issue (memory/CPU), a stuck WebSocket, or a rendering deadlock? Add detection (e.g. heartbeat check) and recovery (auto-restart session or show "Session unresponsive — click to restart" banner). At minimum, the user must never be stuck with no way to act. |
 
 ---
 
