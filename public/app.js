@@ -161,6 +161,20 @@ function getProjectStatus(projectId) {
 }
 
 /**
+ * Map status class to a human-readable tooltip for version dots.
+ */
+function getStatusTooltip(status) {
+  switch (status) {
+    case 'completed': return 'Session completed — ready for next instruction';
+    case 'running': return 'Session running — Claude is working';
+    case 'waiting': return 'Waiting for your input — action required';
+    case 'error': return 'Error or needs attention';
+    case 'unknown': return 'No active session';
+    default: return '';
+  }
+}
+
+/**
  * Show degraded state warning banner in the UI.
  */
 function showDegradedBanner() {
@@ -831,7 +845,7 @@ function renderVersionRow(container, project, ver, activeVersion, flatTestFiles)
 
   row.innerHTML = `
     ${hasChildren ? '<span class="tree-version-chevron">&#x25B8;</span>' : '<span class="tree-version-chevron" style="visibility:hidden">&#x25B8;</span>'}
-    <span class="version-active-dot ${isActive ? (versionStatus || 'completed') : ''}"></span>
+    <span class="version-active-dot ${isActive ? (versionStatus || 'completed') : ''}" title="${isActive ? getStatusTooltip(versionStatus || 'completed') : ''}"></span>
     <span class="tree-version-name">v${escapeHtml(ver.version)}</span>
     <span class="tree-version-actions">
       <span class="action-btn add-patch-btn" title="Create patch version (v${escapeHtml(nextPatch)})">+</span>
@@ -1028,7 +1042,7 @@ function renderPatchRow(container, project, patch, activeVersion) {
 
   row.innerHTML = `
     ${hasFiles ? '<span class="tree-version-chevron">&#x25B8;</span>' : '<span class="tree-version-chevron" style="visibility:hidden">&#x25B8;</span>'}
-    <span class="version-active-dot ${isActive ? (patchStatus || 'completed') : ''}"></span>
+    <span class="version-active-dot ${isActive ? (patchStatus || 'completed') : ''}" title="${isActive ? getStatusTooltip(patchStatus || 'completed') : ''}"></span>
     <span class="tree-version-name">v${escapeHtml(patch.version)}</span>
     <span class="tree-version-actions">
       ${isActive ? '<span class="action-btn mark-complete-btn" title="Mark complete (git tag)">&#x2713;</span>' : ''}

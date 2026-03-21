@@ -73,28 +73,98 @@
 
 ---
 
-## v1.1 — Promotion Tour
+## v1.0.5 — Usage Clarity & UI Polish
 
 **Status:** Planned
-**Prerequisite:** v1.0 shipped and used as daily driver for 2-3 weeks
-**Theme:** First impressions. Polish rough edges found during daily use, then go public.
+**Prerequisite:** v1.0.4 shipped
+**Theme:** Fix misleading usage display and small UI gaps identified during daily use.
+
+### What ships in v1.0.5
+
+| Area | Scope |
+|------|-------|
+| **Usage bar label** | "5h CLI" is misleading — implies a personal session and a full 5 hours. Both are wrong. The window is Anthropic's shared rate limit, not the user's session, and it runs out faster because Chat/Desktop consumption is invisible to CCC. New label: "Rate limit: X% (CLI only - actual limit may be lower)". Display must communicate clearly what is being measured and its limitations. |
+| **Version dot tooltip** | The colored dot in front of the version number in the treeview should show a tooltip on hover explaining what each color means (e.g. green/amber/red/grey and what each indicates for that project's status). CSS `title` attribute or a custom hover tooltip - consistent with existing CCC design language. |
+| **Test file reading panel — full width** | When a test file is opened in the reading panel, the content only renders at half the panel width. The right half is empty. Content must use the full available width of the reading panel, same as any other file. |
+
+---
+
+## v1.1 — Server Mode, DB Migration & Promotion Tour
+
+**Status:** Planned
+**Prerequisite:** v1.0.x patches shipped, PatchPilot available
+**Theme:** CCC grows from a local tool to an optionally centralized command center. DB migration replaces fragile JSON files. Then go public.
 
 ### What ships in v1.1
 
 | Area | Scope |
 |------|-------|
-| Bug fixes | Anything found during 2-3 weeks of daily use |
+| **Server mode (optional)** | At install time, choose `--mode local` (default, current behavior) or `--mode server`. Server mode binds to `0.0.0.0` instead of `localhost`, enables authentication middleware, and optionally configures Cloudflare Tunnel + Access. Local mode stays zero-config as today. Single codebase, no fork — just a config switch via `CCC_MODE` env var. |
+| **Authentication (server mode)** | Required for server mode only. Cloudflare Access (email-based one-time codes, zero-trust) as the primary auth layer. No passwords to manage. Local mode has no auth (it's your machine). |
+| **DB migration — mode-aware backend** | Replace file-based JSON storage (`projects.json`, SHP files) with a proper database. The backend follows the mode: **Local mode → SQLite** (zero config, embedded, no daemon needed). **Server mode → PostgreSQL or MariaDB** (concurrent access, transactions, proper locking). Abstraction layer so the app code doesn't care which DB runs underneath. |
+| **Data migration tool** | One-time migration script: reads existing `projects.json` + SHP files → inserts into the chosen DB. Non-destructive — original files kept as backup. Runs automatically on first start after upgrade. |
+| Bug fixes | Anything found during daily use (v1.0.5+ fixes roll in here) |
 | Degradation detection | Redesign — current approach triggers false positives on idle and decorative output |
 | Polish | UI refinements, performance, edge cases |
 | README | Polished with GIF/screen recording |
-| Integrated Claude chat panel | Claude.ai chat alongside terminal — keeps entire workflow inside CCC. Moved from v2.0: PatchPilot integration creates bug-to-patch pipeline. Open questions: API key cost, no embeddable SDK yet. |
+| Integrated Claude chat panel | Claude.ai chat alongside terminal — keeps entire workflow inside CCC. PatchPilot integration creates bug-to-patch pipeline. Open questions: API key cost, no embeddable SDK yet. |
 | Promotion campaign | Show HN, Reddit (r/ClaudeAI, r/cursor), X/Twitter thread, blog post |
+
+### Server mode architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│  CCC_MODE=local (default)                       │
+│  ┌───────────┐   ┌──────────┐   ┌───────────┐  │
+│  │ Express   │──▸│ SQLite   │   │ node-pty  │  │
+│  │ localhost │   │ embedded │   │ local PTY │  │
+│  └───────────┘   └──────────┘   └───────────┘  │
+│  No auth · single user · zero config            │
+└─────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────┐
+│  CCC_MODE=server                                │
+│  ┌───────────┐   ┌──────────┐   ┌───────────┐  │
+│  │ Express   │──▸│ PostgreSQL│   │ node-pty  │  │
+│  │ 0.0.0.0  │   │ or Maria │   │ server PTY│  │
+│  └─────┬─────┘   └──────────┘   └───────────┘  │
+│        │                                         │
+│  ┌─────▼─────────────────────┐                  │
+│  │ Cloudflare Tunnel + Access│                  │
+│  │ (zero-trust auth gate)    │                  │
+│  └───────────────────────────┘                  │
+│  Auth required · multi-device · DC deployment   │
+└─────────────────────────────────────────────────┘
+```
+
+### DB abstraction layer
+
+The application code uses a storage interface — never raw SQL or file reads:
+
+```
+StorageInterface
+├── getProjects() / saveProject() / deleteProject()
+├── getSHP() / saveSHP() / listSHPs()
+├── getSettings() / saveSettings()
+└── migrate()
+
+Implementations:
+├── SqliteStorage    ← local mode
+└── PostgresStorage  ← server mode (or MariaDB)
+```
+
+### Design questions for v1.1 (to be resolved before development)
+
+- Cloudflare Access vs. simple token auth for server mode? (Leaning Cloudflare — consistent with LeadSieve)
+- Should server mode support multiple users, or just multi-device for a single user?
+- PTY session security in server mode — is Cloudflare Access sufficient, or do we need per-session tokens?
+- DB schema design — what tables replace `projects.json`? (projects, groups, core_files, shp_entries, settings)
 
 ### Promotion strategy
 
-Ship v1.0 → use it daily for 2-3 weeks → fix rough edges → ship v1.1 → promote. First impression must be flawless.
+Ship v1.0.x → DB migration + server mode → polish → ship v1.1 → promote. First impression must be flawless. PatchPilot available at launch gives a real ecosystem story.
 
-All promotion material should highlight: **v1.0 supports macOS natively. Linux and Windows support is code-complete — manual testing pending target hardware.**
+All promotion material should highlight: **CCC runs locally (zero config) or as a central server (Cloudflare-secured). v1.0 supports macOS natively. Linux and Windows support is code-complete — manual testing pending target hardware.**
 
 ### Promotion assets (to be drafted in dedicated session)
 
@@ -110,14 +180,13 @@ All promotion material should highlight: **v1.0 supports macOS natively. Linux a
 
 **Status:** Future
 **Prerequisite:** v1.1 shipped, community feedback collected
-**Theme:** CCC becomes a context-aware command center. SQLite replaces file-based storage. Full project history with search.
+**Theme:** CCC becomes a context-aware command center. Full project history with search. DB is already in place from v1.1.
 
 ### Candidate features
 
 | Area | Scope |
 |------|-------|
-| SQLite migration | Replace file-based SHP storage with SQLite DB |
-| Searchable history | Full-text search across all stored SHPs per project |
+| Searchable history | Full-text search across all stored SHPs per project (DB already available from v1.1) |
 | Context layering | Yesterday's SHP in full + compressed digest of prior history |
 | User manual | CCC as infrastructure — must be running before Claude Code |
 | Global slash commands | `~/.claude/commands/` for universal workflow commands |

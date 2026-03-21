@@ -6,10 +6,10 @@
 ## Project
 
 - **Name:** Claude Command Center (CCC)
-- **Version:** v1.0.3 (tagged, pushed to GitHub)
+- **Version:** v1.0.4 (shipped) — v1.0.5 now active
 - **Active version in projects.json:** 1.0
-- **Stage:** v1.0.3 complete — all stages GO
-- **Status:** Pushed to GitHub. Forgejo pending (offline): `git push origin main --tags`
+- **Stage:** v1.0.5 in progress
+- **Status:** v1.0.4 shipped. v1.0.5 project created in CCC.
 
 ---
 
@@ -230,6 +230,11 @@ Tags: `v1.0.0` on `a30a71d`, `v1.0.1` on `0a9f1ce`, `v1.0.2` on `5ed00f7`, `v1.0
 - Import wizard test deferred (no project available)
 - Onboarding screenshot missing from PDF (not capturable once set up)
 - Colour threshold tests deferred (amber 80%, red 95%) — will trigger naturally at higher usage
+
+## v1.0.5 Roadmap
+
+- **Usage bar label is misleading** — "5h CLI" implies a personal session AND implies a full 5 hours. Both are wrong. (1) It's Anthropic's shared rate limit window, not the user's session. (2) The window runs out well before 5 hours because Chat/Desktop consumption is invisible to CCC - confirmed by Phet running a stopwatch alongside. The "+5pp/-30min" safety buffers are not enough. Display should communicate clearly: this is Anthropic's window, CLI only, actual headroom is lower than shown. Suggested label: "Rate limit: X% (CLI only - actual limit may be lower)".
+- **Version dot tooltip** — The colored dot in front of the version number should show a tooltip on hover explaining what the color means (e.g. what green/amber/red/grey indicates for that project's status). CSS `title` attribute or a custom hover tooltip - CC's choice, must be consistent with the existing CCC design language.
 
 ---
 

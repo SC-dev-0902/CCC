@@ -21,7 +21,7 @@
         "concept": "docs/v1.0/v1.0.1/CCC_concept_v1.0.1.md",
         "tasklist": "docs/v1.0/v1.0.1/CCC_tasklist.md"
       },
-      "activeVersion": "1.0",
+      "activeVersion": "1.0.5",
       "evaluated": true
     },
     {
@@ -29,7 +29,7 @@
       "name": "PatchPilot",
       "path": "Projects/PatchPilot",
       "group": "Parked",
-      "order": 2,
+      "order": 7,
       "coreFiles": {
         "claude": "CLAUDE.md",
         "concept": "docs/v1.0/PatchPilot_concept.md",
@@ -39,25 +39,11 @@
       "evaluated": true
     },
     {
-      "id": "9fcb1bc6-9ae3-4a1c-ac65-6e89114111af",
-      "name": "CC-Monitor",
-      "path": "Projects/CC-Monitor",
-      "group": "Parked",
-      "order": 3,
-      "coreFiles": {
-        "claude": "CLAUDE.md",
-        "concept": "docs/v1.0/CC-Monitor_concept.md",
-        "tasklist": "docs/v1.0/CC-Monitor_tasklist.md"
-      },
-      "activeVersion": "1.0",
-      "evaluated": true
-    },
-    {
       "id": "625f025d-f6c0-48df-bbae-fe69c6801813",
       "name": "PeuanRuamChan",
       "path": "Projects/PeuanRuamChan",
       "group": "Parked",
-      "order": 1,
+      "order": 8,
       "coreFiles": {
         "claude": "CLAUDE.md",
         "concept": "docs/v1.0/PeuanRuamChan_concept.md",
@@ -85,7 +71,7 @@
       "name": "Pactum - Core",
       "path": "Projects/Pactum - Core",
       "group": "Parked",
-      "order": 4,
+      "order": 6,
       "coreFiles": {
         "claude": "CLAUDE.md",
         "concept": "docs/v1.0/Pactum - Core_concept.md",
@@ -95,25 +81,11 @@
       "evaluated": true
     },
     {
-      "id": "bfa7cfaf-8a26-4a79-bf3f-0a3ac067c547",
-      "name": "Concorda",
-      "path": "Projects/Concorda",
-      "group": "Parked",
-      "order": 5,
-      "coreFiles": {
-        "claude": "CLAUDE.md",
-        "concept": "docs/v1.0/Concorda_concept.md",
-        "tasklist": "docs/v1.0/Concorda_tasklist.md"
-      },
-      "activeVersion": "1.0",
-      "evaluated": true
-    },
-    {
       "id": "ef5738d5-c18d-407d-86ce-79621ccf59b7",
       "name": "LedgerNest",
       "path": "Projects/LedgerNest",
       "group": "Parked",
-      "order": 10,
+      "order": 4,
       "coreFiles": {
         "claude": "CLAUDE.md",
         "concept": "docs/v1.0/LedgerNest_concept.md",
@@ -127,7 +99,7 @@
       "name": "Jarvis",
       "path": "Projects/Jarvis",
       "group": "Parked",
-      "order": 6,
+      "order": 1,
       "coreFiles": {
         "claude": "CLAUDE.md",
         "concept": "docs/v1.0/Jarvis_concept.md",
@@ -141,7 +113,7 @@
       "name": "TradingMaster",
       "path": "Projects/TradingMaster",
       "group": "Parked",
-      "order": 7,
+      "order": 10,
       "coreFiles": {
         "claude": "CLAUDE.md",
         "concept": "docs/Trading_project_concept.md",
@@ -155,7 +127,7 @@
       "name": "LeadSieve - Service",
       "path": "Projects/leadsieve-service",
       "group": "Parked",
-      "order": 0,
+      "order": 3,
       "coreFiles": {
         "claude": "CLAUDE.md",
         "concept": "docs/v1.0/leadsieve-service_concept.md",
@@ -169,14 +141,42 @@
       "name": "LeadSieve - Admin",
       "path": "Projects/leadsieve-admin",
       "group": "Parked",
-      "order": 8,
+      "order": 2,
       "coreFiles": {
         "claude": "CLAUDE.md",
-        "concept": "docs/v1.0/leadsieve-admin_concept.md",
-        "tasklist": "docs/v1.0/LeadSieve - Admin_tasklist.md"
+        "concept": "docs/v1.0/LeadSieve - Admin_concept_v1.0.md",
+        "tasklist": "docs/v1.0/LeadSieve - Admin_tasklist_v1.0.md"
       },
       "activeVersion": "1.0",
-      "evaluated": false
+      "evaluated": true
+    },
+    {
+      "id": "2aeb83f9-511c-4e6e-a13e-7a6f36bd0ceb",
+      "name": "Medusa",
+      "path": "Projects/Medusa",
+      "group": "Parked",
+      "order": 5,
+      "coreFiles": {
+        "claude": "CLAUDE.md",
+        "concept": "docs/v1.0/Medusa_concept_v1.0.md",
+        "tasklist": "docs/v1.0/Medusa_tasklist_v1.0.md"
+      },
+      "activeVersion": "1.0",
+      "evaluated": true
+    },
+    {
+      "id": "7beb74b8-23d3-4684-92a5-3fa464fad860",
+      "name": "Concorda",
+      "path": "Projects/Concorda",
+      "group": "Parked",
+      "order": 0,
+      "coreFiles": {
+        "claude": "CLAUDE.md",
+        "concept": "docs/v1.0/Concorda_concept_v1.0.md",
+        "tasklist": "docs/v1.0/Concorda_tasklist_v1.0.md"
+      },
+      "activeVersion": "1.0",
+      "evaluated": true
     }
   ]
 }
