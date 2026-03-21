@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.5
+- Fixed: Usage bar label changed from "5h CLI" to "Rate limit (CLI only)" with tooltip explaining shared Anthropic limits
+- Fixed: Test file and reading panel content now uses full panel width (was capped at 800px)
+- Added: Version dot tooltips — hover to see what each status color means
+
 ## v1.0.4
 - Fixed: Project rename now propagates to all files, folders, references, and coreFiles paths
 - Fixed: Duplicate terminal input after WebSocket reconnect
