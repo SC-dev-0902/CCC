@@ -262,6 +262,18 @@ html, body {
   font-size: 13px;
 }
 
+.tree-project-type-badge {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-tab-bar);
+  padding: 1px 4px;
+  border-radius: 2px;
+  margin-left: 4px;
+  flex-shrink: 0;
+  letter-spacing: 0.5px;
+}
+
 /* Project action buttons (edit, remove) */
 
 .tree-project-actions {

@@ -308,9 +308,27 @@ function runGitTag(projectAbsPath, tagName) {
   });
 }
 
+/**
+ * Get the correct path for a test file based on the active version.
+ * Patch versions (three-part like "1.0.6") → docs/v{X.Y}/v{X.Y.Z}/{name}_test_stage{XX}.md
+ * Major/minor versions (two-part like "1.0") → docs/v{X.Y}/{name}_test_stage{XX}.md
+ */
+function getTestFilePath(projectName, stageNumber, activeVersion) {
+  const parts = activeVersion.split('.');
+  const stageStr = String(stageNumber).padStart(2, '0');
+  const fileName = `${projectName}_test_stage${stageStr}.md`;
+  if (parts.length === 3) {
+    const majorMinor = `v${parts[0]}.${parts[1]}`;
+    const full = `v${activeVersion}`;
+    return path.join('docs', majorMinor, full, fileName);
+  }
+  return path.join('docs', `v${activeVersion}`, fileName);
+}
+
 module.exports = {
   parseVersionString,
   getVersionFolder,
+  getTestFilePath,
   detectFlatDocs,
   scanVersions,
   createVersion,

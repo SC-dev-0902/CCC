@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.0.6
+- Added: Non-code project support — projects can be typed as Code or Config, with Config skipping git validation
+- Added: Project type badges (COD/CFG) in sidebar for visual identification
+- Fixed: Slash command templates now deploy all 8 commands with workflow-aligned instructions (was 3 with outdated text)
+- Fixed: Import modal no longer references non-existent `/start-project` command
+- Fixed: Projects created via wizard can now always be dragged from Parked to Active
+- Fixed: Test files for patch versions now land in the correct subfolder (e.g. `docs/v1.0/v1.0.6/`)
+
 ## v1.0.5
 - Fixed: Usage bar label changed from "5h CLI" to "Rate limit (CLI only)" with tooltip explaining shared Anthropic limits
 - Fixed: Test file and reading panel content now uses full panel width (was capped at 800px)

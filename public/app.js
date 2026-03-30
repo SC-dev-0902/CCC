@@ -618,9 +618,12 @@ function renderTreeView() {
       const status = getProjectStatus(project.id);
       const showProjectDot = !project.activeVersion;
 
+      const typeBadge = (project.type === 'config')
+        ? '<span class="tree-project-type-badge cfg" title="Config project">CFG</span>'
+        : '<span class="tree-project-type-badge cod" title="Code project">COD</span>';
       row.innerHTML = `
         <span class="tree-project-chevron">&#x25B8;</span>
-        <span class="tree-project-name">${escapeHtml(project.name)}</span>
+        <span class="tree-project-name">${escapeHtml(project.name)}</span>${typeBadge}
         <span class="tree-project-actions">
           <span class="action-btn edit-btn" title="Edit project">&#x270E;</span>
           <span class="action-btn remove-btn" title="Remove project">&times;</span>
@@ -1247,8 +1250,8 @@ async function handleDrop(targetGroup, beforeProjectId) {
   const dragged = findProject(draggedId);
   if (!dragged) return;
 
-  // Block unevaluated projects from being dragged to Active
-  if (targetGroup === 'Active' && dragged.evaluated !== true) {
+  // Block unevaluated projects from being dragged to Active (config projects bypass)
+  if (targetGroup === 'Active' && dragged.evaluated === false && dragged.type !== 'config') {
     showWarning('Run /evaluate-import before moving this project to Active.');
     renderTreeView(); // Re-render to snap project back to original position
     return;
@@ -2363,6 +2366,13 @@ function showNewProjectWizard() {
           </div>
         </div>
         <div class="settings-group">
+          <label>Project Type</label>
+          <div class="select-wrap"><select id="wizardType">
+            <option value="code" selected>Code</option>
+            <option value="config">Config</option>
+          </select><span class="select-arrow">&#9662;</span></div>
+        </div>
+        <div class="settings-group">
           <label>Template</label>
           <div class="template-cards">${templateCardsHtml}</div>
         </div>
@@ -2438,6 +2448,7 @@ function showNewProjectWizard() {
     const nameVal = overlay.querySelector('#wizardName').value.trim();
     const locationVal = overlay.querySelector('#wizardLocation').value.trim();
     const templateVal = overlay.querySelector('input[name="wizardTemplate"]:checked')?.value || 'blank';
+    const typeVal = overlay.querySelector('#wizardType').value;
 
     let groupVal = groupSelect.value;
     if (groupVal === '__new__') {
@@ -2477,7 +2488,8 @@ function showNewProjectWizard() {
         name: nameVal,
         parentDir: locationVal,
         template: templateVal,
-        group: groupVal
+        group: groupVal,
+        type: typeVal
       });
 
       if (result.error) {
@@ -2654,10 +2666,10 @@ function showImportProjectModal(prefillPath) {
       notices.push('No CCC documentation found. After importing, run <code>/evaluate-import</code> in your Claude Code session to generate project docs.');
     }
     if (d.concept.found && !d.claude.found) {
-      notices.push('No CLAUDE.md detected. It will be generated when you run <code>/start-project</code>.');
+      notices.push('No CLAUDE.md detected. It will be scaffolded during import.');
     }
     if (d.concept.found && !d.tasklist.found) {
-      notices.push('No tasklist detected. It will be generated when you run <code>/start-project</code>.');
+      notices.push('No tasklist detected. The tasklist will be created in a Cowork session after import.');
     }
     if (scanResult.versioning.hasVersionedDocs && scanResult.versioning.suggestedActiveVersion) {
       notices.push(`Versioned structure detected. Active version will be set to v${escapeHtml(scanResult.versioning.suggestedActiveVersion)}.`);
@@ -2884,10 +2896,18 @@ function showEditModal(project) {
     `<option value="${escapeHtml(g.name)}" ${g.name === project.group ? 'selected' : ''}>${escapeHtml(g.name)}</option>`
   ).join('');
 
+  const currentType = project.type || 'code';
   const body = `
     <div class="settings-group">
       <label>Project Name</label>
       <input type="text" id="editName" value="${escapeHtml(project.name)}">
+    </div>
+    <div class="settings-group">
+      <label>Project Type</label>
+      <div class="select-wrap"><select id="editType">
+        <option value="code" ${currentType === 'code' ? 'selected' : ''}>Code</option>
+        <option value="config" ${currentType === 'config' ? 'selected' : ''}>Config</option>
+      </select><span class="select-arrow">&#9662;</span></div>
     </div>
     <div class="settings-group">
       <label>Group</label>
@@ -2898,10 +2918,11 @@ function showEditModal(project) {
   showModal('Edit Project', body, async (overlay) => {
     const name = overlay.querySelector('#editName').value.trim();
     const group = overlay.querySelector('#editGroup').value;
+    const type = overlay.querySelector('#editType').value;
     if (!name) return;
 
-    // Block unevaluated projects from being moved to Active
-    if (group === 'Active' && project.evaluated !== true) {
+    // Block unevaluated projects from being moved to Active (config projects bypass)
+    if (group === 'Active' && project.evaluated === false && type !== 'config') {
       showWarning('Run /evaluate-import before moving this project to Active.');
       return;
     }
@@ -2915,9 +2936,12 @@ function showEditModal(project) {
       }
     }
 
-    // Update group if changed
-    if (group !== project.group) {
-      await api('PUT', `/api/projects/${project.id}`, { group });
+    // Update group and type if changed
+    const updates = {};
+    if (group !== project.group) updates.group = group;
+    if (type !== currentType) updates.type = type;
+    if (Object.keys(updates).length > 0) {
+      await api('PUT', `/api/projects/${project.id}`, updates);
     }
     await loadProjects();
   });

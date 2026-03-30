@@ -61,7 +61,7 @@ function getAllProjects() {
   return readData();
 }
 
-function addProject({ name, path: projectPath, group, coreFiles }) {
+function addProject({ name, path: projectPath, group, coreFiles, type, evaluated }) {
   const data = readData();
 
   // Ensure the group exists
@@ -89,6 +89,18 @@ function addProject({ name, path: projectPath, group, coreFiles }) {
     }
   };
 
+  // Type defaults to "code" if not specified
+  if (type) {
+    project.type = type;
+  }
+
+  // Ensure evaluated is always explicitly set
+  if (evaluated !== undefined) {
+    project.evaluated = evaluated;
+  } else {
+    project.evaluated = true;
+  }
+
   data.projects.push(project);
   writeData(data);
   return project;
@@ -99,7 +111,7 @@ function updateProject(id, updates) {
   const index = data.projects.findIndex(p => p.id === id);
   if (index === -1) return null;
 
-  const allowed = ['name', 'group', 'coreFiles', 'activeVersion', 'evaluated'];
+  const allowed = ['name', 'group', 'coreFiles', 'activeVersion', 'evaluated', 'type'];
   for (const key of allowed) {
     if (updates[key] !== undefined) {
       data.projects[index][key] = updates[key];

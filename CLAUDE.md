@@ -109,10 +109,10 @@ CCC gives Claude Code session continuity through file-based SHP (Session Handove
 
 - **SHPs are stored as a single file** per project: `docs/handoff/{ProjectName}_shp.md` (overwritten each `/eod`, Git provides history).
 - **Six global slash commands** drive the workflow:
-- **`/start-project`** — reads CLAUDE.md, concept, tasklist. Generates tasklist if missing. Asks comprehension questions. Works without CCC.
-- **`/continue`** — CCC feeds the most recent SHP to Claude Code. Requires CCC to be running.
+- **`/start-stage`** — reads CLAUDE.md, tasklist, and the stage kickoff prompt (`docs/handoff/stage{XX}-prompt.md`). If no kickoff prompt exists, STOPS and informs the developer. CC does not start without a kickoff prompt.
+- **`/continue`** — reads CLAUDE.md, tasklist, kickoff prompt for current stage, and the most recent SHP. Requires CCC to be running.
 - **`/eod`** — Claude Code writes the SHP. CCC stores it. Requires CCC to be running.
-- **`/create-tasklist`** — manual trigger to generate tasklist from concept doc.
+- **`/create-tasklist`** — DEPRECATED. Tasklists are created by Cowork, not CC. If no tasklist exists, CC informs the developer.
 - **`/reload-docs`** — re-reads all project docs after external changes.
 - **`/evaluate-import`** — reads existing code/docs, interviews developer, generates CCC-compliant docs for imported projects.
 - **SHP files are human-readable Markdown** — Git-friendly, openable in any editor.
@@ -176,6 +176,42 @@ Development proceeds in defined stages. See `docs/v1.0/CCC_tasklist.md` for the 
   - Any other naming (`_test_batch`, `_test_`, etc.) is invisible to CCC
   - This rule applies to all CCC-managed projects
 - Stage 01 produces a static UI shell — no backend, no real terminals, hardcoded data only. The UI must feel right before any backend code is written.
+
+---
+
+## Development Workflow (MANDATORY)
+
+**Cowork owns the thinking. CC owns the typing.** This applies to ALL CCC-managed projects.
+
+### The Pipeline
+
+```
+Cowork: Concept Doc → Tasklist (stages + gates) → Stage Kickoff Prompts
+CC:     Reads kickoff prompt → Executes exactly what is written → Nothing more
+```
+
+### Rules
+
+1. **CC never creates its own stage plan or task breakdown.** The tasklist is produced by Cowork. If no tasklist exists, CC informs the developer and stops.
+2. **CC reads the stage kickoff prompt before starting any stage.** The kickoff prompt (`docs/handoff/stage{XX}-prompt.md`) is the primary instruction document. It contains: exact scope, what NOT to build, project structure, acceptance criteria.
+3. **CC does not reinterpret the concept doc.** The concept doc is background context. The kickoff prompt is the instruction. If the kickoff prompt is ambiguous or missing, CC stops and asks  -  it does not fill in blanks with its own assumptions.
+4. **CC updates task completion status only.** When marking tasks done in the tasklist, CC checks off completed items. CC does NOT add new tasks, modify task descriptions, reorder stages, or restructure the tasklist.
+
+### Autonomy (MANDATORY)
+
+**The kickoff prompt is the approved plan. Execute it.**
+
+CC works autonomously through all tasks in a stage. Do NOT ask "shall I proceed?", "can I start?", "want me to continue?" or any variation. The developer said "go" when they launched the stage  -  that is the approval for everything in the kickoff prompt.
+
+**When to ask:** Only when encountering genuine ambiguity  -  the kickoff prompt doesn't cover something, contradicts itself, or a decision could reasonably go multiple ways. Ask about THAT specific point, then continue.
+
+**When NOT to ask:** Before starting each task. Before creating a file. Before installing a dependency listed in the kickoff prompt. Before running a build. These are all covered by the kickoff prompt  -  just do them.
+
+**When done:** Report what was built and present the acceptance criteria results. Then wait for testing.
+
+### Why
+
+CC does not have the context of Cowork sessions. It does not know why decisions were made, what was rejected, or what trade-offs were discussed. When CC interprets a concept doc on its own, it fills in blanks with assumptions that are often wrong. The kickoff prompt eliminates this gap.
 
 ---
 

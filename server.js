@@ -82,12 +82,12 @@ app.get('/api/projects', (req, res) => {
 
 // Add a project
 app.post('/api/projects', (req, res) => {
-  const { name, path: projectPath, group, coreFiles } = req.body;
+  const { name, path: projectPath, group, coreFiles, type } = req.body;
   if (!name || !projectPath || !group) {
     return res.status(400).json({ error: 'name, path, and group are required' });
   }
   try {
-    const project = projects.addProject({ name, path: projectPath, group, coreFiles });
+    const project = projects.addProject({ name, path: projectPath, group, coreFiles, type });
     res.status(201).json(project);
   } catch (err) {
     res.status(500).json({ error: 'Failed to add project' });
@@ -558,6 +558,33 @@ app.post('/api/projects/:id/evaluated', (req, res) => {
   }
 });
 
+// Get the correct test file path for a project's active version
+app.get('/api/projects/:id/test-file-path', (req, res) => {
+  try {
+    const found = findProjectWithPath(req.params.id);
+    if (!found) return res.status(404).json({ error: 'Project not found' });
+
+    const stageNumber = parseInt(req.query.stage, 10);
+    if (!stageNumber || stageNumber < 1) {
+      return res.status(400).json({ error: 'stage query parameter is required (positive integer)' });
+    }
+
+    const activeVersion = found.project.activeVersion || '1.0';
+    const relativePath = versions.getTestFilePath(found.project.name, stageNumber, activeVersion);
+    const absPath = path.join(found.absPath, relativePath);
+
+    // Auto-create the directory if it doesn't exist
+    const dir = path.dirname(absPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    res.json({ path: relativePath, absPath });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to compute test file path: ' + err.message });
+  }
+});
+
 // --- Wizard Templates ---
 
 const WIZARD_TEMPLATES = {
@@ -845,25 +872,61 @@ function generateImportTasklistMd(projectName, version) {
 
 function generateSlashCommand(type) {
   const commands = {
+    'start-stage': `Begin a new stage. Reads the kickoff prompt and executes it.
+
+Instructions:
+1. Read CLAUDE.md to refresh project identity, stack, and standing rules
+2. Read the tasklist to confirm the current stage number and that the previous stage has a Go
+3. Look for the stage kickoff prompt: \`docs/handoff/stage{XX}-prompt.md\`
+   - If it exists: read it completely. This is your approved plan. Begin executing immediately.
+   - If it does not exist: STOP. Inform the developer: "No kickoff prompt found for Stage {XX}. Cowork needs to produce this before I can start."
+4. Execute all tasks in the kickoff prompt autonomously. Work through them one by one without asking for permission at each step.
+5. Only stop and ask when you encounter genuine ambiguity — something the kickoff prompt doesn't cover, contradicts itself, or where a decision could go multiple ways.
+
+The kickoff prompt IS the approval. Do NOT ask "shall I proceed?" or "can I start coding?" — just build what it says. When all tasks are complete, report what was built and present the acceptance criteria results.
+
+IMPORTANT: You do NOT create your own stage plan. You do NOT interpret the concept doc to decide what to build. The kickoff prompt is the instruction. If it is missing, the stage cannot start.`,
+
+    'continue': `Continue working on this project from where the last session left off.
+
+Instructions:
+1. Read CLAUDE.md to refresh project identity, stack, and standing rules
+2. Read the tasklist to find the current stage and open tasks
+3. Check for a stage kickoff prompt: \`docs/handoff/stage{XX}-prompt.md\` for the current stage
+   - If it exists: this is your primary instruction document. Read it and begin executing.
+   - If it does not exist: inform the developer and stop. Do NOT start without a kickoff prompt.
+4. Check git log (last 10 commits) for recent progress
+5. Brief status summary (keep it short), then begin working immediately on the next open task
+
+The kickoff prompt is your approved plan. Execute it. Do NOT ask "shall I proceed?" or "can I start?" for each task. Work autonomously through all tasks in the current stage. Only stop and ask when you encounter genuine ambiguity — something the kickoff prompt doesn't cover or contradicts.
+
+IMPORTANT: You do NOT interpret the concept doc to decide what to build. The kickoff prompt tells you exactly what to build. If the kickoff prompt is missing or ambiguous on a specific point, stop and ask about THAT point — then continue.`,
+
     'update-tasklist': `Update the project's tasklist with current progress.
 
 Instructions:
 1. Read the current tasklist file
-2. For each task, check whether it has been completed based on the codebase
+2. For each task in the CURRENT STAGE ONLY, check whether it has been completed based on the codebase
 3. Mark completed tasks with [x]
-4. Add any new tasks that have emerged during implementation
-5. Update the stage status if all tasks in a stage are complete
-6. Do NOT remove tasks — only update their status
-7. Present the changes for review before writing`,
+4. Update the stage status if all tasks in a stage are complete
+5. Do NOT remove tasks — only update their status
+6. Do NOT add new tasks or stages — the tasklist is owned by Cowork, not CC
+7. Do NOT modify tasks in future stages
+8. Present the changes for review before writing
 
-    'review-concept': `Review the concept document against the current implementation and flag any drift.
+IMPORTANT: The tasklist is created and maintained by Cowork. CC only updates completion status for tasks it has built. If you think a task is missing or wrong, inform the developer — do not modify the tasklist structure.`,
+
+    'review-concept': `Review the current stage's kickoff prompt and concept document against the implementation and flag any drift.
 
 Instructions:
-1. Read the concept document
-2. Compare stated goals, architecture, and scope against what has actually been built
-3. Flag any deviations: features added that aren't in the concept, or concept items that haven't been addressed
-4. Flag any scope creep or missing items
-5. Present findings as a structured summary`,
+1. Read the stage kickoff prompt (\`docs/handoff/stage{XX}-prompt.md\`) for the current stage
+2. Read the concept document for reference
+3. Compare the kickoff prompt's requirements against what has actually been built
+4. Flag any deviations: features built that aren't in the kickoff prompt, or kickoff items that haven't been addressed
+5. Flag any scope creep — anything built that the kickoff prompt explicitly said NOT to build
+6. Present findings as a structured summary
+
+IMPORTANT: The kickoff prompt is the primary instruction. The concept doc is background context. Drift is measured against the kickoff prompt, not the concept doc.`,
 
     'status': `Give a brief project status update.
 
@@ -875,7 +938,43 @@ Instructions:
    - **Stage:** [current stage name and number]
    - **Done:** [count] / [total] tasks
    - **Remaining:** [list of incomplete tasks]
-   - **Blockers:** [any blockers, or "None"]`
+   - **Blockers:** [any blockers, or "None"]`,
+
+    'create-tasklist': `DEPRECATED — CC does not create tasklists.
+
+Tasklists are created and maintained by Cowork (the concept/architecture session). CC only executes stages defined in the tasklist and marks tasks complete.
+
+If this project has no tasklist, inform the developer:
+"No tasklist found. The tasklist needs to be created in a Cowork session before CC can start building."
+
+Do NOT generate a tasklist from the concept doc. Do NOT create your own stage breakdown.`,
+
+    'eod': `Wrap up the current working session with an end-of-day summary.
+
+Instructions:
+1. Read git log for today's commits (use --since="midnight" or last 24h)
+2. Read the tasklist and note what moved from open to done today
+3. Note any files that were changed but not yet committed
+4. Summarise:
+   - **Done today:** bullet list of completed work
+   - **In progress:** anything started but not finished
+   - **Blockers:** issues that need resolution
+   - **Tomorrow:** suggested next steps
+5. If there are uncommitted changes, ask whether to commit them`,
+
+    'test': `Run the project's test suite and verify the build.
+
+Instructions:
+1. Check package.json (or equivalent) for available test/build scripts
+2. Run the test suite (npm test, pytest, etc.) and capture output
+3. Run the build/compile step if applicable
+4. Run any linting or type-checking configured in the project
+5. Summarise:
+   - **Tests:** pass/fail count, any failures with file + line
+   - **Build:** success or error summary
+   - **Lint:** clean or list of issues
+6. If all green, confirm the project is healthy
+7. If failures, suggest fixes for the top-priority issues`
   };
   return commands[type] || '';
 }
@@ -908,7 +1007,7 @@ function generateProjectMapMd(projectName, version) {
 
 // Scaffold a new project
 app.post('/api/scaffold-project', (req, res) => {
-  const { name, parentDir, template, group } = req.body;
+  const { name, parentDir, template, group, type } = req.body;
 
   // Validate name
   if (!name || !name.trim()) {
@@ -982,7 +1081,7 @@ app.post('/api/scaffold-project', (req, res) => {
     scaffoldedFiles.push('docs/v1.0/' + safeName + '_tasklist_v1.0.md');
 
     // Slash commands
-    const slashCommands = ['update-tasklist', 'review-concept', 'status'];
+    const slashCommands = ['start-stage', 'continue', 'update-tasklist', 'review-concept', 'status', 'create-tasklist', 'eod', 'test'];
     for (const cmd of slashCommands) {
       const cmdPath = path.join(projectDir, '.claude', 'commands', cmd + '.md');
       fs.writeFileSync(cmdPath, generateSlashCommand(cmd), 'utf8');
@@ -1022,7 +1121,8 @@ app.post('/api/scaffold-project', (req, res) => {
         claude: 'CLAUDE.md',
         concept: path.join(versionFolder, safeName + '_concept_v1.0.md'),
         tasklist: path.join(versionFolder, safeName + '_tasklist_v1.0.md')
-      }
+      },
+      type: type || 'code'
     });
 
     // Set activeVersion and mark as evaluated (scaffolded projects have all docs)
@@ -1109,7 +1209,7 @@ app.post('/api/scaffold-import', (req, res) => {
     if (!fs.existsSync(commandsDir)) {
       fs.mkdirSync(commandsDir, { recursive: true });
     }
-    const slashCommands = ['update-tasklist', 'review-concept', 'status'];
+    const slashCommands = ['start-stage', 'continue', 'update-tasklist', 'review-concept', 'status', 'create-tasklist', 'eod', 'test'];
     for (const cmd of slashCommands) {
       const cmdPath = path.join(commandsDir, cmd + '.md');
       if (!fs.existsSync(cmdPath)) {
@@ -1452,6 +1552,11 @@ setInterval(async () => {
       // Backfill evaluated flag for projects that pre-date the flag
       if (proj.evaluated === undefined) {
         projects.updateProject(proj.id, { evaluated: true });
+      }
+
+      // Backfill type field for projects that pre-date the field
+      if (proj.type === undefined) {
+        projects.updateProject(proj.id, { type: 'code' });
       }
     }
   } catch (e) {
