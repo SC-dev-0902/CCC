@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.7
+- Fixed: Sub-stage and fix test files (e.g. `CCC_test_stage11a.md`, `CCC_test_stage11a01.md`) now appear in the sidebar — previously only main-stage files were detected
+- Fixed: Test runner now renders interactive checkboxes for sub-stage and fix test files (was rendering as plain markdown)
+- Fixed: Test file path API now accepts string stage identifiers (e.g. `11a`, `11a01`) instead of silently dropping the letter suffix
+
 ## v1.0.6
 - Added: Non-code project support — projects can be typed as Code or Config, with Config skipping git validation
 - Added: Project type badges (COD/CFG) in sidebar for visual identification

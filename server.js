@@ -564,13 +564,13 @@ app.get('/api/projects/:id/test-file-path', (req, res) => {
     const found = findProjectWithPath(req.params.id);
     if (!found) return res.status(404).json({ error: 'Project not found' });
 
-    const stageNumber = parseInt(req.query.stage, 10);
-    if (!stageNumber || stageNumber < 1) {
-      return res.status(400).json({ error: 'stage query parameter is required (positive integer)' });
+    const stageId = req.query.stage;
+    if (!stageId || !/^\d+[a-z]?\d*$/.test(stageId)) {
+      return res.status(400).json({ error: 'stage query parameter is required (e.g. "11", "11a", "11a01")' });
     }
 
     const activeVersion = found.project.activeVersion || '1.0';
-    const relativePath = versions.getTestFilePath(found.project.name, stageNumber, activeVersion);
+    const relativePath = versions.getTestFilePath(found.project.name, stageId, activeVersion);
     const absPath = path.join(found.absPath, relativePath);
 
     // Auto-create the directory if it doesn't exist

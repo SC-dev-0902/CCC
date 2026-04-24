@@ -59,7 +59,7 @@ function scanVersions(projectAbsPath, projectName) {
   // Scan for flat test files in docs/ (legacy backward compat)
   const allDocsFiles = fs.readdirSync(docsDir);
   const escapedName = projectName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const testPattern = new RegExp(`^${escapedName}_test_stage\\d+\\.md$`);
+  const testPattern = new RegExp(`^${escapedName}_test_stage\\d+[a-z]?\\d*\\.md$`);
   for (const f of allDocsFiles) {
     const fullPath = path.join(docsDir, f);
     if (testPattern.test(f) && fs.statSync(fullPath).isFile()) {
@@ -184,7 +184,8 @@ function countCompletedStages(filePath) {
 /**
  * Scan a version directory for core files and test files.
  * Returns { files: (string|object)[], testFiles: { name, checked, total }[] }
- * Test files match {projectName}_test_stage\d+\.md
+ * Test files match {projectName}_test_stage\d+[a-z]?\d*\.md
+ * Supports main stages (stage11), sub-stages (stage11a), and fixes (stage11a01).
  * Tasklist files get stage progress counts: { name, stagesCompleted, stagesTotal }
  */
 function scanVersionFiles(dirPath, projectName) {
@@ -192,7 +193,7 @@ function scanVersionFiles(dirPath, projectName) {
   if (!fs.existsSync(dirPath)) return result;
 
   const escapedName = projectName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const testPattern = new RegExp(`^${escapedName}_test_stage\\d+\\.md$`);
+  const testPattern = new RegExp(`^${escapedName}_test_stage\\d+[a-z]?\\d*\\.md$`);
 
   const entries = fs.readdirSync(dirPath);
   for (const name of entries) {
@@ -310,12 +311,16 @@ function runGitTag(projectAbsPath, tagName) {
 
 /**
  * Get the correct path for a test file based on the active version.
- * Patch versions (three-part like "1.0.6") → docs/v{X.Y}/v{X.Y.Z}/{name}_test_stage{XX}.md
- * Major/minor versions (two-part like "1.0") → docs/v{X.Y}/{name}_test_stage{XX}.md
+ * stageId is a string: purely numeric values (e.g. "11") are zero-padded to 2 digits;
+ * sub-stage or fix identifiers (e.g. "11a", "11a01") are used as-is.
+ * Patch versions (three-part like "1.0.6") → docs/v{X.Y}/v{X.Y.Z}/{name}_test_stage{stageId}.md
+ * Major/minor versions (two-part like "1.0") → docs/v{X.Y}/{name}_test_stage{stageId}.md
  */
-function getTestFilePath(projectName, stageNumber, activeVersion) {
+function getTestFilePath(projectName, stageId, activeVersion) {
   const parts = activeVersion.split('.');
-  const stageStr = String(stageNumber).padStart(2, '0');
+  const stageStr = /^\d+$/.test(String(stageId))
+    ? String(stageId).padStart(2, '0')
+    : String(stageId);
   const fileName = `${projectName}_test_stage${stageStr}.md`;
   if (parts.length === 3) {
     const majorMinor = `v${parts[0]}.${parts[1]}`;

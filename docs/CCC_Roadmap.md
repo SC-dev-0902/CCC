@@ -51,6 +51,65 @@
 
 ---
 
+## v1.0.1 — Bug Fixes & Usage Status Bar
+
+**Status:** Shipped
+**Prerequisite:** v1.0 shipped
+**Theme:** Fix critical bugs found during real-world testing. Add usage visibility.
+
+### What ships in v1.0.1
+
+| Area | Scope |
+|------|-------|
+| **Bug #3 — Import overwrites existing files (CRITICAL)** | Importing a project with existing `*_concept.md` was overwriting it with an empty template. Import is now fully non-destructive — only missing files are scaffolded, existing files are never touched. |
+| **Bug #2 — Imported projects missing folder hierarchy** | Import Wizard now produces identical output to New Project Wizard — full `docs/` and version folder structure, version field for developer to specify (e.g. v1.0), CLAUDE.md template at root if missing. |
+| **Bug #1 — No /evaluate-import notice** | All imports now set `evaluated: false` in `projects.json`. Persistent UI notice prompts developer to run `/evaluate-import` before starting work. New endpoint `POST /api/projects/:id/evaluated` clears the flag. `/evaluate-import` supports two modes: generate from scratch (no concept doc) or audit existing concept doc against actual project artifacts. |
+| **Bug #4 — SHP lost on browser close** | Two-layer defence: `beforeunload` warning when active sessions exist + periodic SHP auto-save every 5 minutes. |
+| **Improvement #5 — Auto-run /continue on session reopen** | On session start, CCC checks for an existing SHP. If found, auto-injects `/continue` after the Claude Code prompt is visible. |
+| **Improvement #7 — Usage status bar** | Persistent status bar fixed to bottom of window (~28px). Hidden on launch, appears on first usage message from PTY. Parser emits `usageUpdate` events (percent, resetTime, isWeekly). Colour thresholds: amber at 80%, red at 95%. Bar is additive — no changes to existing parser state logic. |
+| **Bug #6 — New Version dialog misaligned** | Select options (Major/Minor/Patch) were left-aligned instead of under label text. Fixed to match other CCC dialogs. |
+
+---
+
+## v1.0.2 — Workspace Restructure & Documentation Model
+
+**Status:** Shipped
+**Prerequisite:** v1.0.1 shipped
+**Theme:** Align CCC with the restructured SC-Development workspace. Evolve the project documentation model.
+
+### What ships in v1.0.2
+
+| Area | Scope |
+|------|-------|
+| **Versioned filenames** | Version numbers now included in both folder path and filename: `docs/v1.0/v1.0.2/CCC_concept_v1.0.2.md`. Eliminates ambiguity across tools and conversations. New Project Wizard and New Version action scaffold files with version already in the filename. |
+| **Documentation layer model** | Projects get topic-based doc folders alongside version folders: `discussion/`, `architecture/`, `spec/`, `adr/`, `context/`, `handoff/`. Version-specific files (concept, tasklist, test files) stay in `docs/vX.Y/`. Project-level knowledge (ADRs, specs, context) accumulates across versions in topic folders. |
+| **PROJECT_MAP.md** | New file at project root — filesystem table of contents for CC orientation. Scaffolded by CCC on project creation. Lists key files, doc folders, and source layout. |
+| **SHP relocation** | SHP moved from `docs/{ProjectName}_shp.md` to `docs/handoff/{ProjectName}_shp.md`. Recovery file auto-saved to `docs/handoff/{ProjectName}_recovery.md`. `/eod` and `/continue` updated to new path. |
+| **New Project Wizard update** | Wizard scaffolds the full new folder structure: topic-based doc folders, PROJECT_MAP.md, versioned concept and tasklist filenames. Import follows the same structure — non-destructive. |
+| **CCC own docs restructured** | CCC itself adopts the new doc layer model. Topic-based folders added to `CCC/docs/`. Existing version folders preserved. SHP moved to `docs/handoff/CCC_shp.md`. |
+
+---
+
+## v1.0.3 — Usage Status Bar Fixes
+
+**Status:** Shipped
+**Prerequisite:** v1.0.2 shipped
+**Theme:** Fix the usage bar so it communicates clearly and reliably. The backend was correct — the display was not.
+
+### What ships in v1.0.3
+
+| Area | Scope |
+|------|-------|
+| **Countdown timer — tick every second** | Reset countdown was appearing frozen between data refreshes. Timer now ticks every second using the `resetTime` ISO string from the server. Format: `Xh Ym Zs`. Broken formatter string (`"Resets in resetting..."`) fixed. |
+| **"Last updated" indicator** | Small timestamp showing when the last successful data refresh occurred (e.g. `· updated 5s ago`). Gives the developer confidence the bar is alive even when numbers haven't changed. |
+| **Pulse animation on refresh** | Visual heartbeat — bar briefly flashes when new data arrives from server via WebSocket or REST poll. `usage-pulse` CSS class triggers on `updateUsageBar()`. |
+| **Staleness detection (session-aware)** | If no successful refresh in 60 seconds while a terminal session is active: bar dims to ~0.75 opacity, "last updated" indicator turns amber. Staleness flag cleared immediately when fresh data arrives. No staleness shown when no session is active — expected behaviour, not an error. |
+| **Edge case handling** | `updateUsageBar()` handles identical consecutive data (still pulses, still updates timestamp), zero values, missing fields, and undefined data without breaking the display. |
+
+**Design principle:** CCC displays usage pessimistically — data is CLI-only and the shared pool is invisible. Safety buffers (+5pp token buffer, -30min timer buffer) retained unchanged.
+
+---
+
 ## v1.0.4 — Project Rename, Testing Refresh & Documentation Audit
 
 **Status:** Shipped
@@ -75,7 +134,7 @@
 
 ## v1.0.5 — Usage Clarity & UI Polish
 
-**Status:** Planned
+**Status:** Shipped
 **Prerequisite:** v1.0.4 shipped
 **Theme:** Fix misleading usage display and small UI gaps identified during daily use.
 
@@ -86,6 +145,47 @@
 | **Usage bar label** | "5h CLI" is misleading — implies a personal session and a full 5 hours. Both are wrong. The window is Anthropic's shared rate limit, not the user's session, and it runs out faster because Chat/Desktop consumption is invisible to CCC. New label: "Rate limit: X% (CLI only - actual limit may be lower)". Display must communicate clearly what is being measured and its limitations. |
 | **Version dot tooltip** | The colored dot in front of the version number in the treeview should show a tooltip on hover explaining what each color means (e.g. green/amber/red/grey and what each indicates for that project's status). CSS `title` attribute or a custom hover tooltip - consistent with existing CCC design language. |
 | **Test file reading panel — full width** | When a test file is opened in the reading panel, the content only renders at half the panel width. The right half is empty. Content must use the full available width of the reading panel, same as any other file. |
+
+---
+
+## v1.0.6 — Non-Code Projects, Workflow Enforcement & Activation Fix
+
+**Status:** Shipped
+**Prerequisite:** v1.0.5 shipped
+**Theme:** Final local-era release. Non-code project support, pipeline enforcement in code, and activation gate fixes.
+
+### What ships in v1.0.6
+
+| Area | Scope |
+|------|-------|
+| **Non-code project support** | New `type` field on projects: `"code"` (default) or `"config"`. Config projects skip git requirements (branch checks, commit history, repo validation) but keep the full stage-gate workflow. Project creation/edit UI exposes the type field. Treeview shows **COD** / **CFG** badge on all projects. Startup migration backfills `type: "code"` on existing projects. |
+| **Development workflow enforcement** | `generateSlashCommand()` rewritten to support all 8 commands with workflow-aligned text matching CCC's own `.claude/commands/`. Both scaffold routes (`scaffold-project` and `scaffold-import`) now deploy all 8 commands (was 3). Audit confirmed no code path auto-generates populated tasklists. `/start-project` references removed from import modal UI. |
+| **Test file version-aware placement** | `getTestFilePath()` helper added to `src/versions.js`. New `GET /api/projects/:id/test-file-path?stage=N` endpoint returns the correct path and auto-creates the directory. Patch versions (v1.0.6) place test files in `docs/v1.0/v1.0.6/` — not the major version root. |
+| **Project activation fix** | Comprehensive fix of the activation gate. `evaluated: undefined` no longer blocks Parked→Active drag. `addProject()` defaults `evaluated: true` when undefined. All code paths checked — `handleDrop()`, edit modal, API validation. Config projects bypass evaluation checks entirely. Ad-hoc 2026-03-27 fix removed and replaced with proper solution. |
+
+---
+
+## v1.0.7 — Sub-Stage & Fix Test File Detection
+
+**Status:** Shipped
+**Prerequisite:** v1.0.6 shipped
+**Theme:** CCC's test file regex only matches main-stage files. Sub-stage and fix test files are invisible to the treeview and the path API.
+
+### What ships in v1.0.7
+
+| Area | Scope |
+|------|-------|
+| **Regex fix — flat docs scan** | `src/versions.js` flat scan regex updated from `_test_stage\d+\.md$` to `_test_stage\d+[a-z]?\d*\.md$`. Flat legacy test files with sub-stage or fix suffixes are now detected. |
+| **Regex fix — version folder scan** | Same regex fix applied to `scanVersionFiles()` in `src/versions.js`. Sub-stage and fix test files in version/patch subfolders are now detected and shown in the treeview. |
+| **Regex fix — frontend test runner** | `public/app.js` `isTestFile()` regex updated to `_test_stage\d+[a-z]?\d*\.md$` so the test runner renders interactive checkboxes for sub-stage and fix test files instead of plain markdown. |
+| **API fix — stage identifier as string** | `GET /api/projects/:id/test-file-path` previously called `parseInt(req.query.stage)`, silently stripping letter suffixes. Now accepts string stage identifiers matching `\d+[a-z]?\d*` (e.g. `11`, `11a`, `11a01`). |
+| **`getTestFilePath()` fix** | Updated to accept a string stage identifier. Pads only purely numeric identifiers to 2 digits; sub-stage identifiers (e.g. `11a`, `11a01`) are used as-is. |
+| **CLAUDE.md update** | Treeview regex documented in Stage Gate Process section updated to reflect the new pattern. |
+
+**Naming convention supported after this patch:**
+- `CCC_test_stage11.md` — main stage
+- `CCC_test_stage11a.md` — sub-stage
+- `CCC_test_stage11a01.md` — fix
 
 ---
 

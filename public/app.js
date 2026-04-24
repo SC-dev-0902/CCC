@@ -1344,7 +1344,7 @@ function getTabInfo(tabId) {
 // --- Test File Detection ---
 
 function isTestFile(fileName) {
-  return /_test_stage\d+\.md$/.test(fileName);
+  return /_test_stage\d+[a-z]?\d*\.md$/.test(fileName);
 }
 
 // --- Session Content Helper ---
