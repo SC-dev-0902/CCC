@@ -273,20 +273,21 @@ All servers have two NICs:
 
 **Servers:**
 
-| Role | Host Alias | OS | Service | Key Details |
-|---|---|---|---|---|
-| Dev-Web | `dev-web` | Debian 12 | Apache 2.4.66 | MPM event, DocumentRoot: /var/www/kkh01vdweb01/wwwroot |
-| Dev-DB | `dev-db` | Debian 12 | MariaDB 10.11.14 | — |
-| Dev-Repo | `dev-repo` | Debian 12 | Forgejo | Git repository hosting |
+There are no hostname aliases. Always use the full FQDN — never a short name.
+
+| Role | OS | Service | SRV-LAN (native) | MNG-LAN (SSH) | Key Details |
+|---|---|---|---|---|---|
+| Dev-Web | Debian 12 | Apache 2.4.66 | `kkh01vdweb01.mcsfam.local:80/443` | `kkh01vdweb01.mng.mcsfam.local:22` | MPM event, DocumentRoot: /var/www/kkh01vdweb01/wwwroot |
+| Dev-DB | Debian 12 | MariaDB 10.11.14 | `kkh01vddb01.mcsfam.local:3306` | `kkh01vddb01.mng.mcsfam.local:22` | — |
+| Dev-Repo | Debian 12 | Forgejo | `kkh01vrepo01.mcsfam.local:3000` | `kkh01vrepo01.mng.mcsfam.local:22` | Git repository hosting |
 
 **SSH access:**
-- Via MNG-LAN only
-- Host aliases defined in `~/.ssh/config` on the local Mac
+- Via MNG-LAN only (`.mng.mcsfam.local`)
 - Key-based authentication
 - **Credentials rule:** No usernames, passwords, keys, or IPs are stored in CLAUDE.md, project files, or any repository. Ever.
 
 **Host targeting rule:**
-Every command Claude produces must explicitly state which machine it targets. No ambiguity. Format: `[dev-web]`, `[dev-db]`, `[dev-repo]`, or `[local]`.
+Every command Claude produces must explicitly state which machine it targets. No ambiguity. Use the full FQDN — never a short alias. Format: `[kkh01vdweb01]`, `[kkh01vddb01]`, `[kkh01vrepo01]`, or `[local]`.
 
 **Destructive command guardrail:**
 Claude must never execute destructive commands without explicit confirmation, regardless of user privileges. This includes but is not limited to: `rm -rf`, `DROP`, `TRUNCATE`, service restarts, config overwrites, and force-push operations.

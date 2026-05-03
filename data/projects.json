@@ -15,13 +15,13 @@
       "name": "CCC",
       "path": "CCC",
       "group": "Active",
-      "order": 1,
+      "order": 0,
       "coreFiles": {
         "claude": "CLAUDE.md",
         "concept": "docs/v1.0/v1.0.1/CCC_concept_v1.0.1.md",
         "tasklist": "docs/v1.0/v1.0.1/CCC_tasklist.md"
       },
-      "activeVersion": "1.0.6",
+      "activeVersion": "1.1",
       "evaluated": true,
       "type": "code"
     },
@@ -30,7 +30,7 @@
       "name": "PatchPilot",
       "path": "Projects/PatchPilot",
       "group": "Parked",
-      "order": 7,
+      "order": 9,
       "coreFiles": {
         "claude": "CLAUDE.md",
         "concept": "docs/v1.0/PatchPilot_concept.md",
@@ -45,7 +45,7 @@
       "name": "PeuanRuamChan",
       "path": "Projects/PeuanRuamChan",
       "group": "Parked",
-      "order": 8,
+      "order": 10,
       "coreFiles": {
         "claude": "CLAUDE.md",
         "concept": "docs/v1.0/PeuanRuamChan_concept.md",
@@ -60,7 +60,7 @@
       "name": "SC-Web",
       "path": "Projects/SC-Web",
       "group": "Parked",
-      "order": 9,
+      "order": 11,
       "coreFiles": {
         "claude": "CLAUDE.md",
         "concept": "docs/v1.0/SC-Web_concept.md",
@@ -75,7 +75,7 @@
       "name": "Pactum - Core",
       "path": "Projects/Pactum - Core",
       "group": "Parked",
-      "order": 6,
+      "order": 8,
       "coreFiles": {
         "claude": "CLAUDE.md",
         "concept": "docs/v1.0/Pactum - Core_concept.md",
@@ -90,7 +90,7 @@
       "name": "LedgerNest",
       "path": "Projects/LedgerNest",
       "group": "Parked",
-      "order": 4,
+      "order": 6,
       "coreFiles": {
         "claude": "CLAUDE.md",
         "concept": "docs/v1.0/LedgerNest_concept.md",
@@ -119,27 +119,27 @@
       "id": "bb04c9bd-abcd-4640-9f62-aa26c4a921d3",
       "name": "TradingMaster",
       "path": "Projects/TradingMaster",
-      "group": "Parked",
-      "order": 10,
+      "group": "Active",
+      "order": 2,
       "coreFiles": {
         "claude": "CLAUDE.md",
-        "concept": "docs/Trading_project_concept.md",
-        "tasklist": "docs/v1.0/TradingMaster_tasklist.md"
+        "concept": "docs/v1.0/TradingMaster_concept_v1.0.md",
+        "tasklist": "docs/v1.0/TradingMaster_tasklist_v1.0.md"
       },
       "activeVersion": "1.0",
-      "evaluated": false,
+      "evaluated": true,
       "type": "code"
     },
     {
       "id": "3a383926-f39a-44e9-bbfc-8d23b8886bc8",
       "name": "LeadSieve - Service",
-      "path": "Projects/leadsieve-service",
+      "path": "Projects/Leadsieve - Service",
       "group": "Parked",
-      "order": 3,
+      "order": 4,
       "coreFiles": {
         "claude": "CLAUDE.md",
-        "concept": "docs/v1.0/leadsieve-service_concept.md",
-        "tasklist": "docs/v1.0/LeadSieve-Service_tasklist.md"
+        "concept": "docs/v1.0/Leadsieve - Service_concept.md",
+        "tasklist": "docs/v1.0/LeadSieve - Service_tasklist.md"
       },
       "activeVersion": "1.0",
       "evaluated": true,
@@ -148,7 +148,7 @@
     {
       "id": "a0d08cce-9cf4-4480-9742-9e06d32d244a",
       "name": "LeadSieve - Admin",
-      "path": "Projects/leadsieve-admin",
+      "path": "Projects/LeadSieve - Admin",
       "group": "Parked",
       "order": 2,
       "coreFiles": {
@@ -165,7 +165,7 @@
       "name": "Medusa",
       "path": "Projects/Medusa",
       "group": "Parked",
-      "order": 5,
+      "order": 7,
       "coreFiles": {
         "claude": "CLAUDE.md",
         "concept": "docs/v1.0/Medusa_concept_v1.0.md",
@@ -195,7 +195,7 @@
       "name": "VitalPBX",
       "path": "Projects/VitalPBX",
       "group": "Parked",
-      "order": 11,
+      "order": 13,
       "coreFiles": {
         "claude": "CLAUDE.md",
         "concept": "docs/v1.0/VitalPBX_concept.md",
@@ -204,6 +204,66 @@
       "activeVersion": "1.0",
       "evaluated": true,
       "type": "code"
+    },
+    {
+      "id": "9df6a1e7-5d89-47f3-bef2-a5f3e6372e28",
+      "name": "TheMediaDB",
+      "path": "Projects/TheMediaDB",
+      "group": "Parked",
+      "order": 12,
+      "coreFiles": {
+        "claude": "CLAUDE.md",
+        "concept": "docs/v1.0/TheMediaDB_concept.md",
+        "tasklist": "docs/v1.0/TheMediaDB_tasklist.md"
+      },
+      "evaluated": true,
+      "activeVersion": "1.0",
+      "type": "code"
+    },
+    {
+      "id": "49ddc1b8-0dad-4028-b6e0-5a6aa78c0a9e",
+      "name": "LeadSieve - Web",
+      "path": "Projects/LeadSieve - Web",
+      "group": "Parked",
+      "order": 5,
+      "coreFiles": {
+        "claude": "CLAUDE.md",
+        "concept": "docs/v1.0/LeadSieve - Web_concept.md",
+        "tasklist": "docs/v1.0/LeadSieve - Web_tasklist.md"
+      },
+      "evaluated": true,
+      "activeVersion": "1.0",
+      "type": "code"
+    },
+    {
+      "id": "92d6f621-1703-4662-b0d4-2a0e3b453202",
+      "name": "LeadSieve - Infra",
+      "path": "Projects/LeadSieve - Infra",
+      "group": "Parked",
+      "order": 3,
+      "coreFiles": {
+        "claude": "CLAUDE.md",
+        "concept": "docs/v1.0/LeadSieve - Infra_concept_v1.0.md",
+        "tasklist": "docs/v1.0/LeadSieve - Infra_tasklist_v1.0.md"
+      },
+      "type": "config",
+      "evaluated": true,
+      "activeVersion": "1.0"
+    },
+    {
+      "id": "b6eeba00-1245-4f9c-8735-5f0a177057ca",
+      "name": "MCSFAM",
+      "path": "Projects/MCSFAM",
+      "group": "Active",
+      "order": 1,
+      "coreFiles": {
+        "claude": "CLAUDE.md",
+        "concept": "docs/v1.0/MCSFAM_concept_v1.0.md",
+        "tasklist": "docs/v1.0/MCSFAM_tasklist_v1.0.md"
+      },
+      "type": "config",
+      "evaluated": true,
+      "activeVersion": "1.0"
     }
   ]
 }

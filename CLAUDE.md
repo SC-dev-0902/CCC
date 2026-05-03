@@ -172,8 +172,8 @@ Development proceeds in defined stages. See `docs/v1.0/CCC_tasklist.md` for the 
 - **Never begin Stage N+1 without an explicit Go**
 - **Before every Go/NoGo gate, generate a test checklist file.** No test file = no gate.
   - Naming: `docs/v{X.Y}/{ProjectName}_test_stage{XX}.md` (e.g. `CCC_test_stage01.md`)
-  - MUST use `_test_stage` — CCC treeview regex: `/_test_stage\d+[a-z]?\d*\.md$/`
-  - Supports main stages (e.g. `CCC_test_stage11.md`), sub-stages (`CCC_test_stage11a.md`), and fixes (`CCC_test_stage11a01.md`).
+  - MUST use `_test_stage` — CCC treeview regex: `/_test_stage\d+[a-z]*\d*\.md$/`
+  - Supports main stages (e.g. `CCC_test_stage11.md`), sub-stages (`CCC_test_stage11a.md`, `CCC_test_stage07ac.md`), and fixes (`CCC_test_stage11a01.md`, `CCC_test_stage07ac01.md`).
   - Any other naming (`_test_batch`, `_test_`, etc.) is invisible to CCC
   - This rule applies to all CCC-managed projects
 - Stage 01 produces a static UI shell — no backend, no real terminals, hardcoded data only. The UI must feel right before any backend code is written.
