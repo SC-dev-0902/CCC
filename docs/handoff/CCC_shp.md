@@ -1,80 +1,69 @@
-# Session Handover Pack — CCC
-*Generated: 2026-05-04 | Version: v1.1.0 (Stage 01 GO) | Stage 02 next*
+# Session Handover Pack - CCC
+*Generated: 2026-05-04 | Version: v1.1.0 (Stage 02a GO) | Stage 02b next*
 
 ---
 
 ## Project
 
 - **Name:** Claude Command Center (CCC)
-- **Version:** v1.1.0 — **Stage 01 (UI Design) complete on 2026-05-04**. All sub-stages 01a-01f done.
-- **Active version in projects.json:** "1.1.0" (was "1.1" before this session — corrected by Phet to align with versioned filename convention)
-- **Stage:** v1.1 Stage 01 GO. Next: Stage 02 — UI Shell. Implementation work begins on top of the wired design preview.
-- **Status:** Wired design preview is live at http://172.16.10.6/CCC/design-preview/. Mac CCC v1.0.7 still running on Mac localhost:3000 (production). CCC v1.1 instance running on Dev-Web (PID 3864 at session end, port 3000).
+- **Version:** v1.1.0 - Stage 02a (Treeview: Parent/Sub-Project Hierarchy) complete on 2026-05-04. All 14 test items ticked.
+- **Active version in projects.json:** "1.1.0".
+- **Stage:** v1.1 Stage 02a GO. Next: Stage 02b - Locking Badge & "New" Group.
+- **Status:** Wired design preview at `http://172.16.10.6/CCC/design-preview/` now renders three new fixture parents (Orion, Nexus, Vertex) with progress bars and version badges. Sidebar is resizable. Group headers readable. Mac CCC v1.0.7 still on Mac localhost:3000.
 
 ---
 
-## What Was Done This Session (Stage 01f)
+## What Was Done This Session (Stage 02a)
 
 ### The deliverable
-A **fully-wired Next.js design preview** of the v1.1 UI, served via Apache on Dev-Web at `http://172.16.10.6/CCC/design-preview/`. Five routes — dashboard `/`, login `/login`, setup `/setup`, settings `/settings` — sharing one persistent app shell (header with three diodes + theme toggle, tab bar, live treeview sidebar, main content area). Theme toggle is global (sun/moon icon, persists to localStorage). Dummy data inline. All form inputs are real React state, treeview filter/expand/lock-tooltip works, in-context modals (project edit, register dialog, watchdog banner, reconnecting banner) trigger from a "preview controls" strip in the dashboard.
+Three new test fixture parents wired into the Next.js design preview:
+- **Orion** (Active group, running, Stage 2/8, expanded by default) - sub-projects `orion-api` (running, v1.0) + `orion-web` (unknown, v1.0)
+- **Nexus** (Active group, completed, Stage 1/6, collapsed by default) - sub-projects `nexus-core` (completed, v1.0) + `nexus-admin` (unknown, v1.0) + `nexus-mobile` (unknown, v1.0)
+- **Vertex** (Parked group, unknown, Stage 0/5, collapsed by default) - sub-project `vertex-service` (unknown, v1.0)
 
-### Scope evolution mid-stage
-The 01f kickoff prompt (`docs/handoff/stage01f-prompt.md`) asked for a screenshot-gallery preview — single static `index.html` with embedded screenshots for sub-stages 01b-01e plus the live 01a Next.js component. CC built that first. Phet rejected it: "the page has to be the framework for our coding ... fully wired site with the screenshots as guideline (dummy data for now is fine)". The deliverable was redone from scratch as the wired multi-route Next.js site.
+Plus two mid-stage adjustments at Phet's request:
+- Group header (NEW / ACTIVE / PARKED) contrast bumped to `textPrimary` + `font-semibold` + 11px (was unreadable `textMuted` 10px)
+- Resizable sidebar: drag handle between sidebar and main, 200-600px range, persists to `localStorage`, double-click resets to 320px
 
-Tech stack decision: Approach A (extend the existing 01a Next.js app with new pages/components for 01b-01e) rather than vanilla JS. Implication: Stage 02+ will need to translate React → CCC's actual Vanilla JS production frontend.
+### Scope detour mid-stage
+The 02a kickoff prompt (`docs/handoff/stage02a-prompt.md`) initially told CC to edit `public/app.js` and `public/styles.css` (the v1.0 vanilla JS frontend). CC did so and gave Phet the wrong test URL (`http://172.16.10.6:3000/`). Phet flagged this: the v1.1 framework is the Next.js design preview, not the v1.0 production frontend.
 
-### Key code added/changed in 01f
-- `docs/v1.1/design/stage01a-dark-light/next.config.mjs` — added `output: 'export'`, `basePath: '/CCC/design-preview'`, `trailingSlash: true`
-- `docs/v1.1/design/stage01a-dark-light/app/` — new pages: `page.tsx` (rewrote to use AppShell), `login/page.tsx`, `setup/page.tsx`, `settings/page.tsx`
-- `docs/v1.1/design/stage01a-dark-light/components/`:
-  - NEW: `theme-context.tsx` (ThemeProvider + useTheme + tokens helper)
-  - NEW: `app-shell.tsx` (header + tab bar + sidebar + main slot)
-  - NEW: `dashboard-main.tsx` (terminal placeholder + preview-control triggers)
-  - NEW: `treeview-shell.tsx` (live filterable treeview)
-  - NEW: `auth-card.tsx` (SignInCard, CreateAdminCard)
-  - NEW: `settings-shell.tsx` (3-section settings + 4-step migration tool)
-  - NEW: `component-gallery.tsx` (modals + banners — used in-context, not in a gallery page anymore)
-  - DELETED: `ccc-dashboard.tsx`, `top-menu-shell.tsx`, `page-frame.tsx` (gallery-style)
-- `docs/v1.1/design/stage01a-dark-light/lib/dummy-data.ts` — projects, users, integrations, migration families
-- `docs/v1.1/design/preview/` — built static export (52 → ~80 files, all under basePath `/CCC/design-preview`)
-- `server.js:24` — added `app.use('/design-preview', express.static(...))`. Active for any CCC instance running from this codebase.
-- `docs/v1.1/CCC_test_stage01f.md` — 41-item test checklist, all marked [x] by Phet
-- `.gitignore` — added `.next/` and `.smbdelete*`
+The kickoff prompt was rewritten to target the design preview source (`docs/v1.1/design/stage01a-dark-light/lib/dummy-data.ts` + `components/treeview-shell.tsx`). The vanilla-JS edits were reverted clean. The implementation moved into the Next.js source.
 
-### Apache (Dev-Web, outside repo)
-- Created `/etc/apache2/conf-available/CCC-design-preview-alias.conf`:
-  ```apache
-  RewriteEngine On
-  RewriteRule ^/CCC/design-preview$ /CCC/design-preview/ [PT,L]
-  Alias "/CCC/design-preview" "/mnt/sc-development/CCC/docs/v1.1/design/preview/"
-  <Directory "/mnt/sc-development/CCC/docs/v1.1/design/preview">
-      Options FollowSymLinks
-      AllowOverride All
-      Require all granted
-  </Directory>
-  ```
-- `a2enconf CCC-design-preview-alias`, `systemctl reload apache2` — done.
+This is a clarification of the workflow rule for v1.1+: **the Next.js design preview is the dev base for Stage 02+ implementation, not just a visual reference.** Future Stage 02b+ kickoff prompts should target the design preview source.
 
-### Build flow
+### Key code added/changed
+- `docs/v1.1/design/stage01a-dark-light/lib/dummy-data.ts` - added `version?: string` to `SubProject` interface; appended Orion + Nexus to `ACTIVE_PROJECTS`; replaced empty `PARKED_PROJECTS` with Vertex.
+- `docs/v1.1/design/stage01a-dark-light/components/treeview-shell.tsx`:
+  - `SubProjectRow` renders `<Badge>{sub.version}</Badge>` after the type badge when `sub.version` is set
+  - `ProjectRow` defaults Orion + LeadSieve to expanded, others collapsed (`expandedByDefault`)
+  - `Parked` group now renders `PARKED_PROJECTS` with shared `filterProjects` helper (was hardcoded "empty")
+  - `GroupHeader` color: `textMuted` -> `textPrimary`, weight: + `font-semibold`, size: 10px -> 11px
+- `docs/v1.1/design/stage01a-dark-light/components/app-shell.tsx`:
+  - `useState(sidebarWidth)` hydrated from `localStorage["ccc-sidebar-width"]`
+  - Drag divider element between `<aside>` and `<main>`; `mousedown` -> window `mousemove`/`mouseup` listeners; constraints 200-600px; `cursor: col-resize`, body cursor + user-select locked during drag; double-click resets to 320
+- `docs/v1.1/design/preview/` - rebuilt static export (~80 files, manifest hashes changed)
+- `docs/handoff/stage02a-prompt.md` - rewritten from "edit `public/*`" to "edit Next.js source + rebuild + rsync"
+- `docs/v1.1/CCC_test_stage02a.md` - 14-item test checklist, all `[x]`
+- `docs/v1.1/CCC_tasklist_v1.1.0.md` - all four Stage 02a items checked off
+
+### Build flow (unchanged from 01f, now standard for v1.1)
 1. Source on share at `/mnt/sc-development/CCC/docs/v1.1/design/stage01a-dark-light/`
-2. rsync to Dev-Web local `/tmp/stage01a-build/` (excluding node_modules/.next/out)
-3. `npm install && npm run build` on /tmp (ext4 — fast: ~2 min install first time, <1s cached; ~6s build)
-4. rsync `/tmp/stage01a-build/out/` → `/mnt/sc-development/CCC/docs/v1.1/design/preview/`
-5. Apache alias serves it at `http://172.16.10.6/CCC/design-preview/`
-
-Building directly on the share would be slow due to NFS small-file write overhead; building on Dev-Web local /tmp keeps install + build fast.
+2. SSH to Dev-Web (`kkh01vdweb01.mng.mcsfam.local`)
+3. `rsync -a --delete --exclude=node_modules --exclude=.next --exclude=out` to `/tmp/stage01a-build/`
+4. `cd /tmp/stage01a-build && npm run build` (npm install only on first build; ~6s rebuild)
+5. `rsync -a --delete /tmp/stage01a-build/out/ /mnt/sc-development/CCC/docs/v1.1/design/preview/`
+6. Apache alias serves from `/mnt/sc-development/CCC/docs/v1.1/design/preview/` at `http://172.16.10.6/CCC/design-preview/`. No reload needed.
 
 ---
 
 ## Decisions Made
 
-- **Approach A (extend Next.js).** All wired 01b-01e components live inside the same Next.js app at `docs/v1.1/design/stage01a-dark-light/`, sharing SC tokens, Inter font, theme context. Stage 02 implementation will translate React → vanilla JS for production CCC frontend.
-- **Build on Dev-Web /tmp, deploy to share.** Faster than building on the share. Single rsync afterward. Both Mac (SMB) and Dev-Web (NFS) see the same `preview/` content.
-- **Dummy data inline in `lib/dummy-data.ts`.** Swappable later when real APIs exist.
-- **Theme toggle persists to localStorage.** Whole app (header, sidebar, main, modals, banners) follows.
-- **CCC v1.1 instance started on Dev-Web** for the 01f test (`nohup env PORT=3000 node server.js`, PID 3864). Mac CCC v1.0.7 untouched on localhost:3000 (production).
-- **"No localhost for v1.1" rule.** Saved to memory. v1.1 lives entirely on Dev-Web; v1.0 stays on Mac for daily use.
-- **"Design preview = wired framework, not screenshots" rule.** Saved to memory. Future preview stages must produce wired code, not image galleries.
+- **Design preview is the dev base, not screenshots.** Stage 02+ implements in `docs/v1.1/design/stage01a-dark-light/`. Vanilla JS files in `public/` are NOT the v1.1 implementation target.
+- **Test URL for Stage 02+ is `http://172.16.10.6/CCC/design-preview/`.** Not port 3000. Apache serves the static Next.js export.
+- **`/CCC/design-preview/` is the only `/CCC/...` URL that resolves on Apache.** No `/CCC/` -> live CCC binding exists. The CCC v1.1 Express instance (port 3000) is unrelated to the design preview.
+- **Test files follow v1.0 structure** - `docs/v1.0/CCC_test_stage*.md` are the canonical pattern. Stage 02a's flat checklist was below standard. Future test files use sectioned structure with steps + outcomes, comment placeholders, footer. Memory saved.
+- **Out-of-scope items get committed in the same stage.** Group header polish + resizable sidebar were direct mid-stage asks; rolled into the Stage 02a commit rather than split into 02a01.
 
 ---
 
@@ -82,93 +71,101 @@ Building directly on the share would be slow due to NFS small-file write overhea
 
 | Commit | Description | Date |
 |---|---|---|
-| ... v1.0.0 - v1.0.7 ... | (see prior SHP) | 2026-02-27 to 2026-04-24 |
-| `ab9bee7` | **v1.1.0 Stage 00a+00b** — TrueNAS share mounted (Mac SMB + Dev-Web NFS), v1.1 concept/tasklist added | 2026-05-04 |
-| (this commit) | **v1.1.0 Stage 01f** — wired design preview at /CCC/design-preview/, basePath Next.js, Apache alias | 2026-05-04 |
+| ... v1.0.0 - v1.0.7 ... | (see prior SHPs) | 2026-02-27 to 2026-04-24 |
+| `ab9bee7` | v1.1.0 Stage 00a+00b - TrueNAS share mounted | 2026-05-04 |
+| `5f5d03f` | v1.1.0 Stage 01f - wired design preview live at `/CCC/design-preview/` | 2026-05-04 |
+| `fd0265b` | **v1.1.0 Stage 02a** - Orion/Nexus/Vertex parents, version badges, resizable sidebar, group header polish | 2026-05-04 |
 
-Tags pushed to both remotes: `v1.0.0` → `v1.0.7`. v1.1.0 not yet tagged (will be when v1.1 ships).
+Pushed to Forgejo. GitHub push pending (Bash tool can't reach keychain - Phet to `git push github main`).
+
+Tags: `v1.0.0` -> `v1.0.7` on both remotes. v1.1.0 not yet tagged.
 
 ---
 
-## Architecture & File Map (v1.1 additions only — see prior SHP for v1.0)
+## Architecture & File Map (v1.1 active surface)
 
 | Area | File / Path |
 |---|---|
-| Design preview source | `docs/v1.1/design/stage01a-dark-light/` (Next.js 16 with Turbopack) |
-| Design preview build output | `docs/v1.1/design/preview/` (static HTML, ~80 files, basePath `/CCC/design-preview`) |
-| Screenshots (visual reference for Stage 02 implementation) | `docs/v1.1/design/stage01-*.png` (11 files) |
-| Static route in CCC's Express | `server.js:24` |
+| Design preview source (Next.js 16) | `docs/v1.1/design/stage01a-dark-light/` |
+| Treeview component | `components/treeview-shell.tsx` |
+| App shell + resizable sidebar | `components/app-shell.tsx` |
+| Theme tokens | `components/theme-context.tsx` |
+| Dummy data | `lib/dummy-data.ts` |
+| Static build output | `docs/v1.1/design/preview/` |
 | Apache alias config | `/etc/apache2/conf-available/CCC-design-preview-alias.conf` (on Dev-Web, NOT in repo) |
-| Stage 01f kickoff prompt | `docs/handoff/stage01f-prompt.md` |
-| Stage 01f test file | `docs/v1.1/CCC_test_stage01f.md` |
+| Stage 02a kickoff prompt | `docs/handoff/stage02a-prompt.md` |
+| Stage 02a test file | `docs/v1.1/CCC_test_stage02a.md` |
+| v1.1 tasklist | `docs/v1.1/CCC_tasklist_v1.1.0.md` |
 
 ---
 
-## Frontend State Model (preview app)
+## Frontend State Model (preview app, additions)
 
-- `theme` — ThemeContext, dark | light. localStorage key `ccc-theme`. `<html class="dark">` toggled.
-- `activeTabId` (dashboard) — string. Three default tabs: leadsieve, ccc, settings.
-- Dashboard preview-controls flags: `editOpen`, `registerOpen`, `watchdog`, `reconnecting`.
-- Treeview internal state: `query` (filter), per-row `expanded` flags.
-- Settings-shell: `section` (Integrations | User Management | Migration Tool), `step` (0-3).
+- `app-shell.tsx`:
+  - `sidebarWidth: number` (200-600), persisted to `localStorage["ccc-sidebar-width"]`, default 320
+  - `dragging: boolean` - true while user is dragging the divider; locks body cursor and user-select
+- `treeview-shell.tsx`:
+  - `ProjectRow.expanded` - `useState(expandedByDefault)`. `expandedByDefault = project.id === "leadsieve" || project.id === "orion"`. Other projects collapsed.
+  - `filteredActive` and `filteredParked` both flow through shared `filterProjects(list)` helper. Filter matches parent name OR sub-project name; keeps parents whose children matched.
 
 ---
 
 ## Apache & Deployment
 
 ### v1.1 design preview (live)
-- URL: http://172.16.10.6/CCC/design-preview/
-- Static via Apache `Alias` → `/mnt/sc-development/CCC/docs/v1.1/design/preview/`
-- Updates: rebuild on Dev-Web `/tmp/stage01a-build/`, rsync `out/` → preview/. No Apache reload needed.
+- URL: `http://172.16.10.6/CCC/design-preview/`
+- Apache `Alias` -> `/mnt/sc-development/CCC/docs/v1.1/design/preview/`
+- Updates: rebuild on Dev-Web `/tmp/stage01a-build/`, rsync `out/` -> `preview/`. No Apache reload.
 
-### CCC v1.1 Express instance (also running for 01f, but the preview itself is Apache-served)
-- Started by `cd /mnt/sc-development/CCC && nohup env PORT=3000 node server.js > /tmp/ccc-v1.1.log 2>&1 &`
-- PID at session end: 3864 (will not survive Dev-Web reboot)
-- Stop with: `pkill -f "node server.js"` on Dev-Web
+### Apache routing summary
+| URL path | Binds to |
+|---|---|
+| `/` | Apache DocumentRoot `/var/www/kkh01vdweb01/wwwroot/` (steinhofer-consulting site) |
+| `/proxforge/` | mod_proxy -> `127.0.0.1:8800` |
+| `/CCC/design-preview/` | Apache Alias -> share preview folder |
+| `/CCC/...` (anything else) | 404 |
+
+There is no Apache binding to the live CCC Express server. `http://172.16.10.6:3000/` is the raw Node port (CCC v1.1 instance, manual nohup).
 
 ### Mac CCC v1.0.7 (production, unchanged)
-- localhost:3000, PID 86709 at session end
+- localhost:3000 on Mac
 - Untouched this session
 
 ---
 
 ## Dependencies
 
-CCC server: unchanged from v1.0.7. Next.js preview app uses its own `package.json` at `docs/v1.1/design/stage01a-dark-light/`:
-- Next.js 16.2.4 (Turbopack)
-- React 19, React DOM 19
-- shadcn/ui components (existing from V0 source)
-- lucide-react icons
-
-`node_modules/` is present on the share but `.gitignore`d. `.next/` is now also `.gitignore`d.
+CCC server: unchanged from v1.0.7. Next.js preview app: unchanged dependency set (Next.js 16.2.4, React 19, shadcn/ui, lucide-react). No new packages added in 02a.
 
 ---
 
-## Known Gotchas (additions for v1.1)
+## Known Gotchas (cumulative for v1.1)
 
-1. **Building on the share is slow over NFS** — small-file writes to TrueNAS via NFS take many minutes. Always build on Dev-Web local `/tmp` and rsync `out/` to the share.
-2. **Building on Mac SMB is much slower still** (~30+ min for npm install of a Next.js app vs 2 min on Dev-Web ext4). Don't.
-3. **Next.js `basePath: '/CCC/design-preview'`** must be in `next.config.mjs`. Without it, the static export's absolute `/_next/...` URLs break under Apache alias (404). All client links must respect basePath (Next.js's `<Link>` does this automatically).
-4. **`pnpm: not found` warning at end of `npm run build`** — non-fatal post-build script trying pnpm; ignore.
-5. **No deploy.sh for the preview** — preview lives on the share, accessed by both Mac and Dev-Web at the same path. "Deploy" = rsync out/ to preview/.
-6. **server.js `/design-preview` Express route is now redundant** for the live URL (Apache serves the static folder directly), but kept in code so any CCC running from this codebase has the route. Remove only if it conflicts with future routing.
-7. **Apache config `CCC-design-preview-alias.conf` is not in the CCC repo** — it lives on Dev-Web at `/etc/apache2/conf-available/`. If Dev-Web is rebuilt, recreate it from the SHP.
-8. **DNS:** `kkh01vdweb01.mcsfam.local` does NOT resolve from Mac (only `.mng.` does). Use the IP `172.16.10.6` or the .mng. hostname for Mac → Dev-Web service URLs until SRV-LAN DNS is configured.
+1. **Test URL is the design preview, not port 3000.** `http://172.16.10.6/CCC/design-preview/` for v1.1+ visual work.
+2. **Browser caching is sticky.** Cmd+Shift+R required after every build. Brave is especially sticky on Next.js asset URLs even though hash-named filenames change per build.
+3. **Building on the share is slow over NFS / very slow over SMB.** Always build on Dev-Web local `/tmp/`. ~6s rebuild after first install.
+4. **Next.js `basePath: '/CCC/design-preview'`** must be in `next.config.mjs`. Without it, `/_next/...` URLs 404 under Apache alias.
+5. **server.js `/design-preview` Express route is redundant** (Apache serves static). Kept in code for any CCC running from this codebase.
+6. **Apache config not in repo.** `/etc/apache2/conf-available/CCC-design-preview-alias.conf` lives on Dev-Web only.
+7. **DNS:** `kkh01vdweb01.mcsfam.local` does NOT resolve from Mac (only `.mng.` does). Use IP `172.16.10.6` or `.mng.` hostname.
+8. **GitHub push requires terminal credentials.** Bash tool can't reach macOS keychain - Phet pushes manually after each stage.
+9. **Recovery file is auto-saved transient session state**, not committed. SHP is the durable artefact.
 
 ---
 
 ## Open Items / Carry-Forwards
 
-- **GitHub push pending** — local Bash tool can't reach the macOS keychain for git credentials. Phet to push to GitHub manually after the Forgejo push completes: `git push github main`.
-- **CCC v1.1 instance on Dev-Web is a manual nohup job, not a service** — Stage 14 will turn this into a systemd service. For now, manual restart needed across reboots.
-- **Apache alias is not version-controlled** — needs documenting in deploy.sh later or in CCC's own infrastructure docs.
-- **Stage 02 (UI Shell)** — implementation work begins. The wired Next.js preview is the visual contract; Stage 02 ports it into CCC's actual production frontend (Vanilla JS per concept doc §10). React-to-vanilla translation will be the bulk of Stage 02.
-- **Carry-forwards from prior sessions:** Mac SMB no fstab entry (manual remount after reboot); `_SC-Development` 6.2GB local backup still kept; GitHub credential refresh; PM2 / Leadsieve / Mac CCC restart per Stage 00.
+- **GitHub push pending** for commit `fd0265b` - Phet to run `git push github main` from terminal.
+- **CCC v1.1 instance on Dev-Web** - no longer needed for the preview test loop. PID 3864 from prior session likely gone after Dev-Web reboot/passage of time.
+- **Apache alias not version-controlled** - still needs to be captured in a deploy.sh or infrastructure doc later.
+- **Stage 02a kickoff prompt edited mid-stage** (broke the immutability rule) because the original target was wrong. Phet directed the rewrite. Future kickoff prompts: check target files before sending.
+- **Stage 02b** - Locking Badge & "New" Group. Cowork to draft kickoff prompt. Source files will be the same Next.js preview surface.
+- **Carry-forwards from prior sessions:** Mac SMB no fstab entry; `_SC-Development` 6.2GB local backup still kept; Mac CCC v1.0.7 untouched on production.
 
 ---
 
 ## Next Actions
 
-1. (After this commit) Phet pushes to GitHub from terminal: `git push github main`.
-2. Begin **Stage 02 (UI Shell)** when ready. Cowork drafts the kickoff prompt for Stage 02a or similar — the actual implementation work in CCC's vanilla JS frontend, using the wired Next.js preview as the visual contract.
-3. CCC v1.1 instance on Dev-Web can be left running or stopped — no longer required for design review since Apache serves the preview. If left running, keep PID 3864 noted.
+1. Phet pushes to GitHub: `git push github main`.
+2. Begin **Stage 02b (Locking Badge & "New" Group)** when ready. Cowork drafts the kickoff prompt targeting the Next.js design preview source.
+3. Future test files use the v1.0 sectioned structure (saved to memory: `feedback_test_file_format_v1_style.md`).
