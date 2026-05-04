@@ -97,10 +97,10 @@
 **Focus:** Static frontend only. All new v1.1 UI elements rendered with hardcoded data, implementing the approved Stage 01 design. No backend wiring, no real DB calls. The interface must look and feel right before any backend code is written.
 
 ### Sub-Stage 02a — Treeview: Parent/Sub-Project Hierarchy
-- [ ] Render hardcoded parent project with collapsible sub-projects underneath
-- [ ] Each sub-project has its own status dot and version indicator
-- [ ] Parent project shows aggregate status dot
-- [ ] Stage progress bar on parent node: hardcoded `Stage 03 / 16` with filled CSS bar
+- [x] Render hardcoded parent project with collapsible sub-projects underneath
+- [x] Each sub-project has its own status dot and version indicator
+- [x] Parent project shows aggregate status dot
+- [x] Stage progress bar on parent node: hardcoded `Stage 03 / 16` with filled CSS bar
 
 ### Sub-Stage 02b — Locking Badge & "New" Group
 - [ ] Sub-project locking badge: `● DevName` renders next to a locked sub-project (hardcoded)

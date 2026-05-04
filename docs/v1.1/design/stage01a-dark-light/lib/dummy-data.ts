@@ -6,6 +6,7 @@ export interface SubProject {
   name: string
   type: ProjectType
   status: Status
+  version?: string
   lockedBy?: string
   files?: { name: string; type: "claude" | "shp" | "concept" | "tasklist" }[]
 }
@@ -53,9 +54,43 @@ export const ACTIVE_PROJECTS: Project[] = [
     status: "running",
     stageProgress: { current: 14, total: 17 },
   },
+  {
+    id: "orion",
+    name: "Orion",
+    type: "code",
+    status: "running",
+    stageProgress: { current: 2, total: 8 },
+    subProjects: [
+      { id: "orion-api", name: "orion-api", type: "code", status: "running", version: "v1.0" },
+      { id: "orion-web", name: "orion-web", type: "code", status: "unknown", version: "v1.0" },
+    ],
+  },
+  {
+    id: "nexus",
+    name: "Nexus",
+    type: "code",
+    status: "completed",
+    stageProgress: { current: 1, total: 6 },
+    subProjects: [
+      { id: "nexus-core",   name: "nexus-core",   type: "code", status: "completed", version: "v1.0" },
+      { id: "nexus-admin",  name: "nexus-admin",  type: "code", status: "unknown",   version: "v1.0" },
+      { id: "nexus-mobile", name: "nexus-mobile", type: "code", status: "unknown",   version: "v1.0" },
+    ],
+  },
 ]
 
-export const PARKED_PROJECTS: Project[] = []
+export const PARKED_PROJECTS: Project[] = [
+  {
+    id: "vertex",
+    name: "Vertex",
+    type: "code",
+    status: "unknown",
+    stageProgress: { current: 0, total: 5 },
+    subProjects: [
+      { id: "vertex-service", name: "vertex-service", type: "code", status: "unknown", version: "v1.0" },
+    ],
+  },
+]
 
 export const USERS = [
   { username: "phet", role: "admin" as const },

@@ -68,6 +68,7 @@ function SubProjectRow({ sub, theme }: { sub: SubProject; theme: "dark" | "light
         <StatusDot status={sub.status} />
         <span className="text-xs" style={{ color: t.textPrimary }}>{sub.name}</span>
         <Badge theme={theme}>{sub.type === "code" ? "COD" : "CFG"}</Badge>
+        {sub.version && <Badge theme={theme}>{sub.version}</Badge>}
         {locked && (
           <span
             className="text-[9px] font-mono px-1.5 py-0.5 ml-auto"
@@ -99,7 +100,8 @@ function SubProjectRow({ sub, theme }: { sub: SubProject; theme: "dark" | "light
 
 function ProjectRow({ project, theme }: { project: Project; theme: "dark" | "light" }) {
   const t = tokens(theme)
-  const [expanded, setExpanded] = useState(true)
+  const expandedByDefault = project.id === "leadsieve" || project.id === "orion"
+  const [expanded, setExpanded] = useState(expandedByDefault)
   const hasChildren = !!project.subProjects?.length
 
   return (
@@ -132,8 +134,8 @@ function GroupHeader({ label, theme }: { label: string; theme: "dark" | "light" 
   const t = tokens(theme)
   return (
     <div
-      className="flex items-center gap-2 px-2 py-1 text-[10px] uppercase tracking-wider mt-2"
-      style={{ color: t.textMuted, borderBottom: `1px solid ${t.border}` }}
+      className="flex items-center gap-2 px-2 py-1 text-[11px] font-semibold uppercase tracking-wider mt-2"
+      style={{ color: t.textPrimary, borderBottom: `1px solid ${t.border}` }}
     >
       <ChevronDown size={10} />
       {label}
@@ -146,9 +148,9 @@ export function TreeviewShell({ theme, filter = "" }: { theme: "dark" | "light";
   const [query, setQuery] = useState(filter)
 
   const matches = (s: string) => s.toLowerCase().includes(query.toLowerCase())
-  const filteredActive = useMemo(() => {
-    if (!query) return ACTIVE_PROJECTS
-    return ACTIVE_PROJECTS
+  const filterProjects = (list: Project[]) => {
+    if (!query) return list
+    return list
       .map((p) => {
         const subMatches = p.subProjects?.filter((s) => matches(s.name)) || []
         if (matches(p.name) || subMatches.length > 0) {
@@ -157,7 +159,9 @@ export function TreeviewShell({ theme, filter = "" }: { theme: "dark" | "light";
         return null
       })
       .filter(Boolean) as Project[]
-  }, [query])
+  }
+  const filteredActive = useMemo(() => filterProjects(ACTIVE_PROJECTS), [query])
+  const filteredParked = useMemo(() => filterProjects(PARKED_PROJECTS), [query])
 
   return (
     <div
@@ -213,10 +217,12 @@ export function TreeviewShell({ theme, filter = "" }: { theme: "dark" | "light";
         {filteredActive.map((p) => <ProjectRow key={p.id} project={p} theme={theme} />)}
 
         <GroupHeader label="Parked" theme={theme} />
-        {PARKED_PROJECTS.length === 0 && (
+        {filteredParked.length === 0 ? (
           <div className="px-2 py-2 text-[10px] italic" style={{ paddingLeft: 24, color: t.textMuted }}>
             empty
           </div>
+        ) : (
+          filteredParked.map((p) => <ProjectRow key={p.id} project={p} theme={theme} />)
         )}
       </div>
 

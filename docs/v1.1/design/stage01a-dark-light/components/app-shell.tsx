@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, type ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Hexagon, Moon, Sun, X } from "lucide-react"
@@ -158,9 +158,47 @@ export interface AppShellProps {
   onCloseTab?: (id: string) => void
 }
 
+const SIDEBAR_MIN = 200
+const SIDEBAR_MAX = 600
+const SIDEBAR_DEFAULT = 320
+const SIDEBAR_STORAGE_KEY = "ccc-sidebar-width"
+
 export function AppShell({ children, tabs, activeTabId, onSelectTab, onCloseTab }: AppShellProps) {
   const { theme } = useTheme()
   const t = tokens(theme)
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT)
+  const [dragging, setDragging] = useState(false)
+
+  useEffect(() => {
+    const stored = typeof window !== "undefined" ? window.localStorage.getItem(SIDEBAR_STORAGE_KEY) : null
+    if (stored) {
+      const n = parseInt(stored, 10)
+      if (!isNaN(n) && n >= SIDEBAR_MIN && n <= SIDEBAR_MAX) setSidebarWidth(n)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!dragging) return
+    const onMove = (e: MouseEvent) => {
+      const w = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, e.clientX))
+      setSidebarWidth(w)
+    }
+    const onUp = () => {
+      setDragging(false)
+      try { window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(sidebarWidth)) } catch {}
+    }
+    window.addEventListener("mousemove", onMove)
+    window.addEventListener("mouseup", onUp)
+    document.body.style.cursor = "col-resize"
+    document.body.style.userSelect = "none"
+    return () => {
+      window.removeEventListener("mousemove", onMove)
+      window.removeEventListener("mouseup", onUp)
+      document.body.style.cursor = ""
+      document.body.style.userSelect = ""
+    }
+  }, [dragging, sidebarWidth])
+
   return (
     <div
       className="flex flex-col"
@@ -173,10 +211,24 @@ export function AppShell({ children, tabs, activeTabId, onSelectTab, onCloseTab 
       <div className="flex flex-1 overflow-hidden">
         <aside
           className="shrink-0 overflow-hidden"
-          style={{ width: 320, borderRight: `1px solid ${t.border}` }}
+          style={{ width: sidebarWidth, borderRight: `1px solid ${t.border}` }}
         >
           <TreeviewShell theme={theme} />
         </aside>
+        <div
+          onMouseDown={(e) => { e.preventDefault(); setDragging(true) }}
+          onDoubleClick={() => setSidebarWidth(SIDEBAR_DEFAULT)}
+          title="Drag to resize - double-click to reset"
+          style={{
+            width: 4,
+            cursor: "col-resize",
+            backgroundColor: dragging ? t.accent : "transparent",
+            transition: dragging ? "none" : "background-color 0.15s ease",
+            flexShrink: 0,
+          }}
+          onMouseEnter={(e) => { if (!dragging) (e.currentTarget as HTMLDivElement).style.backgroundColor = t.border }}
+          onMouseLeave={(e) => { if (!dragging) (e.currentTarget as HTMLDivElement).style.backgroundColor = "transparent" }}
+        />
         <main className="flex-1 overflow-auto" style={{ backgroundColor: t.bgMain }}>
           {children}
         </main>
