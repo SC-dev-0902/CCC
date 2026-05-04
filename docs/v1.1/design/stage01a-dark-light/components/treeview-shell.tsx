@@ -48,6 +48,35 @@ function ProgressBar({ current, total, theme }: { current: number; total: number
   )
 }
 
+function StartSessionButton({ disabled, theme }: { disabled: boolean; theme: "dark" | "light" }) {
+  const t = tokens(theme)
+  const [hover, setHover] = useState(false)
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={(e) => {
+        e.stopPropagation()
+        if (disabled) return
+      }}
+      onMouseEnter={() => !disabled && setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      className="text-[9px] font-mono"
+      style={{
+        border: `1px solid ${t.border}`,
+        backgroundColor: hover && !disabled ? t.bgHover : "transparent",
+        color: t.textSecondary,
+        padding: "2px 6px",
+        borderRadius: 0,
+        opacity: disabled ? 0.4 : 1,
+        cursor: disabled ? "not-allowed" : "pointer",
+      }}
+    >
+      Start Session
+    </button>
+  )
+}
+
 function SubProjectRow({ sub, theme }: { sub: SubProject; theme: "dark" | "light" }) {
   const t = tokens(theme)
   const [expanded, setExpanded] = useState(sub.id === "leadsieve-service")
@@ -69,15 +98,17 @@ function SubProjectRow({ sub, theme }: { sub: SubProject; theme: "dark" | "light
         <span className="text-xs" style={{ color: t.textPrimary }}>{sub.name}</span>
         <Badge theme={theme}>{sub.type === "code" ? "COD" : "CFG"}</Badge>
         {sub.version && <Badge theme={theme}>{sub.version}</Badge>}
-        {locked && (
-          <span
-            className="text-[9px] font-mono px-1.5 py-0.5 ml-auto"
-            style={{ backgroundColor: t.bgHover, color: t.accent, border: `1px solid ${t.accent}` }}
-            title={`Locked by ${sub.lockedBy}`}
-          >
-            {sub.lockedBy}
-          </span>
-        )}
+        <div className="flex items-center gap-2 ml-auto">
+          {locked && (
+            <span
+              className="text-[9px] font-mono px-1.5 py-0.5"
+              style={{ backgroundColor: t.bgHover, color: t.accent, border: `1px solid ${t.accent}` }}
+            >
+              ● {sub.lockedBy}
+            </span>
+          )}
+          <StartSessionButton disabled={locked} theme={theme} />
+        </div>
       </div>
       {expanded && sub.files?.map((f) => (
         <div
@@ -89,11 +120,6 @@ function SubProjectRow({ sub, theme }: { sub: SubProject; theme: "dark" | "light
           {f.name}
         </div>
       ))}
-      {locked && expanded && (
-        <div className="text-[10px] italic px-2 py-1" style={{ paddingLeft: 50, color: t.textMuted }}>
-          Read only - Start Session disabled
-        </div>
-      )}
     </div>
   )
 }

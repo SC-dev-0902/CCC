@@ -103,9 +103,9 @@
 - [x] Stage progress bar on parent node: hardcoded `Stage 03 / 16` with filled CSS bar
 
 ### Sub-Stage 02b — Locking Badge & "New" Group
-- [ ] Sub-project locking badge: `● DevName` renders next to a locked sub-project (hardcoded)
-- [ ] Locked sub-project "Start Session" button visually disabled for other developers
-- [ ] "New" group renders above "Active" with a sample unregistered project entry
+- [x] Sub-project locking badge: `● DevName` renders next to a locked sub-project (hardcoded)
+- [x] Locked sub-project "Start Session" button visually disabled for other developers
+- [x] "New" group renders above "Active" with a sample unregistered project entry
 
 ### Sub-Stage 02c — Top Menu Diodes
 - [ ] Three status diodes in top menu: PatchPilot, Forgejo, GitHub
