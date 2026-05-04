@@ -268,9 +268,10 @@ CC never touches Go/NoGo gate lines. Gate updates are Cowork's responsibility, p
 `/go` is a new global slash command that formalizes the GO action inside a CC session. Behaviour is identical for both sub-stages and main stages — one command, no special cases.
 
 **Sequence when `/go` is run:**
-1. CC runs `/eod` (writes the sub-project SHP, captures current state)
-2. CC commits the completed stage/sub-stage to Forgejo with the correct commit message
-3. CC exits the session (clean end — CCC shows "start new session" prompt)
+1. CC commits the completed stage/sub-stage to Forgejo with the correct commit message
+2. CC updates the tasklist - checks off completed tasks for the stage/sub-stage
+3. CC runs `/eod` (writes the sub-project SHP, captures current state)
+4. CC exits the session (clean end — CCC shows "start new session" prompt)
 
 **After session exit (human steps):**
 - Sub-stage: Phet starts a fresh session for the next sub-stage via `/continue` + next kickoff prompt
@@ -525,6 +526,14 @@ Full API specification defined in `Projects/PatchPilot/docs/v1.0/Ccc v1.1 api re
 ---
 
 ## 10. Server-Side Code Changes
+
+### Framework Decision
+
+CCC v1.1 stays on **Node.js + Express + Vanilla JS**. Astro is not used.
+
+The SC intranet development standard recommends Astro as the default frontend framework. CCC is explicitly exempt from this recommendation because it is a real-time application, not a content site. CCC requires a persistent WebSocket server, node-pty for PTY session management, and streaming terminal I/O via xterm.js — none of which are compatible with Astro's static/SSR model. Project lead sign-off: Phet Steinhofer, 2026-05-04.
+
+**Target viewport:** Desktop and laptop only. Minimum 1024px wide. iPad supported. No mobile breakpoints.
 
 ### File Structure
 

@@ -4,3 +4,5 @@ data/settings.json
 dist/
 .DS_Store
 debug_parser_output.log
+.next/
+.smbdelete*
