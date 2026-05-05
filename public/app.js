@@ -1587,12 +1587,12 @@ function renderSettings(container) {
       </div>
       <div class="settings-group">
         <label>Concept File Pattern</label>
-        <input type="text" id="settingsConceptPattern" value="${escapeHtml((settings.filePatterns || {}).concept || 'docs/v{VERSION}/{PROJECT}_concept_v{VERSION}.md')}" placeholder="docs/v{VERSION}/{PROJECT}_concept_v{VERSION}.md">
+        <input type="text" id="settingsConceptPattern" value="${escapeHtml((settings.filePatterns || {}).concept || 'v{VERSION}/docs/{PROJECT}_concept_v{VERSION}.md')}" placeholder="v{VERSION}/docs/{PROJECT}_concept_v{VERSION}.md">
         <span class="settings-hint">{PROJECT} = project folder name, {VERSION} = version number (e.g. 1.0).</span>
       </div>
       <div class="settings-group">
         <label>Tasklist File Pattern</label>
-        <input type="text" id="settingsTasklistPattern" value="${escapeHtml((settings.filePatterns || {}).tasklist || 'docs/v{VERSION}/{PROJECT}_tasklist_v{VERSION}.md')}" placeholder="docs/v{VERSION}/{PROJECT}_tasklist_v{VERSION}.md">
+        <input type="text" id="settingsTasklistPattern" value="${escapeHtml((settings.filePatterns || {}).tasklist || 'v{VERSION}/docs/{PROJECT}_tasklist_v{VERSION}.md')}" placeholder="v{VERSION}/docs/{PROJECT}_tasklist_v{VERSION}.md">
       </div>
       <div class="settings-group">
         <label>Recovery Auto-Save Interval (minutes)</label>

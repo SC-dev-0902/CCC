@@ -34,7 +34,7 @@ const SETTINGS_DEFAULTS = {
   editor: '',
   shell: '',
   theme: 'dark',
-  filePatterns: { concept: 'docs/v{VERSION}/{PROJECT}_concept_v{VERSION}.md', tasklist: 'docs/v{VERSION}/{PROJECT}_tasklist_v{VERSION}.md' },
+  filePatterns: { concept: 'v{VERSION}/docs/{PROJECT}_concept_v{VERSION}.md', tasklist: 'v{VERSION}/docs/{PROJECT}_tasklist_v{VERSION}.md' },
   githubToken: '',
   recoveryInterval: 5,
   usagePlan: 'max5',
