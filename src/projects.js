@@ -27,7 +27,11 @@ function rowsToProject(rows) {
     coreFiles,
     type: r.type,
     evaluated: !!r.evaluated,
-    activeVersion: r.active_version || null
+    activeVersion: r.active_version || null,
+    parentId:      r.parent_id       || null,
+    lockUserId:    r.lock_user_id    || null,
+    lockSessionId: r.lock_session_id || null,
+    subProjects:   []
   };
 }
 
@@ -35,6 +39,7 @@ async function fetchProjectById(id) {
   const rows = await db.query(
     `SELECT p.id, p.name, p.path, p.group_name, p.sort_order,
             p.type, p.active_version, p.evaluated,
+            p.parent_id, p.lock_user_id, p.lock_session_id,
             pcf.file_type, pcf.file_path
        FROM projects p
        LEFT JOIN project_core_files pcf ON p.id = pcf.project_id
@@ -45,9 +50,10 @@ async function fetchProjectById(id) {
 }
 
 async function buildGroupsArray() {
-  // Distinct group names from projects, ordered by their min sort_order
+  // Distinct group names from top-level projects only.
+  // Sub-projects have group_name = NULL and must not pollute the groups list.
   const projectGroupRows = await db.query(
-    'SELECT group_name FROM projects GROUP BY group_name ORDER BY MIN(sort_order) ASC'
+    'SELECT group_name FROM projects WHERE parent_id IS NULL GROUP BY group_name ORDER BY MIN(sort_order) ASC'
   );
   // Empty groups recorded in settings (extra_group_<name>)
   const extraGroupRows = await db.query(
@@ -83,6 +89,7 @@ async function getAllProjects() {
   const rows = await db.query(
     `SELECT p.id, p.name, p.path, p.group_name, p.sort_order,
             p.type, p.active_version, p.evaluated,
+            p.parent_id, p.lock_user_id, p.lock_session_id,
             pcf.file_type, pcf.file_path
        FROM projects p
        LEFT JOIN project_core_files pcf ON p.id = pcf.project_id
@@ -100,29 +107,67 @@ async function getAllProjects() {
     }
   }
 
-  const projects = orderById.map((id) => rowsToProject(byId.get(id)));
+  const flat = orderById.map((id) => rowsToProject(byId.get(id)));
+
+  // Tree builder: top-level entries (parentId === null) hold sub-projects in subProjects[].
+  // Orphaned sub-projects (parent not found) fall back to top-level.
+  const topLevelById = new Map();
+  for (const p of flat) {
+    if (p.parentId === null) topLevelById.set(p.id, p);
+  }
+
+  const projects = [];
+  for (const p of flat) {
+    if (p.parentId === null) {
+      projects.push(p);
+    } else {
+      const parent = topLevelById.get(p.parentId);
+      if (parent) {
+        parent.subProjects.push(p);
+      } else {
+        projects.push(p);
+      }
+    }
+  }
+
   const groups = await buildGroupsArray();
   return { groups, projects };
 }
 
-async function addProject({ name, path: projectPath, group, coreFiles, type, evaluated }) {
+async function addProject({ name, path: projectPath, group, coreFiles, type, evaluated, parentId }) {
   const id = crypto.randomUUID();
   const finalType = type || 'code';
   const finalEvaluated = evaluated !== undefined ? (evaluated ? 1 : 0) : 1;
   const finalCoreFiles = coreFiles || emptyCoreFiles();
+  const isSubProject = parentId !== undefined && parentId !== null;
 
   await db.transaction(async (conn) => {
-    const countRows = await conn.query(
-      'SELECT COUNT(*) AS c FROM projects WHERE group_name = ?',
-      [group]
-    );
-    const sortOrder = Number(countRows[0].c);
+    let sortOrder;
+    if (isSubProject) {
+      const countRows = await conn.query(
+        'SELECT COUNT(*) AS c FROM projects WHERE parent_id = ?',
+        [parentId]
+      );
+      sortOrder = Number(countRows[0].c);
 
-    await conn.query(
-      `INSERT INTO projects (id, name, path, group_name, sort_order, type, evaluated)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [id, name, projectPath, group, sortOrder, finalType, finalEvaluated]
-    );
+      await conn.query(
+        `INSERT INTO projects (id, name, path, group_name, sort_order, type, evaluated, parent_id)
+         VALUES (?, ?, ?, NULL, ?, ?, ?, ?)`,
+        [id, name, projectPath, sortOrder, finalType, finalEvaluated, parentId]
+      );
+    } else {
+      const countRows = await conn.query(
+        'SELECT COUNT(*) AS c FROM projects WHERE group_name = ?',
+        [group]
+      );
+      sortOrder = Number(countRows[0].c);
+
+      await conn.query(
+        `INSERT INTO projects (id, name, path, group_name, sort_order, type, evaluated)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [id, name, projectPath, group, sortOrder, finalType, finalEvaluated]
+      );
+    }
 
     for (const [fileType, filePath] of Object.entries(finalCoreFiles)) {
       await conn.query(
