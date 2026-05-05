@@ -1,84 +1,80 @@
 # Session Handover Pack - CCC
-*Generated: 2026-05-05 | Version: v1.1.0 (Stage 02 GO - main gate) | Stage 03 next*
+*Generated: 2026-05-05 | Version: v1.1.0 (Stage 03a complete, awaiting /tested) | Stage 03b next*
 
 ---
 
 ## Project
 
 - **Name:** Claude Command Center (CCC)
-- **Version:** v1.1.0 - Stage 02 (UI Shell) main Go/NoGo gate **GO** on 2026-05-05. Sub-Stages 02a (parent/sub hierarchy), 02b (locking badge + New group), 02c (top menu diodes + progress-bar relocation fix), and 02d (treeview search/filter polish) all complete.
+- **Version:** v1.1.0 - Stage 02 GO (2026-05-05). Stage 03a (Schema & Migration Runner) implementation complete on 2026-05-05; test file authored, **not yet executed by Phet**. /go was invoked before /tested - this SHP records the closure state. Stage 03 main Go/NoGo gate is at the end of 03a-03d, not after 03a alone.
 - **Active version in projects.json:** "1.1.0".
-- **Stage:** v1.1 Stage 02 GO (main gate). Next: **Stage 03 - MariaDB Schema & Data Migration** (Cowork drafts the Stage 03a kickoff prompt; CC waits).
-- **Status:** Wired Next.js design preview at `http://172.16.10.6/CCC/design-preview/` is the v1.1 dev base. All static UI elements look and feel correct against the Stage 01 visual spec. No backend wiring touched yet. CCC v1.0.7 still on Mac localhost:3000 (untouched).
+- **Stage:** v1.1 Stage 03a complete (sub-stage). Next: Phet runs the stage 03a test file, then /tested. Then Cowork drafts Stage 03b kickoff prompt (JSON Import Script).
+- **Status:** Backend foundation laid - MariaDB schema applied to Dev-DB (`ccc` database), migration runner present, lazy-pool DB layer in `src/db.js`. None of it is wired into `server.js` yet (Stage 03c). UI shell on `http://172.16.10.6/CCC/design-preview/` unchanged. CCC v1.0.7 still on Mac localhost:3000 (untouched).
 
 ---
 
-## What Was Done This Session (Stage 02d + Stage 02 main GO)
+## What Was Done This Session (Stage 03a)
 
-### Code changes (single source file)
+### Files added (all new this session)
 
-`docs/v1.1/design/stage01a-dark-light/components/treeview-shell.tsx`:
+- `migrations/001_initial.sql` - 6 tables exactly per kickoff spec:
+  - `users` (PK id, UNIQUE username, ENUM role)
+  - `projects` (13 columns, self-FK on parent_id, FK to users on lock_user_id, **no FK on lock_session_id** - intentional, avoids circular dep with sessions)
+  - `project_core_files` (composite PK, CASCADE delete)
+  - `sessions` (PK id, two CASCADE FKs)
+  - `settings` (key/value)
+  - `project_integrations` (composite PK, CASCADE)
+  - All `IF NOT EXISTS`, `ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
+- `migrations/run.js` - validates `DB_*` env vars, reads sorted `*.sql`, runs with `multipleStatements: true`, prints `SHOW TABLES`. Idempotent. Exit 0/1.
+- `src/db.js` - lazy connection pool (only built on first `getPool()` call). Exports:
+  - `query(sql, params)` - get conn, run, release
+  - `queryOne(sql, params)` - returns `rows[0] || null`
+  - `transaction(fn)` - begin, run, commit-or-rollback, always release
+- `docs/v1.1/CCC_test_stage03a.md` - 7 sections, 18 actionable items, v1.0 sectioned format. Tests use `node -e "..."` snippets through `src/db.js` (proves both schema AND db.js work, no `mysql` CLI required).
 
-1. **`ProjectRow` got a `forceExpand?: boolean` prop** (default `false`).
-   - Computed `const effectiveExpanded = forceExpand || expanded`.
-   - Replaced both `expanded` reads (chevron icon choice + child render gate) with `effectiveExpanded`.
-   - Local `expanded` state and the `setExpanded` toggle remain intact - so when filter clears, rows fall back to their own state.
-2. **`filteredNew` memo added** alongside the existing `filteredActive` / `filteredParked` memos:
-   ```tsx
-   const filteredNew = useMemo(
-     () => (!query ? NEW_PROJECTS : NEW_PROJECTS.filter((p) => matches(p.name))),
-     [query]
-   )
-   ```
-3. **NEW group rendering rewritten** - now guarded by `filteredNew.length > 0`. When zero matches, the `GroupHeader` itself disappears (not just the entries).
-4. **ACTIVE group empty state** - when `filteredActive.length === 0 && query` is non-empty, renders a single `no match` line (10px italic, `paddingLeft: 24`, `textMuted`). Mirrors the existing PARKED `empty` placeholder visually but uses different copy because PARKED's no-match path is the default empty state, not a filter result.
-5. **`forceExpand={!!query}` passed** to every `ProjectRow` rendered from `filteredActive` and `filteredParked`. NOT passed to `SubProjectRow` (sub-project expansion is independent of the parent-level filter).
+### Files changed
 
-### Test file
-
-`docs/v1.1/CCC_test_stage02d.md` - 7 sections, **24 items, all ticked, no comments** during /tested:
-1. Search Input - Render (2)
-2. Real-Time Filtering - Active group (5: `lead`, `LEAD`, `nexus-admin`, `web`, `ccc`)
-3. Auto-Expand on Filter Match (5)
-4. New Group - Filter Behaviour (4)
-5. Active Group - Empty State (3)
-6. Escape to Clear (2)
-7. Themes and Console (3)
-
-### Tasklist
-
-`docs/v1.1/CCC_tasklist_v1.1.0.md` - all four Sub-Stage 02d items ticked. Sub-Stages 02a, 02b, 02c, 02d all complete. Stage 02 Go/NoGo gate line **untouched** (per /go protocol).
-
-### Build flow
-
-Standard Dev-Web pipeline (unchanged from 02a/02b/02c):
-1. Source: `/mnt/sc-development/CCC/docs/v1.1/design/stage01a-dark-light/`
-2. SSH `kkh01vdweb01.mng.mcsfam.local`
-3. `rsync -av --exclude=node_modules --exclude=.next --exclude=out` -> `/tmp/stage01a-build/`
-4. `cd /tmp/stage01a-build && npm run build` (~2.5s compile + 0.2s static gen)
-5. `rsync -a --delete /tmp/stage01a-build/out/` -> `/mnt/sc-development/CCC/docs/v1.1/design/preview/`
-6. Apache alias serves at `http://172.16.10.6/CCC/design-preview/` - no reload needed.
-
-Build hash advanced: `yluISBb-rOD8LGrClytSe` -> `vKRGR_7136MUbc4SKAy_R`.
+- `package.json` - added `"mariadb": "^3.4.0"` (3.5.2 installed)
+- `package-lock.json` - regenerated by `npm install`
+- `docs/v1.1/CCC_tasklist_v1.1.0.md` - all four Sub-Stage 03a items ticked
+- `docs/v1.1/CCC_concept_v1.1.0.md` - Phet-authored fix: DB user `ccc_app` -> `ccc` to match what is actually provisioned on Dev-DB
+- `.env.example` - same `ccc_app` -> `ccc` correction
 
 ### Commits this session
 
-- `9d645b9` **Stage 02d complete - treeview search/filter polish** (source + rebuilt static export + new test file + tasklist ticks + kickoff prompt)
-- `5a53802` **Stage 02 complete - UI Shell** (test file 24/24 ticks, records Stage 02 main gate GO)
+- `2225181` **v1.1.0 Stage 03a - MariaDB schema and migration runner** (work + tasklist ticks + concept/example corrections + kickoff prompt)
+- One /eod SHP commit will follow this file write.
 
-Both pushed to Forgejo (`origin`). GitHub push pending - see Open Items.
+Pushed to Forgejo (`origin`).
+
+### Migration run
+
+`node migrations/run.js` ran clean from the Mac (connecting to Dev-DB at 172.16.12.11):
+```
+Running 001_initial.sql...
+  001_initial.sql done
+Tables in database:
+  - project_core_files
+  - project_integrations
+  - projects
+  - sessions
+  - settings
+  - users
+Migration complete.
+```
+Idempotency confirmed (re-run exit 0, no errors).
 
 ---
 
 ## Decisions Made
 
-- **`forceExpand` semantics: filter overrides, never mutates.** Picked `effectiveExpanded = forceExpand || expanded` over driving `setExpanded` from the filter. Reason: the user's explicit collapsed/expanded choice must survive filter changes. After Escape, Nexus snaps back to collapsed (its prior state) - validated in test sections 3 + 6.
-- **Active uses `no match`, Parked stays `empty`.** Two visually identical placeholders, two different strings, intentional. Parked's `empty` predates Stage 02d and represents the no-data default state; Active's `no match` represents a filter result. Keeping them distinct preserves semantic meaning.
-- **NEW group hides entire group when zero matches** (header included), but Active group keeps its header and shows `no match` underneath. Asymmetry is intentional: NEW is a transient group that disappears when irrelevant; ACTIVE is the primary working surface and must always be present so the user can see *why* nothing is showing.
-- **No `forceExpand` on `SubProjectRow`.** Sub-project expansion drives file-list visibility (CLAUDE.md, SHP). The filter doesn't match file names, so auto-expanding sub-projects would expose unrelated files. Per kickoff prompt explicit instruction.
-- **Stage 02 closure committed as separate commit** (`5a53802`) rather than amending the work commit. Per global rules: never amend; new commits only.
-- **`data/projects.json` working-tree modification left unstaged.** Pre-existing change at session start, not from this session. Needs separate review.
-- **`docs/handoff/CCC_recovery.md` deletion left unstaged in stage commits.** Legacy-tracked transient file - should be `git rm --cached` + `.gitignore` outside of stage commits (carry-forward).
+- **DB user is `ccc`, not `ccc_app`.** The kickoff prompt narrative said `ccc_app` exists, but the actual provisioned user on Dev-DB is `ccc`. `.env` (Phet rewrote it this session) and concept doc + .env.example were corrected to match reality. The `ccc_app` text was aspirational/leftover.
+- **dotenv `override: true` in both `migrations/run.js` and `src/db.js`.** Stale `DB_*` shell exports from earlier sessions silently overrode `.env` (default dotenv behaviour: existing `process.env` wins). Override forces `.env` to be authoritative - matches the global rule "credentials are always in `.env`". This is a one-line change that prevents a whole class of dev-environment bugs.
+- **Test file uses `node -e ...` through src/db.js** rather than `mysql` CLI. Reason: every test exercises both the schema AND the db.js layer; no extra tooling required on Phet's side.
+- **`lock_session_id` deliberately has NO FK** to `sessions`. Documented inline in 001_initial.sql with the comment that explains the circular-dependency reason.
+- **Forgejo macOS keychain entry stale.** Used a one-shot inline `credential.helper` with `FORGEJO_TOKEN` from `.env` for this session's push. Did NOT modify the keychain. Recommendation: refresh once in a regular terminal next session - clear the bad entry, push, enter token at prompt, macOS re-caches.
+- **Work commit message deviation noted.** `2225181` reads "v1.1.0 Stage 03a - ..." rather than the /go-canonical "Stage 03a complete - ...". I followed kickoff Task 7 verbatim (`git commit -m ...` / `git push`). Per global "never amend" rule, leaving it. Future stage commits should use the /go-canonical format ("Stage NNx complete - ...") even when the kickoff Task N message is more terse.
+- **`data/projects.json` and `docs/handoff/CCC_recovery.md` left unstaged.** Both are pre-existing carry-forwards from earlier sessions, not stage 03a content.
 
 ---
 
@@ -88,46 +84,54 @@ Both pushed to Forgejo (`origin`). GitHub push pending - see Open Items.
 |---|---|---|
 | ... v1.0.0 - v1.0.7 ... | (see prior SHPs) | 2026-02-27 to 2026-04-24 |
 | `ab9bee7` | v1.1.0 Stage 00a+00b - TrueNAS share mounted | 2026-05-04 |
-| `5f5d03f` | v1.1.0 Stage 01f - wired design preview live at `/CCC/design-preview/` | 2026-05-04 |
-| `fd0265b` | v1.1.0 Stage 02a - parent/sub-project hierarchy, version badges, resizable sidebar | 2026-05-04 |
-| `a7292ed` | SHP update - Stage 02a GO, Stage 02b next | 2026-05-04 |
-| `3749432` | v1.1.0 Stage 02b - locking badge `● DevName`, Start Session button, New group verified | 2026-05-05 |
-| `fdbc231` | SHP update - Stage 02b GO, Stage 02c next | 2026-05-05 |
-| `a98d2a8` | v1.1.0 Stage 02c - top menu diodes (+ progress-bar relocation fix) | 2026-05-05 |
-| `1389e28` | SHP update - Stage 02c GO, Stage 02d next | 2026-05-05 |
-| `9d645b9` | **v1.1.0 Stage 02d** - treeview search/filter polish | 2026-05-05 |
-| `5a53802` | **v1.1.0 Stage 02 main gate GO** - UI Shell complete | 2026-05-05 |
+| `5f5d03f` | v1.1.0 Stage 01f - wired design preview live | 2026-05-04 |
+| `fd0265b` | v1.1.0 Stage 02a - parent/sub hierarchy | 2026-05-04 |
+| `a7292ed` | SHP update - Stage 02a GO | 2026-05-04 |
+| `3749432` | v1.1.0 Stage 02b - locking badge + Start Session | 2026-05-05 |
+| `fdbc231` | SHP update - Stage 02b GO | 2026-05-05 |
+| `a98d2a8` | v1.1.0 Stage 02c - top menu diodes (+ progress-bar relocation) | 2026-05-05 |
+| `1389e28` | SHP update - Stage 02c GO | 2026-05-05 |
+| `9d645b9` | v1.1.0 Stage 02d - treeview search/filter | 2026-05-05 |
+| `5a53802` | Stage 02 complete - UI Shell (main gate GO) | 2026-05-05 |
+| `722efa9` | SHP update - Stage 02 GO, Stage 03 next | 2026-05-05 |
+| `2225181` | **v1.1.0 Stage 03a - MariaDB schema and migration runner** | 2026-05-05 |
 
-Pushed to Forgejo. **GitHub push pending** for `a7292ed`, `3749432`, `fdbc231`, `a98d2a8`, `1389e28`, `9d645b9`, `5a53802` - Phet to run `git push github main` from terminal (Bash tool can't reach macOS keychain).
+Pushed to Forgejo. **GitHub push pending** for everything from `a7292ed` onwards (9+ commits) - Phet runs `git push github main` from terminal once.
 
-Tags: `v1.0.0` -> `v1.0.7` on both remotes. v1.1.0 not yet tagged - tag on Stage 03+ readiness or end-of-v1.1 ship.
+Tags: `v1.0.0` -> `v1.0.7`. v1.1.0 not yet tagged.
 
 ---
 
-## Architecture & File Map (v1.1 active surface)
+## Architecture & File Map (v1.1 active surface, post-03a)
 
 | Area | File / Path |
 |---|---|
+| **Backend (NEW this stage)** | |
+| MariaDB schema | `migrations/001_initial.sql` |
+| Migration runner | `migrations/run.js` |
+| DB layer (lazy pool, query/queryOne/transaction) | `src/db.js` |
+| **Frontend (unchanged from Stage 02)** | |
 | Design preview source (Next.js 16) | `docs/v1.1/design/stage01a-dark-light/` |
-| Treeview component (search/filter, expand/collapse, progress bars) | `components/treeview-shell.tsx` |
-| App shell + top menu (AppHeader, Diode component, sidebar resizer) | `components/app-shell.tsx` |
-| Theme tokens (dark/light) | `components/theme-context.tsx` |
-| Component gallery (in-preview test surface) | `components/component-gallery.tsx` |
-| Dummy data (NEW_PROJECTS, ACTIVE_PROJECTS, PARKED_PROJECTS, INTEGRATIONS, USERS, STATUS_LEGEND) | `lib/dummy-data.ts` |
+| Treeview component | `components/treeview-shell.tsx` |
+| App shell + top menu | `components/app-shell.tsx` |
+| Theme tokens | `components/theme-context.tsx` |
+| Component gallery | `components/component-gallery.tsx` |
+| Dummy data | `lib/dummy-data.ts` |
 | Static build output | `docs/v1.1/design/preview/` |
-| Apache alias config | `/etc/apache2/conf-available/CCC-design-preview-alias.conf` (on Dev-Web, NOT in repo) |
-| Stage kickoff prompts (02a-02d) | `docs/handoff/stage02{a,b,c,d}-prompt.md` |
-| Stage test files (02a-02d) | `docs/v1.1/CCC_test_stage02{a,b,c,d}.md` |
+| Apache alias config | `/etc/apache2/conf-available/CCC-design-preview-alias.conf` (Dev-Web only) |
+| **Docs** | |
+| Stage kickoff prompts (02a-03a) | `docs/handoff/stage02{a,b,c,d}-prompt.md`, `docs/handoff/stage03a-prompt.md` |
+| Stage test files (02a-03a) | `docs/v1.1/CCC_test_stage02{a,b,c,d}.md`, `docs/v1.1/CCC_test_stage03a.md` |
 | v1.1 tasklist | `docs/v1.1/CCC_tasklist_v1.1.0.md` |
-| v1.1 concept doc | `docs/v1.1/CCC_concept_v1.1.md` |
+| v1.1 concept doc | `docs/v1.1/CCC_concept_v1.1.0.md` |
 
-CCC v1.0 server code (`server.js`, `src/parser.js`, `src/sessions.js`, `src/projects.js`, `src/versions.js`, `src/usage.js`, `public/*`) is untouched in v1.1 so far. Stage 03 will start touching server-side code (MariaDB).
+CCC v1.0 server code (`server.js`, `src/parser.js`, `src/sessions.js`, `src/projects.js`, `src/versions.js`, `src/usage.js`, `public/*`) is **untouched**. Stage 03c will start replacing JSON I/O with DB calls inside `src/projects.js`.
 
 ---
 
 ## API Endpoint Inventory (current - v1.0.7 server, unchanged in v1.1 to date)
 
-All endpoints live in `server.js`. v1.1 has not added any backend routes yet (Stage 02 was UI shell only).
+All endpoints live in `server.js`. Stage 03a added no routes (foundation only).
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -136,160 +140,193 @@ All endpoints live in `server.js`. v1.1 has not added any backend routes yet (St
 | POST | `/api/projects` | Register a new project |
 | PUT | `/api/projects/:id` | Update project (name, group, coreFiles, activeVersion, evaluated) |
 | DELETE | `/api/projects/:id` | Remove a project |
-| DELETE | `/api/projects/:id/versions/:version` | Delete a specific version (active version deletable with auto-fallback) |
-| GET | `/api/projects/:id/versions` | List versions for project (returns `{ files[], testFiles[] }` per `scanVersionFiles`) |
+| DELETE | `/api/projects/:id/versions/:version` | Delete a specific version (active deletable with auto-fallback) |
+| GET | `/api/projects/:id/versions` | List versions per `scanVersionFiles` |
 | GET | `/api/projects/:id/files` | Tree of project's coreFiles |
-| GET | `/api/file/:projectId` | Read a single file (querystring `path`) |
-| PUT | `/api/file/:projectId` | Write a single file (test-runner save) |
+| GET | `/api/file/:projectId` | Read a single file |
+| PUT | `/api/file/:projectId` | Write a single file |
 | GET | `/api/settings` | Read global settings |
 | PUT | `/api/settings` | Update global settings |
-| WS | `/ws` | xterm.js websocket - PTY session multiplexer (sessions identified by `projectId::session`) |
-| GET | `/design-preview/...` | Express static fallback for the v1.1 design preview (redundant in prod where Apache serves directly; kept for any local CCC instance) |
+| WS | `/ws` | xterm.js websocket - PTY session multiplexer |
+| GET | `/design-preview/...` | Express static fallback (redundant in prod) |
 
 ---
 
-## Frontend State Model (preview app, current after Stage 02d)
+## Database Schema (NEW - v1.1 backend foundation)
+
+Database: `ccc` on Dev-DB (`172.16.12.11:3306`, MariaDB 10.11.14). User: `ccc`.
+
+| Table | Columns (key fields only) | FKs |
+|---|---|---|
+| `users` | id (PK CHAR(36)), username (UNIQUE), password_hash, role (admin/developer), created_at, last_login | - |
+| `projects` | id (PK), name, path, parent_id, group_name, sort_order, type (code/config), active_version, evaluated, lock_user_id, lock_session_id, created_at, updated_at | parent_id -> projects.id (SET NULL); lock_user_id -> users.id (SET NULL); **lock_session_id intentionally has no FK** |
+| `project_core_files` | (project_id, file_type) PK; file_path | project_id -> projects.id (CASCADE) |
+| `sessions` | id (PK), project_id, user_id, status, started_at, ended_at | project_id, user_id (both CASCADE) |
+| `settings` | key (PK), value | - |
+| `project_integrations` | (project_id, integration) PK; config (JSON), enabled | project_id -> projects.id (CASCADE) |
+
+All InnoDB, utf8mb4. All `CREATE TABLE IF NOT EXISTS` so `migrations/run.js` is idempotent.
+
+### DB layer interface (`src/db.js`)
+
+- `await db.query(sql, params)` - returns array of row objects
+- `await db.queryOne(sql, params)` - returns single object or null
+- `await db.transaction(async (conn) => { ... })` - auto begin/commit/rollback/release
+- Pool is lazy: built on first call, not on `require()`. Survives DB unreachable at server-start.
+- `dotenv.config({ override: true })` so `.env` always wins over shell vars.
+
+### Migration runner (`migrations/run.js`)
+
+- Reads all `migrations/*.sql` in sorted order
+- Validates `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` are present, exits 1 with clear message if any missing
+- Connects with `multipleStatements: true`, runs each file
+- Prints `SHOW TABLES` at end as proof of success
+- Exit 0 on success, 1 on any error
+- Designed to be called by `deploy.sh` on every deploy - safe to re-run
+
+---
+
+## Frontend State Model (preview app, unchanged this session)
 
 `app-shell.tsx`:
-- `Diode.hover` - `useState(false)` per diode, drives tooltip visibility.
-- `sidebarWidth: number` (200-600), persisted to `localStorage["ccc-sidebar-width"]`, default 320.
-- `dragging: boolean` - true while user is dragging the sidebar divider.
-- `theme: "dark" | "light"` - global theme via `theme-context`.
+- `Diode.hover` per diode -> tooltip
+- `sidebarWidth: number` (200-600), localStorage `ccc-sidebar-width`, default 320
+- `dragging: boolean`
+- `theme: "dark" | "light"`
 
 `treeview-shell.tsx`:
-- `query: string` - the live filter input. Set by `<input onChange>` + `onKeyDown` Escape handler.
-- `matches(s)` - case-insensitive includes test against `query`.
-- `filterProjects(list)` - parent-or-child match; if parent matches, keeps all subProjects; if only children match, narrows to matching subProjects.
-- `filteredActive`, `filteredParked`, `filteredNew` - all `useMemo([query])`.
-- `ProjectRow.expanded` - local `useState(expandedByDefault)`. `expandedByDefault = project.id === "leadsieve" || project.id === "orion"`. All other rows collapsed by default.
-- `ProjectRow.forceExpand` - prop. `true` whenever `query` is non-empty (passed by parent). Drives `effectiveExpanded`.
-- `ProjectRow` progress bar render guard: `!hasChildren && project.stageProgress` - container rows do not show a bar.
-- `SubProjectRow.expanded` - `useState(sub.id === "leadsieve-service")` (only LeadSieve service starts expanded to demo file children). Independent of filter.
-- `SubProjectRow` progress bar render guard: `sub.stageProgress` truthy. All sub-projects in dummy-data have it.
-- `StartSessionButton.hover` - `useState(false)`, toggled by `onMouseEnter`/`onMouseLeave`.
+- `query: string` - filter input
+- `filteredActive`, `filteredParked`, `filteredNew` - all `useMemo([query])`
+- `ProjectRow.expanded` - local state, default per project id
+- `ProjectRow.forceExpand` - filter override, never mutates `expanded`
+- `ProjectRow` progress-bar guard: `!hasChildren && project.stageProgress`
+- `SubProjectRow.expanded` independent of filter
+- `StartSessionButton.hover`
 
-Rendering pipeline (top to bottom of sidebar):
-1. Header (title + RefreshCw / Plus icons)
-2. Search input (filter field, Escape clears)
-3. Tree:
-   - NEW group: rendered iff `filteredNew.length > 0` (header AND entries hide together)
-   - ACTIVE group: header always rendered. Body: `no match` line iff `filteredActive.length === 0 && query`, else map over `filteredActive` with `forceExpand={!!query}`.
-   - PARKED group: header always rendered. Body: `empty` line iff `filteredParked.length === 0`, else map with `forceExpand={!!query}`.
-4. Status legend (footer)
+Sidebar render order: header -> search -> NEW (only if matches) -> ACTIVE (always shows header; "no match" if filtered empty) -> PARKED (always shows header; "empty" if no data) -> legend.
 
 ---
 
 ## Key Technical Details
 
-### Container vs single-project rendering rule
+### Lazy DB pool
 
-A `Project` with `subProjects` is a **container** - no progress bar at parent row, bars on each sub. A `Project` without `subProjects` is **single-project mode** - bar stays at parent row (e.g., CCC `Stage 14 / 17`). Code guard in `ProjectRow`: `!hasChildren && project.stageProgress`. `Project.stageProgress` is optional in the type; container projects omit it.
+`src/db.js` builds the pool on first call, not on `require()`. This lets `server.js` start before the DB is reachable - critical for the eventual deploy-once startup sequence where Apache may proxy to Express before `migrations/run.js` has finished on first boot. Once a connection is needed, the pool builds and from then on connections are reused with `connectionLimit: 10`.
 
-### Filter expand/collapse contract
+### Why `lock_session_id` has no FK
 
-The filter never mutates `expanded`. It overrides via `effectiveExpanded` for as long as `query` is non-empty. Clearing the filter (Escape or empty input) instantly restores each row's prior expand state because the local `useState` was never touched.
+`projects.lock_session_id` -> `sessions.id` would create a circular dependency: `sessions` has a FK to `projects` (`project_id`). On schema creation, sessions table doesn't exist yet when projects is created. Avoided by leaving `lock_session_id` as a CHAR(36) without a formal FK constraint. Inline comment in 001_initial.sql records this. Application code is responsible for ensuring `lock_session_id` references a real session.
 
-### Path resolution
+### Container vs single-project rendering rule (unchanged)
 
-Project paths in `data/projects.json` are stored relative to `settings.projectRoot`. `settings.projectRoot` defaults to user-chosen path; New Project Wizard defaults to `{projectRoot}/Projects`. SHP path: `docs/handoff/{ProjectName}_shp.md` (fallback to old `docs/{Name}_shp.md` for legacy).
+`Project` with `subProjects` -> container, no progress bar at parent. `Project` without `subProjects` -> single-project mode, bar at parent (e.g. CCC). Code guard: `!hasChildren && project.stageProgress`.
 
-### Version model
+### Filter expand/collapse contract (unchanged)
 
-- Active version stored in `projects.json` `activeVersion` field (e.g., `"1.0"`, `"1.1.0"`). Major.minor only - patches nest as subfolders.
-- `docs/vX.Y/` holds concept doc + tasklist + test files for that version.
-- Patches: `docs/vX.Y/vX.Y.Z/` for patch-specific concept + tasklist.
-- No filesystem symlinks - the `activeVersion` field is the only pointer.
-- CLAUDE.md at project root is derived from active version's concept doc.
+`forceExpand` overrides via `effectiveExpanded`, never mutates `expanded`. After Escape, expand state restores to whatever was set locally before the filter.
 
-### Test file naming (CCC treeview regex)
+### Path resolution (unchanged)
 
-`/_test_stage\d+[a-z]*\d*\.md$/` - supports `_test_stage11.md`, `_test_stage11a.md`, `_test_stage07ac.md`, `_test_stage11a01.md`, `_test_stage07ac01.md`. Anything else (`_test_batch`, `_test_`) is invisible to CCC.
+Project paths in `data/projects.json` are relative to `settings.projectRoot`. SHP path: `docs/handoff/{ProjectName}_shp.md`.
 
-### Status model (parser)
+### Version model (unchanged)
 
-`src/parser.js` maps Claude Code output to five states: WAITING_FOR_INPUT (red `#9B2335`), RUNNING (yellow `#B7791F`), COMPLETED (green `#276749`), ERROR (orange `#7A1828`), UNKNOWN (grey `#A0AEC0`). Same colours used in design preview's `StatusDot` component. PTY env must clear both `CLAUDECODE` and `CLAUDE_CODE_ENTRYPOINT` - leaking either makes Claude Code detect nesting and alter output.
+`activeVersion` field in `projects.json` is the only pointer. `docs/vX.Y/` for major.minor; `docs/vX.Y/vX.Y.Z/` for patches. No filesystem symlinks.
+
+### Test file naming regex (unchanged)
+
+`/_test_stage\d+[a-z]*\d*\.md$/` - supports `_test_stage11.md`, `_test_stage11a.md`, `_test_stage07ac.md`, `_test_stage11a01.md`, `_test_stage07ac01.md`. Anything else is invisible to CCC.
+
+### Status model (parser, unchanged)
+
+Five states: WAITING_FOR_INPUT (red `#9B2335`), RUNNING (yellow `#B7791F`), COMPLETED (green `#276749`), ERROR (orange `#7A1828`), UNKNOWN (grey `#A0AEC0`). PTY env must clear both `CLAUDECODE` and `CLAUDE_CODE_ENTRYPOINT`.
 
 ---
 
 ## Dependencies
 
-CCC server (Node): unchanged from v1.0.7.
-- `express`, `node-pty@1.2.0-beta.11` (Node v25 compat), `ws`, `marked`.
+CCC server (Node):
+- `express@^4.21.2`
+- `node-pty@^1.2.0-beta.11` (Node v25 compat)
+- `ws@^8.19.0`
+- `marked@^17.0.3`
+- `dotenv@^16.4.7`
+- `mariadb@^3.4.0` **(NEW this stage; 3.5.2 installed)**
+- `@xterm/addon-fit@^0.11.0`, `@xterm/xterm@^6.0.0` (vendored to `public/` for browser)
+- Dev: `playwright@^1.58.2`
 
-Next.js preview app (`docs/v1.1/design/stage01a-dark-light/`):
-- `next@16.2.4` (Turbopack, static export via `output: 'export'`)
-- `react@19`
-- `lucide-react` (icons)
-- `tailwindcss` (with the custom theme tokens layered on via inline styles - hover variants are NOT used because tokens are dynamic)
-- shadcn/ui components (subset)
-- No new packages added in 02d.
+Next.js preview app (`docs/v1.1/design/stage01a-dark-light/`): unchanged.
+- `next@16.2.4` (Turbopack, static export), `react@19`, `lucide-react`, `tailwindcss`, shadcn/ui subset.
 
-Dev-Web build dir: `/tmp/stage01a-build/`. May need a fresh `npm install` if the dir was wiped between sessions.
+Dev-Web build dir: `/tmp/stage01a-build/`. Re-run `npm install` if `next: not found`.
 
 ---
 
 ## Apache & Deployment
 
-### v1.1 design preview (live)
+### v1.1 design preview (live, unchanged)
 - URL: `http://172.16.10.6/CCC/design-preview/`
 - Apache `Alias` -> `/mnt/sc-development/CCC/docs/v1.1/design/preview/`
-- Updates: rebuild on Dev-Web `/tmp/stage01a-build/`, rsync `out/` -> `preview/`. No Apache reload required.
-- Apache config file lives on Dev-Web only (NOT in repo): `/etc/apache2/conf-available/CCC-design-preview-alias.conf`.
+- Updates: rebuild on Dev-Web `/tmp/stage01a-build/`, rsync `out/` -> `preview/`. No reload required.
+- Apache config: `/etc/apache2/conf-available/CCC-design-preview-alias.conf` (Dev-Web only, not in repo).
 
-### Apache routing summary
-| URL path | Binds to |
-|---|---|
-| `/` | Apache DocumentRoot `/var/www/kkh01vdweb01/wwwroot/` (steinhofer-consulting site) |
-| `/proxforge/` | mod_proxy -> `127.0.0.1:8800` |
-| `/CCC/design-preview/` | Apache Alias -> share preview folder |
-| `/CCC/...` (anything else) | 404 |
+### CCC server v1.1 (not yet deployed to Dev-Web)
+- Stage 03a added DB layer but did NOT wire into server.js. CCC is still v1.0.7 on Mac localhost:3000.
+- v1.1 server-side smoke test will need a CCC instance on Dev-Web - planned for Stage 03c+.
 
-### Mac CCC v1.0.7 (production, unchanged)
-- localhost:3000 on Mac. Untouched this session and across the v1.1 stage cycle.
+### Mac CCC v1.0.7 (production, untouched)
+- localhost:3000 on Mac, unchanged across the entire v1.1 stage cycle so far.
 
 ---
 
-## Known Gotchas (cumulative for v1.1)
+## Known Gotchas (cumulative for v1.1, with new ones from 03a)
 
-1. **Test URL is the design preview, not port 3000.** `http://172.16.10.6/CCC/design-preview/` for all v1.1 visual work.
-2. **Browser caching is sticky.** Cmd+Shift+R required after every build. Brave is especially sticky on Next.js asset URLs even though hash-named filenames change per build.
-3. **Building on the share is slow over NFS / very slow over SMB.** Always build on Dev-Web local `/tmp/`. ~2.5s rebuild after first install.
-4. **`next.config.mjs` must set `basePath: '/CCC/design-preview'`.** Without it, `/_next/...` URLs 404 under Apache alias.
-5. **`server.js /design-preview` Express route is redundant** in production (Apache serves static). Kept in code for any CCC running from this codebase.
-6. **Apache config not in repo.** `/etc/apache2/conf-available/CCC-design-preview-alias.conf` lives on Dev-Web only - capture in deploy.sh or infra doc later.
-7. **DNS:** `kkh01vdweb01.mcsfam.local` does NOT resolve from Mac (only `.mng.` does). Use IP `172.16.10.6` or `.mng.` hostname.
-8. **GitHub push requires terminal credentials.** Bash tool can't reach macOS keychain - Phet pushes manually after each session.
-9. **SSH key must be loaded into ssh-agent at session start.** Bash tool cannot reach macOS keychain to enter the passphrase. Phet runs `! ssh-add --apple-use-keychain ~/.ssh/id_ed25519` once per session before any SSH/rsync to Dev-Web.
-10. **`/tmp/stage01a-build/` on Dev-Web is not persistence-guaranteed.** If `next: not found` after rsync, run `npm install` once.
-11. **Recovery file is auto-saved transient session state**, not committed. Currently tracked in git (legacy) - exclude from stage commits manually. Regenerates mid-session even after deletion. Carry-forward: `git rm --cached docs/handoff/CCC_recovery.md` + add to `.gitignore`.
-12. **Hover styles in this codebase use `useState`, not Tailwind hover classes.** Theme tokens are dynamic so Tailwind hover utilities cannot reference them.
-13. **Click handlers on row-internal elements need `e.stopPropagation()`** - the parent row has an onClick that toggles expand. Without `stopPropagation`, button clicks expand/collapse the row.
-14. **Container vs single-project rendering rule.** A `Project` with `subProjects` is a container - no progress bar at parent row, bars on each sub. A `Project` without `subProjects` keeps its bar at parent row. Code guard: `!hasChildren && project.stageProgress` in `ProjectRow`.
-15. **Filter never mutates expand state.** `forceExpand` is an override prop; local `expanded` is preserved. Tested in stage 02d - Escape after auto-expand returns Nexus to collapsed. Do not "fix" this by setting `expanded` from the filter - it would break the contract.
-16. **Distinct empty copy: ACTIVE = `no match`, PARKED = `empty`.** Different strings on purpose. Don't unify them.
+1. **Test URL is the design preview, not port 3000.** `http://172.16.10.6/CCC/design-preview/` for visual work.
+2. **Browser caching is sticky.** Cmd+Shift+R required after every preview build.
+3. **Build on Dev-Web local `/tmp/`**, not on the share. ~2.5s rebuild after first install.
+4. **`next.config.mjs` must set `basePath: '/CCC/design-preview'`.**
+5. **`server.js /design-preview` Express route is redundant** in prod (Apache serves static).
+6. **Apache config not in repo** - `/etc/apache2/conf-available/CCC-design-preview-alias.conf` lives on Dev-Web only.
+7. **DNS:** `kkh01vdweb01.mcsfam.local` doesn't resolve from Mac. Use IP `172.16.10.6` or `.mng.` hostname.
+8. **GitHub push requires terminal credentials.** Bash tool can't reach macOS keychain. Phet pushes manually.
+9. **SSH key must be loaded into ssh-agent** at session start: `! ssh-add --apple-use-keychain ~/.ssh/id_ed25519`.
+10. **`/tmp/stage01a-build/` not persistence-guaranteed.** If `next: not found`, run `npm install` once.
+11. **`docs/handoff/CCC_recovery.md` is legacy-tracked.** Modifies mid-session even after deletion. Carry-forward: `git rm --cached` + `.gitignore`.
+12. **Hover styles use `useState`, not Tailwind hover.** Theme tokens are dynamic.
+13. **Click handlers on row-internal elements need `e.stopPropagation()`** so they don't toggle the row.
+14. **Container vs single-project rendering rule.** `!hasChildren && project.stageProgress` in `ProjectRow`.
+15. **Filter never mutates expand state.** `forceExpand` override only; local `expanded` survives.
+16. **Distinct empty copy: ACTIVE = `no match`, PARKED = `empty`.** Don't unify.
+17. **(NEW)** **dotenv default does NOT override existing `process.env`.** Stale shell exports of `DB_*` from prior sessions silently win. Both `migrations/run.js` and `src/db.js` use `dotenv.config({ override: true })` to make `.env` authoritative. If you add new env-loading code in v1.1, follow the same pattern.
+18. **(NEW)** **Provisioned DB user is `ccc`, not `ccc_app`.** The original kickoff text and concept doc said `ccc_app`; reality is `ccc`. Both have been corrected. If you see `ccc_app` in any future doc, it is wrong.
+19. **(NEW)** **MariaDB sees connections from Mac as coming from `hhq01vifw01.mng.mcsfam.local`** (NAT through firewall). The `ccc` user GRANT must cover that host pattern; first connection failed because of stale creds, not host pattern, so this is informational - if a fresh user is provisioned later, the GRANT must allow that host.
+20. **(NEW)** **Forgejo macOS keychain entry stale.** `git push` fails with "credentials are incorrect or have expired" until the keychain entry is refreshed. Fresh `FORGEJO_TOKEN` is in `.env`. One-shot inline `credential.helper` works without modifying the keychain. Recommended: refresh the keychain entry once in a regular terminal, then future pushes are clean.
+21. **(NEW)** **`lock_session_id` deliberately has no FK** (would create circular dep with sessions table). Application code must enforce referential integrity for that column.
 
 ---
 
 ## Open Items / Carry-Forwards
 
-- **GitHub push pending** for `a7292ed`, `3749432`, `fdbc231`, `a98d2a8`, `1389e28`, `9d645b9`, `5a53802`, plus the upcoming /eod SHP commit. Phet to run `git push github main`.
-- **Recovery file legacy-tracked.** `docs/handoff/CCC_recovery.md` is tracked but should not be. Run `git rm --cached docs/handoff/CCC_recovery.md` and add `docs/handoff/CCC_recovery.md` to `.gitignore`. Small cleanup, not stage-blocking.
-- **Apache alias not version-controlled.** Capture `/etc/apache2/conf-available/CCC-design-preview-alias.conf` into a `deploy.sh` or infra doc.
-- **`data/projects.json` modification carried in working tree from prior session.** Untouched by Stage 02 work. Needs separate review/commit.
-- **CCC v1.1 instance not running on Dev-Web.** Apache static serve is sufficient for the preview-test loop. v1.1 server-side will come up in Stage 03+ once MariaDB lands.
-- **v1.1.0 not yet tagged.** Tag at end-of-v1.1 ship or after Stage 03 readiness.
-- **Stage 03 (MariaDB Schema & Data Migration) starts next.** Cowork drafts the Stage 03a kickoff prompt - per CCC pipeline rules CC waits and does not interpret the concept doc on its own. Stage 03 will be the first v1.1 sub-stage to touch backend code.
+- **GitHub push pending** for all v1.1 stage commits and the SHP commit - Phet runs `git push github main` once.
+- **Forgejo keychain refresh** needed (gotcha 20). Until done, every push needs the inline credential helper trick.
+- **Phet has not yet run the Stage 03a test file.** /go was invoked before /tested. Test file is `docs/v1.1/CCC_test_stage03a.md` - 7 sections, 18 items. Recommended next-session step: run the tests, /tested, then proceed with 03b.
+- **Recovery file legacy-tracked.** `git rm --cached docs/handoff/CCC_recovery.md` + `.gitignore` cleanup.
+- **`data/projects.json`** modified in working tree from earlier session - untouched, needs separate review.
+- **Apache alias not version-controlled.** Capture in `deploy.sh` or infra doc later.
+- **CCC v1.1 instance not running on Dev-Web.** Comes up in Stage 03c+ when DB is wired into the server.
+- **v1.1.0 not yet tagged.**
+- **Stage 03a work commit message deviation.** `2225181` reads "v1.1.0 Stage 03a - ..." not "Stage 03a complete - ...". Future stages: use the /go-canonical "Stage NNx complete - ..." format from the start. Don't amend.
 
 ---
 
 ## Next Actions
 
-1. **Phet pushes to GitHub:** `git push github main` (covers all v1.1 stage commits and the /eod SHP commit).
-2. **Cowork drafts the Stage 03a kickoff prompt** (`docs/handoff/stage03a-prompt.md`) covering the MariaDB schema + migration runner subset of Stage 03.
-3. When ready: Phet runs `Read and execute docs/handoff/stage03a-prompt.md` against CC. CC will switch from UI-shell mode to backend mode - first time touching `migrations/` and a new `src/db.js`.
-4. Continue using v1.0 sectioned test file format (saved feedback).
-5. Build/deploy flow stays the same for any preview-side touches; for backend testing the test loop will move to a CCC v1.1 instance running on Dev-Web (not yet stood up).
+1. **Phet runs the Stage 03a test file** (`docs/v1.1/CCC_test_stage03a.md`) - 7 sections, 18 items. Most are quick `node -e ...` snippets.
+2. **Phet runs `/tested`** - CC verifies its own work against the kickoff and produces a Cowork-bound stage report. Cowork signs off, Phet decides Stage 03 is on track.
+3. **Phet pushes to GitHub:** `git push github main` (covers all unpushed v1.1 commits).
+4. **Cowork drafts Stage 03b kickoff prompt** (`docs/handoff/stage03b-prompt.md`) - JSON Import Script. Reads `data/projects.json` and `data/settings.json`, inserts into DB. Keep `data/` files as backup.
+5. **Stage 03c next** - rewrite `src/projects.js` to use MariaDB instead of JSON I/O. Server.js route handlers stay identical (interface-preserving rewrite).
 
 ---
 
-*End of SHP. Build 47. Run `/continue` to resume.*
+*End of SHP. Build 49. Run `/continue` to resume.*
