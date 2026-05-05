@@ -72,9 +72,9 @@ function isPathWithin(child, parent) {
 // --- API Routes ---
 
 // Get all projects and groups
-app.get('/api/projects', (req, res) => {
+app.get('/api/projects', async (req, res) => {
   try {
-    const data = projects.getAllProjects();
+    const data = await projects.getAllProjects();
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: 'Failed to read projects' });
@@ -82,13 +82,13 @@ app.get('/api/projects', (req, res) => {
 });
 
 // Add a project
-app.post('/api/projects', (req, res) => {
+app.post('/api/projects', async (req, res) => {
   const { name, path: projectPath, group, coreFiles, type } = req.body;
   if (!name || !projectPath || !group) {
     return res.status(400).json({ error: 'name, path, and group are required' });
   }
   try {
-    const project = projects.addProject({ name, path: projectPath, group, coreFiles, type });
+    const project = await projects.addProject({ name, path: projectPath, group, coreFiles, type });
     res.status(201).json(project);
   } catch (err) {
     res.status(500).json({ error: 'Failed to add project' });
@@ -96,9 +96,9 @@ app.post('/api/projects', (req, res) => {
 });
 
 // Update a project
-app.put('/api/projects/:id', (req, res) => {
+app.put('/api/projects/:id', async (req, res) => {
   try {
-    const updated = projects.updateProject(req.params.id, req.body);
+    const updated = await projects.updateProject(req.params.id, req.body);
     if (!updated) return res.status(404).json({ error: 'Project not found' });
     res.json(updated);
   } catch (err) {
@@ -107,11 +107,11 @@ app.put('/api/projects/:id', (req, res) => {
 });
 
 // Rename a project (full propagation — files, coreFiles, CLAUDE.md)
-app.post('/api/projects/:id/rename', (req, res) => {
+app.post('/api/projects/:id/rename', async (req, res) => {
   try {
     const { name } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
-    const result = projects.renameProject(req.params.id, name.trim());
+    const result = await projects.renameProject(req.params.id, name.trim());
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -119,20 +119,20 @@ app.post('/api/projects/:id/rename', (req, res) => {
 });
 
 // Remove a project
-app.delete('/api/projects/:id', (req, res) => {
+app.delete('/api/projects/:id', async (req, res) => {
   try {
     const deleteFiles = req.query.deleteFiles === 'true';
 
     // Resolve path before removing from registry
     let absPath = null;
     if (deleteFiles) {
-      const project = projects.getAllProjects().projects.find(p => p.id === req.params.id);
+      const project = (await projects.getAllProjects()).projects.find(p => p.id === req.params.id);
       if (project) {
-        absPath = projects.resolveProjectPath(project.path);
+        absPath = await projects.resolveProjectPath(project.path);
       }
     }
 
-    const removed = projects.removeProject(req.params.id);
+    const removed = await projects.removeProject(req.params.id);
     if (!removed) return res.status(404).json({ error: 'Project not found' });
 
     // Delete from disk if requested
@@ -147,13 +147,13 @@ app.delete('/api/projects/:id', (req, res) => {
 });
 
 // Reorder projects (drag & drop)
-app.put('/api/projects-reorder', (req, res) => {
+app.put('/api/projects-reorder', async (req, res) => {
   const { orderedIds } = req.body;
   if (!Array.isArray(orderedIds)) {
     return res.status(400).json({ error: 'orderedIds array is required' });
   }
   try {
-    const data = projects.reorderProjects(orderedIds);
+    const data = await projects.reorderProjects(orderedIds);
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: 'Failed to reorder projects' });
@@ -161,11 +161,11 @@ app.put('/api/projects-reorder', (req, res) => {
 });
 
 // Add a group
-app.post('/api/groups', (req, res) => {
+app.post('/api/groups', async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: 'name is required' });
   try {
-    const result = projects.addGroup(name);
+    const result = await projects.addGroup(name);
     if (!result) return res.status(409).json({ error: 'Group already exists' });
     res.status(201).json(result);
   } catch (err) {
@@ -174,9 +174,9 @@ app.post('/api/groups', (req, res) => {
 });
 
 // Remove a group
-app.delete('/api/groups/:name', (req, res) => {
+app.delete('/api/groups/:name', async (req, res) => {
   try {
-    const result = projects.removeGroup(req.params.name);
+    const result = await projects.removeGroup(req.params.name);
     if (result.error) return res.status(400).json(result);
     res.json(result);
   } catch (err) {
@@ -247,16 +247,16 @@ app.put('/api/settings', (req, res) => {
 // --- File API ---
 
 // Read a project file (for Markdown preview)
-app.get('/api/file/:projectId', (req, res) => {
+app.get('/api/file/:projectId', async (req, res) => {
   const { projectId } = req.params;
   const { filePath } = req.query;
 
   if (!filePath) return res.status(400).json({ error: 'filePath query parameter required' });
 
-  const project = projects.getAllProjects().projects.find(p => p.id === projectId);
+  const project = (await projects.getAllProjects()).projects.find(p => p.id === projectId);
   if (!project) return res.status(404).json({ error: 'Project not found' });
 
-  const projectPath = projects.resolveProjectPath(project.path);
+  const projectPath = await projects.resolveProjectPath(project.path);
 
   if (!fs.existsSync(projectPath)) {
     return res.status(400).json({ error: 'Project directory does not exist: ' + project.path });
@@ -281,17 +281,17 @@ app.get('/api/file/:projectId', (req, res) => {
 });
 
 // Write a project file (for test runner save-back)
-app.put('/api/file/:projectId', (req, res) => {
+app.put('/api/file/:projectId', async (req, res) => {
   const { projectId } = req.params;
   const { filePath, content } = req.body;
 
   if (!filePath) return res.status(400).json({ error: 'filePath is required' });
   if (content === undefined) return res.status(400).json({ error: 'content is required' });
 
-  const project = projects.getAllProjects().projects.find(p => p.id === projectId);
+  const project = (await projects.getAllProjects()).projects.find(p => p.id === projectId);
   if (!project) return res.status(404).json({ error: 'Project not found' });
 
-  const projectPath = projects.resolveProjectPath(project.path);
+  const projectPath = await projects.resolveProjectPath(project.path);
 
   if (!fs.existsSync(projectPath)) {
     return res.status(400).json({ error: 'Project directory does not exist: ' + project.path });
@@ -363,16 +363,16 @@ app.post('/api/open-editor', (req, res) => {
 // --- Version API ---
 
 // Helper: find project and resolve path
-function findProjectWithPath(projectId) {
-  const project = projects.getAllProjects().projects.find(p => p.id === projectId);
+async function findProjectWithPath(projectId) {
+  const project = (await projects.getAllProjects()).projects.find(p => p.id === projectId);
   if (!project) return null;
-  return { project, absPath: projects.resolveProjectPath(project.path) };
+  return { project, absPath: await projects.resolveProjectPath(project.path) };
 }
 
 // Scan project versions
-app.get('/api/projects/:id/versions', (req, res) => {
+app.get('/api/projects/:id/versions', async (req, res) => {
   try {
-    const found = findProjectWithPath(req.params.id);
+    const found = await findProjectWithPath(req.params.id);
     if (!found) return res.status(404).json({ error: 'Project not found' });
 
     const result = versions.scanVersions(found.absPath, found.project.name);
@@ -387,12 +387,12 @@ app.get('/api/projects/:id/versions', (req, res) => {
 });
 
 // Create a new version
-app.post('/api/projects/:id/versions', (req, res) => {
+app.post('/api/projects/:id/versions', async (req, res) => {
   const { version, type } = req.body;
   if (!version || !type) return res.status(400).json({ error: 'version and type are required' });
 
   try {
-    const found = findProjectWithPath(req.params.id);
+    const found = await findProjectWithPath(req.params.id);
     if (!found) return res.status(404).json({ error: 'Project not found' });
 
     // Read previous version's concept doc to seed the new one
@@ -419,7 +419,7 @@ app.post('/api/projects/:id/versions', (req, res) => {
     const result = versions.createVersion(found.absPath, found.project.name, version, type, previousConceptContent);
 
     // Set as active version
-    projects.updateProject(req.params.id, { activeVersion: version });
+    await projects.updateProject(req.params.id, { activeVersion: version });
 
     res.status(201).json(result);
   } catch (err) {
@@ -428,12 +428,12 @@ app.post('/api/projects/:id/versions', (req, res) => {
 });
 
 // Set active version
-app.put('/api/projects/:id/active-version', (req, res) => {
+app.put('/api/projects/:id/active-version', async (req, res) => {
   const { version } = req.body;
   if (!version) return res.status(400).json({ error: 'version is required' });
 
   try {
-    const updated = projects.updateProject(req.params.id, { activeVersion: version });
+    const updated = await projects.updateProject(req.params.id, { activeVersion: version });
     if (!updated) return res.status(404).json({ error: 'Project not found' });
     res.json({ ok: true, activeVersion: version });
   } catch (err) {
@@ -442,9 +442,9 @@ app.put('/api/projects/:id/active-version', (req, res) => {
 });
 
 // Delete a version
-app.delete('/api/projects/:id/versions/:version', (req, res) => {
+app.delete('/api/projects/:id/versions/:version', async (req, res) => {
   try {
-    const found = findProjectWithPath(req.params.id);
+    const found = await findProjectWithPath(req.params.id);
     if (!found) return res.status(404).json({ error: 'Project not found' });
 
     const deletingVersion = req.params.version;
@@ -490,7 +490,7 @@ app.delete('/api/projects/:id/versions/:version', (req, res) => {
         return res.status(400).json({ error: 'Fallback version folder does not exist: v' + fallbackVersion });
       }
 
-      projects.updateProject(req.params.id, { activeVersion: fallbackVersion });
+      await projects.updateProject(req.params.id, { activeVersion: fallbackVersion });
     }
 
     fs.rmSync(absFolder, { recursive: true, force: true });
@@ -506,7 +506,7 @@ app.post('/api/projects/:id/versions/:version/complete', async (req, res) => {
   if (!tagName) return res.status(400).json({ error: 'tagName is required' });
 
   try {
-    const found = findProjectWithPath(req.params.id);
+    const found = await findProjectWithPath(req.params.id);
     if (!found) return res.status(404).json({ error: 'Project not found' });
 
     const result = await versions.runGitTag(found.absPath, tagName);
@@ -517,19 +517,19 @@ app.post('/api/projects/:id/versions/:version/complete', async (req, res) => {
 });
 
 // Migrate flat docs to versioned structure
-app.post('/api/projects/:id/migrate-versions', (req, res) => {
+app.post('/api/projects/:id/migrate-versions', async (req, res) => {
   const { version } = req.body;
   if (!version) return res.status(400).json({ error: 'version is required' });
 
   try {
-    const found = findProjectWithPath(req.params.id);
+    const found = await findProjectWithPath(req.params.id);
     if (!found) return res.status(404).json({ error: 'Project not found' });
 
     const result = versions.migrateToVersioned(found.absPath, found.project.name, version);
 
     // Set as active version and update coreFiles to point to versioned paths
     const versionFolder = versions.getVersionFolder(version);
-    projects.updateProject(req.params.id, {
+    await projects.updateProject(req.params.id, {
       activeVersion: version,
       coreFiles: {
         claude: 'CLAUDE.md',
@@ -547,12 +547,12 @@ app.post('/api/projects/:id/migrate-versions', (req, res) => {
 // --- Evaluated Flag ---
 
 // Called by /evaluate-import at completion to clear the unevaluated notice
-app.post('/api/projects/:id/evaluated', (req, res) => {
+app.post('/api/projects/:id/evaluated', async (req, res) => {
   try {
-    const found = findProjectWithPath(req.params.id);
+    const found = await findProjectWithPath(req.params.id);
     if (!found) return res.status(404).json({ error: 'Project not found' });
 
-    projects.updateProject(req.params.id, { evaluated: true });
+    await projects.updateProject(req.params.id, { evaluated: true });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update evaluated flag: ' + err.message });
@@ -560,9 +560,9 @@ app.post('/api/projects/:id/evaluated', (req, res) => {
 });
 
 // Get the correct test file path for a project's active version
-app.get('/api/projects/:id/test-file-path', (req, res) => {
+app.get('/api/projects/:id/test-file-path', async (req, res) => {
   try {
-    const found = findProjectWithPath(req.params.id);
+    const found = await findProjectWithPath(req.params.id);
     if (!found) return res.status(404).json({ error: 'Project not found' });
 
     const stageId = req.query.stage;
@@ -1007,7 +1007,7 @@ function generateProjectMapMd(projectName, version) {
 }
 
 // Scaffold a new project
-app.post('/api/scaffold-project', (req, res) => {
+app.post('/api/scaffold-project', async (req, res) => {
   const { name, parentDir, template, group, type } = req.body;
 
   // Validate name
@@ -1112,9 +1112,9 @@ app.post('/api/scaffold-project', (req, res) => {
       // Fall back to absolute path
     }
 
-    // Register in projects.json
+    // Register in projects registry
     const versionFolder = path.join('docs', 'v1.0');
-    const project = projects.addProject({
+    const project = await projects.addProject({
       name: safeName,
       path: projectPath,
       group: group.trim(),
@@ -1127,7 +1127,7 @@ app.post('/api/scaffold-project', (req, res) => {
     });
 
     // Set activeVersion and mark as evaluated (scaffolded projects have all docs)
-    projects.updateProject(project.id, { activeVersion: '1.0', evaluated: true });
+    await projects.updateProject(project.id, { activeVersion: '1.0', evaluated: true });
 
     res.status(201).json({
       project,
@@ -1404,14 +1404,14 @@ app.post('/api/scan-project', (req, res) => {
 // --- Session API ---
 
 // Start a session for a project
-app.post('/api/sessions/:projectId', (req, res) => {
+app.post('/api/sessions/:projectId', async (req, res) => {
   const { projectId } = req.params;
   const { command } = req.body; // 'claude' or 'shell'
 
-  const project = projects.getAllProjects().projects.find(p => p.id === projectId);
+  const project = (await projects.getAllProjects()).projects.find(p => p.id === projectId);
   if (!project) return res.status(404).json({ error: 'Project not found' });
 
-  const projectPath = projects.resolveProjectPath(project.path);
+  const projectPath = await projects.resolveProjectPath(project.path);
 
   if (!fs.existsSync(projectPath)) {
     return res.status(400).json({ error: 'Project path does not exist: ' + projectPath });
@@ -1533,12 +1533,12 @@ setInterval(async () => {
 }, 30000);
 
 // --- Startup Migration: ensure topic folders + evaluated flag for all registered projects ---
-(function startupMigration() {
+(async function startupMigration() {
   const TOPIC_FOLDERS = ['discussion', 'architecture', 'spec', 'adr', 'context', 'handoff'];
   try {
-    const registry = projects.getAllProjects();
+    const registry = await projects.getAllProjects();
     for (const proj of registry.projects) {
-      const absPath = projects.resolveProjectPath(proj.path);
+      const absPath = await projects.resolveProjectPath(proj.path);
       const docsDir = path.join(absPath, 'docs');
       if (!fs.existsSync(docsDir)) continue;
 
@@ -1552,12 +1552,12 @@ setInterval(async () => {
 
       // Backfill evaluated flag for projects that pre-date the flag
       if (proj.evaluated === undefined) {
-        projects.updateProject(proj.id, { evaluated: true });
+        await projects.updateProject(proj.id, { evaluated: true });
       }
 
       // Backfill type field for projects that pre-date the field
       if (proj.type === undefined) {
-        projects.updateProject(proj.id, { type: 'code' });
+        await projects.updateProject(proj.id, { type: 'code' });
       }
     }
   } catch (e) {

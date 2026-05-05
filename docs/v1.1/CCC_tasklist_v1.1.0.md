@@ -145,13 +145,13 @@
 - [x] Keep `data/` folder files as backup (not deleted)
 
 ### Sub-Stage 03c — projects.js Rewrite
-- [ ] Rewrite `src/projects.js` to use MariaDB queries instead of JSON I/O
-- [ ] `getAllProjects()` -> SELECT with LEFT JOIN on project_core_files
-- [ ] `addProject()` -> INSERT + INSERT core files
-- [ ] `updateProject()` -> UPDATE projects + upsert core files
-- [ ] `removeProject()` -> DELETE cascade
-- [ ] `resolveProjectPath()` -> reads `project_root` from settings table
-- [ ] Exported interface stays identical - no changes to server.js route handlers
+- [x] Rewrite `src/projects.js` to use MariaDB queries instead of JSON I/O
+- [x] `getAllProjects()` -> SELECT with LEFT JOIN on project_core_files
+- [x] `addProject()` -> INSERT + INSERT core files
+- [x] `updateProject()` -> UPDATE projects + upsert core files
+- [x] `removeProject()` -> DELETE cascade
+- [x] `resolveProjectPath()` -> reads `project_root` from settings table
+- [x] Exported interface stays identical - no changes to server.js route handlers
 
 ### Sub-Stage 03d — Settings & Sessions DB
 - [ ] Update settings read/write in `server.js` to use DB instead of settings.json

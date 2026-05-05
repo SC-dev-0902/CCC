@@ -1,205 +1,291 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const DATA_FILE = path.join(DATA_DIR, 'projects.json');
-const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
-
-const DEFAULT_DATA = {
-  groups: [
-    { name: 'Active', order: 0 },
-    { name: 'Parked', order: 1 }
-  ],
-  projects: []
-};
-
-/**
- * Resolve a project's relative path to an absolute path using settings.projectRoot.
- * If the path is already absolute, returns it as-is.
- */
-function resolveProjectPath(projectPath) {
-  if (path.isAbsolute(projectPath)) return projectPath;
-
-  try {
-    const settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
-    if (settings.projectRoot) {
-      return path.join(settings.projectRoot, projectPath);
-    }
-  } catch (e) {
-    // Fall back to raw path
-  }
-  return projectPath;
-}
-
-function readData() {
-  try {
-    const raw = fs.readFileSync(DATA_FILE, 'utf8');
-    return JSON.parse(raw);
-  } catch (e) {
-    // First run or corrupted file — create defaults
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-    writeData(DEFAULT_DATA);
-    return JSON.parse(JSON.stringify(DEFAULT_DATA));
-  }
-}
-
-function writeData(data) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2) + '\n', 'utf8');
-}
+const db = require('./db');
 
 const PROTECTED_GROUPS = ['Active', 'Parked'];
 
-function pruneEmptyGroups(data) {
-  const usedGroups = new Set(data.projects.map(p => p.group));
-  data.groups = data.groups.filter(g => PROTECTED_GROUPS.includes(g.name) || usedGroups.has(g.name));
+// ---------------------------- helpers ----------------------------
+
+function emptyCoreFiles() {
+  return { claude: 'CLAUDE.md', concept: '', tasklist: '' };
 }
 
-function getAllProjects() {
-  return readData();
+function rowsToProject(rows) {
+  if (!rows || rows.length === 0) return null;
+  const r = rows[0];
+  const coreFiles = emptyCoreFiles();
+  for (const row of rows) {
+    if (row.file_type) coreFiles[row.file_type] = row.file_path;
+  }
+  return {
+    id: r.id,
+    name: r.name,
+    path: r.path,
+    group: r.group_name,
+    order: r.sort_order,
+    coreFiles,
+    type: r.type,
+    evaluated: !!r.evaluated,
+    activeVersion: r.active_version || null
+  };
 }
 
-function addProject({ name, path: projectPath, group, coreFiles, type, evaluated }) {
-  const data = readData();
+async function fetchProjectById(id) {
+  const rows = await db.query(
+    `SELECT p.id, p.name, p.path, p.group_name, p.sort_order,
+            p.type, p.active_version, p.evaluated,
+            pcf.file_type, pcf.file_path
+       FROM projects p
+       LEFT JOIN project_core_files pcf ON p.id = pcf.project_id
+      WHERE p.id = ?`,
+    [id]
+  );
+  return rowsToProject(rows);
+}
 
-  // Ensure the group exists
-  if (!data.groups.find(g => g.name === group)) {
-    const maxOrder = data.groups.reduce((max, g) => Math.max(max, g.order), -1);
-    data.groups.push({ name: group, order: maxOrder + 1 });
+async function buildGroupsArray() {
+  // Distinct group names from projects, ordered by their min sort_order
+  const projectGroupRows = await db.query(
+    'SELECT group_name FROM projects GROUP BY group_name ORDER BY MIN(sort_order) ASC'
+  );
+  // Empty groups recorded in settings (extra_group_<name>)
+  const extraGroupRows = await db.query(
+    "SELECT value FROM settings WHERE `key` LIKE 'extra_group_%'"
+  );
+
+  const ordered = [];
+  for (const row of projectGroupRows) {
+    if (!PROTECTED_GROUPS.includes(row.group_name) && !ordered.includes(row.group_name)) {
+      ordered.push(row.group_name);
+    }
+  }
+  for (const row of extraGroupRows) {
+    if (!PROTECTED_GROUPS.includes(row.value) && !ordered.includes(row.value)) {
+      ordered.push(row.value);
+    }
   }
 
-  const id = crypto.randomUUID();
+  const groups = [
+    { name: 'Active', order: 0 },
+    { name: 'Parked', order: 1 }
+  ];
+  let nextOrder = 2;
+  for (const name of ordered) {
+    groups.push({ name, order: nextOrder++ });
+  }
+  return groups;
+}
 
-  // Determine order — append to end of group
-  const groupProjects = data.projects.filter(p => p.group === group);
-  const order = groupProjects.length;
+// ---------------------------- public API ----------------------------
 
-  const project = {
-    id,
-    name,
-    path: projectPath,
-    group,
-    order,
-    coreFiles: coreFiles || {
-      claude: 'CLAUDE.md',
-      concept: '',
-      tasklist: ''
+async function getAllProjects() {
+  const rows = await db.query(
+    `SELECT p.id, p.name, p.path, p.group_name, p.sort_order,
+            p.type, p.active_version, p.evaluated,
+            pcf.file_type, pcf.file_path
+       FROM projects p
+       LEFT JOIN project_core_files pcf ON p.id = pcf.project_id
+      ORDER BY p.sort_order ASC`
+  );
+
+  const byId = new Map();
+  const orderById = [];
+  for (const row of rows) {
+    if (!byId.has(row.id)) {
+      byId.set(row.id, [row]);
+      orderById.push(row.id);
+    } else {
+      byId.get(row.id).push(row);
     }
+  }
+
+  const projects = orderById.map((id) => rowsToProject(byId.get(id)));
+  const groups = await buildGroupsArray();
+  return { groups, projects };
+}
+
+async function addProject({ name, path: projectPath, group, coreFiles, type, evaluated }) {
+  const id = crypto.randomUUID();
+  const finalType = type || 'code';
+  const finalEvaluated = evaluated !== undefined ? (evaluated ? 1 : 0) : 1;
+  const finalCoreFiles = coreFiles || emptyCoreFiles();
+
+  await db.transaction(async (conn) => {
+    const countRows = await conn.query(
+      'SELECT COUNT(*) AS c FROM projects WHERE group_name = ?',
+      [group]
+    );
+    const sortOrder = Number(countRows[0].c);
+
+    await conn.query(
+      `INSERT INTO projects (id, name, path, group_name, sort_order, type, evaluated)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id, name, projectPath, group, sortOrder, finalType, finalEvaluated]
+    );
+
+    for (const [fileType, filePath] of Object.entries(finalCoreFiles)) {
+      await conn.query(
+        `INSERT INTO project_core_files (project_id, file_type, file_path)
+         VALUES (?, ?, ?)`,
+        [id, fileType, filePath]
+      );
+    }
+  });
+
+  return await fetchProjectById(id);
+}
+
+async function updateProject(id, updates) {
+  const colMap = {
+    name: 'name',
+    group: 'group_name',
+    activeVersion: 'active_version',
+    evaluated: 'evaluated',
+    type: 'type'
   };
 
-  // Type defaults to "code" if not specified
-  if (type) {
-    project.type = type;
-  }
-
-  // Ensure evaluated is always explicitly set
-  if (evaluated !== undefined) {
-    project.evaluated = evaluated;
-  } else {
-    project.evaluated = true;
-  }
-
-  data.projects.push(project);
-  writeData(data);
-  return project;
-}
-
-function updateProject(id, updates) {
-  const data = readData();
-  const index = data.projects.findIndex(p => p.id === id);
-  if (index === -1) return null;
-
-  const allowed = ['name', 'group', 'coreFiles', 'activeVersion', 'evaluated', 'type'];
-  for (const key of allowed) {
+  const setParts = [];
+  const setValues = [];
+  for (const [key, col] of Object.entries(colMap)) {
     if (updates[key] !== undefined) {
-      data.projects[index][key] = updates[key];
+      setParts.push(`${col} = ?`);
+      let val = updates[key];
+      if (key === 'evaluated') val = val ? 1 : 0;
+      setValues.push(val);
     }
   }
 
-  pruneEmptyGroups(data);
-  writeData(data);
-  return data.projects[index];
-}
+  const hasCoreFiles = updates.coreFiles && typeof updates.coreFiles === 'object';
 
-function removeProject(id) {
-  const data = readData();
-  const index = data.projects.findIndex(p => p.id === id);
-  if (index === -1) return false;
+  if (setParts.length === 0 && !hasCoreFiles) return null;
 
-  data.projects.splice(index, 1);
-  pruneEmptyGroups(data);
-  writeData(data);
-  return true;
-}
+  const existing = await db.queryOne('SELECT id FROM projects WHERE id = ?', [id]);
+  if (!existing) return null;
 
-function reorderProjects(orderedIds) {
-  const data = readData();
-
-  // orderedIds is an array of { id, group, order }
-  for (const entry of orderedIds) {
-    const project = data.projects.find(p => p.id === entry.id);
-    if (project) {
-      project.group = entry.group;
-      project.order = entry.order;
+  await db.transaction(async (conn) => {
+    if (setParts.length > 0) {
+      await conn.query(
+        `UPDATE projects SET ${setParts.join(', ')} WHERE id = ?`,
+        [...setValues, id]
+      );
     }
+    if (hasCoreFiles) {
+      for (const [fileType, filePath] of Object.entries(updates.coreFiles)) {
+        await conn.query(
+          `INSERT INTO project_core_files (project_id, file_type, file_path)
+           VALUES (?, ?, ?)
+           ON DUPLICATE KEY UPDATE file_path = VALUES(file_path)`,
+          [id, fileType, filePath]
+        );
+      }
+    }
+  });
+
+  return await fetchProjectById(id);
+}
+
+async function removeProject(id) {
+  const result = await db.query('DELETE FROM projects WHERE id = ?', [id]);
+  return Number(result.affectedRows || 0) > 0;
+}
+
+async function reorderProjects(orderedIds) {
+  await db.transaction(async (conn) => {
+    for (const entry of orderedIds) {
+      await conn.query(
+        'UPDATE projects SET group_name = ?, sort_order = ? WHERE id = ?',
+        [entry.group, entry.order, entry.id]
+      );
+    }
+  });
+  return await getAllProjects();
+}
+
+async function addGroup(name) {
+  const countRows = await db.query(
+    'SELECT COUNT(*) AS c FROM projects WHERE group_name = ?',
+    [name]
+  );
+  if (Number(countRows[0].c) > 0) return null;
+  if (PROTECTED_GROUPS.includes(name)) return null;
+
+  const settingKey = `extra_group_${name}`;
+  const existing = await db.queryOne(
+    'SELECT `key` FROM settings WHERE `key` = ?',
+    [settingKey]
+  );
+  if (existing) return null;
+
+  await db.query(
+    'INSERT INTO settings (`key`, value) VALUES (?, ?) ON DUPLICATE KEY UPDATE value = VALUES(value)',
+    [settingKey, name]
+  );
+
+  return await buildGroupsArray();
+}
+
+async function removeGroup(name) {
+  const countRows = await db.query(
+    'SELECT COUNT(*) AS c FROM projects WHERE group_name = ?',
+    [name]
+  );
+  if (Number(countRows[0].c) > 0) {
+    return { error: 'Group still has projects' };
   }
 
-  pruneEmptyGroups(data);
-  writeData(data);
-  return data;
-}
+  const settingKey = `extra_group_${name}`;
+  await db.query('DELETE FROM settings WHERE `key` = ?', [settingKey]);
 
-function addGroup(name) {
-  const data = readData();
-  if (data.groups.find(g => g.name === name)) return null;
-
-  const maxOrder = data.groups.reduce((max, g) => Math.max(max, g.order), -1);
-  data.groups.push({ name, order: maxOrder + 1 });
-  writeData(data);
-  return data.groups;
-}
-
-function removeGroup(name) {
-  const data = readData();
-  // Only remove if no projects belong to this group
-  const hasProjects = data.projects.some(p => p.group === name);
-  if (hasProjects) return { error: 'Group still has projects' };
-
-  data.groups = data.groups.filter(g => g.name !== name);
-  writeData(data);
-  return data.groups;
+  return await buildGroupsArray();
 }
 
 /**
- * Escape special regex characters in a string.
+ * Resolve a project's relative path to an absolute path.
+ * Priority: absolute path > PROJECT_ROOT env var > settings.project_root in DB > raw path.
+ * PROJECT_ROOT env var takes precedence over the DB value because the DB stores the
+ * Mac path while .env on each machine sets the correct local PROJECT_ROOT.
  */
+async function resolveProjectPath(projectPath) {
+  if (path.isAbsolute(projectPath)) return projectPath;
+
+  if (process.env.PROJECT_ROOT) {
+    return path.join(process.env.PROJECT_ROOT, projectPath);
+  }
+
+  try {
+    const row = await db.queryOne(
+      "SELECT value FROM settings WHERE `key` = 'project_root'"
+    );
+    if (row && row.value) {
+      return path.join(row.value, projectPath);
+    }
+  } catch (e) {
+    // Fall through to raw path
+  }
+
+  return projectPath;
+}
+
 function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
  * Rename a project and propagate to all associated files.
- * Renames files matching {oldName}_ pattern in docs/, docs/handoff/, and version folders.
- * Updates coreFiles paths in projects.json.
- * Updates internal references in CLAUDE.md.
- * Returns { project, renamedFiles[], updatedContent[] } on success.
- * Rolls back file renames on failure.
  */
-function renameProject(id, newName) {
-  const data = readData();
-  const project = data.projects.find(p => p.id === id);
+async function renameProject(id, newName) {
+  const project = await fetchProjectById(id);
   if (!project) throw new Error('Project not found');
 
   const oldName = project.name;
   if (oldName === newName) return { project, renamedFiles: [], updatedContent: [] };
 
-  const absPath = resolveProjectPath(project.path);
+  const absPath = await resolveProjectPath(project.path);
   if (!fs.existsSync(absPath)) throw new Error('Project path does not exist');
 
   // Phase 1: Collect all file renames
-  const renames = []; // { from: absPath, to: absPath }
+  const renames = [];
   const namePattern = new RegExp('^' + escapeRegex(oldName) + '_');
 
   function collectRenames(dirPath) {
@@ -214,14 +300,11 @@ function renameProject(id, newName) {
     }
   }
 
-  // Scan docs/handoff/
   collectRenames(path.join(absPath, 'docs', 'handoff'));
 
-  // Scan docs/ (legacy flat files)
   const docsDir = path.join(absPath, 'docs');
   collectRenames(docsDir);
 
-  // Scan version folders: docs/vX.Y/ and patch subfolders docs/vX.Y/vX.Y.Z/
   if (fs.existsSync(docsDir)) {
     const docEntries = fs.readdirSync(docsDir, { withFileTypes: true });
     for (const entry of docEntries) {
@@ -229,7 +312,6 @@ function renameProject(id, newName) {
       const versionDir = path.join(docsDir, entry.name);
       collectRenames(versionDir);
 
-      // Patch subdirectories
       const subEntries = fs.readdirSync(versionDir, { withFileTypes: true });
       for (const sub of subEntries) {
         if (!sub.isDirectory() || !/^v\d+\.\d+\.\d+$/.test(sub.name)) continue;
@@ -238,7 +320,7 @@ function renameProject(id, newName) {
     }
   }
 
-  // Phase 2: Validate — no target file already exists
+  // Phase 2: Validate
   for (const r of renames) {
     if (fs.existsSync(r.to)) {
       throw new Error('Target file already exists: ' + path.relative(absPath, r.to));
@@ -251,7 +333,6 @@ function renameProject(id, newName) {
   const newAbsPath = path.join(parentDir, newFolderName);
   let folderRenamed = false;
 
-  // Validate folder target doesn't exist (unless it's the same path, e.g. case-only change on case-insensitive FS)
   if (absPath !== newAbsPath && fs.existsSync(newAbsPath)) {
     throw new Error('Target folder already exists: ' + newAbsPath);
   }
@@ -277,17 +358,15 @@ function renameProject(id, newName) {
       folderRenamed = true;
     }
   } catch (err) {
-    // Rollback file renames (now inside old folder, still at absPath since folder rename failed)
     for (const r of completed.reverse()) {
       try { fs.renameSync(r.to, r.from); } catch (_) { /* best effort */ }
     }
     throw new Error('Folder rename failed, rolled back: ' + err.message);
   }
 
-  // From here on, project lives at newAbsPath
   const effectivePath = folderRenamed ? newAbsPath : absPath;
 
-  // Phase 6: Update CLAUDE.md content (replace old name references)
+  // Phase 6: Update CLAUDE.md content
   const updatedContent = [];
   const claudePath = path.join(effectivePath, 'CLAUDE.md');
   if (fs.existsSync(claudePath)) {
@@ -299,7 +378,7 @@ function renameProject(id, newName) {
     }
   }
 
-  // Phase 7: Update coreFiles paths in projects.json
+  // Phase 7: Update coreFiles paths in the in-memory project object
   if (project.coreFiles) {
     for (const key of Object.keys(project.coreFiles)) {
       if (typeof project.coreFiles[key] === 'string' && project.coreFiles[key].includes(oldName)) {
@@ -308,10 +387,9 @@ function renameProject(id, newName) {
     }
   }
 
-  // Phase 8: Update project name, path, and persist
+  // Phase 8: Update project name, path
   project.name = newName;
   if (folderRenamed) {
-    // Update the relative path: replace the old basename with the new one
     const oldBasename = path.basename(absPath);
     const pathParts = project.path.split(path.sep);
     const lastIdx = pathParts.lastIndexOf(oldBasename);
@@ -320,7 +398,22 @@ function renameProject(id, newName) {
       project.path = pathParts.join(path.sep);
     }
   }
-  writeData(data);
+
+  // Persist to DB
+  await db.transaction(async (conn) => {
+    await conn.query(
+      'UPDATE projects SET name = ?, path = ? WHERE id = ?',
+      [project.name, project.path, id]
+    );
+    for (const [fileType, filePath] of Object.entries(project.coreFiles)) {
+      await conn.query(
+        `INSERT INTO project_core_files (project_id, file_type, file_path)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE file_path = VALUES(file_path)`,
+        [id, fileType, filePath]
+      );
+    }
+  });
 
   return {
     project,
