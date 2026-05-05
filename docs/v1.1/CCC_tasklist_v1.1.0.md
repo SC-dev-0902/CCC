@@ -188,40 +188,41 @@
 - [x] Re-run the two blocked items in `CCC_test_stage04a.md` - both PASS, 13/13 + 8/8
 
 ### Sub-Stage 04b — Filesystem Scanner Update
-- [ ] Update `src/versions.js`: version folders now at project root (e.g., `v1.0/`), not inside `docs/`
-- [ ] Update `src/versions.js`: `scanVersionFiles()` scans `vX.Y/docs/` for concept and tasklist; scans `vX.Y/docs/testfiles/` recursively for test files
-- [ ] Update `src/versions.js`: patch versions nest as `vX.Y/vX.Y.Z/` - scan recursively
-- [ ] Update `src/versions.js`: `getTestFilePath()` returns path within `vX.Y/docs/testfiles/stageNN/` (creates stage subfolder if missing)
-- [ ] Update test file scanner to walk `testfiles/stageNN/stageNNa/` nesting
+- [x] Update `src/versions.js`: version folders now at project root (e.g., `v1.0/`), not inside `docs/`
+- [x] Update `src/versions.js`: `scanVersionFiles()` scans `vX.Y/docs/` for concept and tasklist; scans `vX.Y/docs/testfiles/` recursively for test files
+- [x] Update `src/versions.js`: patch versions nest as `vX.Y/vX.Y.Z/` - scan recursively
+- [x] Update `src/versions.js`: `getTestFilePath()` returns path within `vX.Y/docs/testfiles/stageNN/` (creates stage subfolder if missing)
+- [x] Update test file scanner to walk `testfiles/stageNN/stageNNa/` nesting
 - [ ] ~~Treeview renders test files grouped by stage under the Testing section~~ (re-targeted to 04b01 — lands in Next.js)
 - Backend work (AC1-7, AC9, AC10): complete. AC8 + 5 UI items deferred to 04b01.
 
 ### Sub-Stage 04bN — Next.js Client Wiring
-- [ ] `git mv docs/v1.1/design/stage01a-dark-light client`
-- [ ] Update `client/next.config.mjs`: remove design-preview basePath, set `basePath: process.env.NEXT_PUBLIC_BASE_PATH || ''`
-- [ ] Add `"build:client"` script to root `package.json`: `cd client && pnpm build`
-- [ ] Replace `express.static('public')` with `express.static(path.join(__dirname, 'client', 'out'))` in `server.js`
-- [ ] Add `client/out/` to `.gitignore`; remove `client/out/` from repo tracking
-- [ ] Remove `@vercel/analytics` from `client/package.json` and `app/layout.tsx`; replace Google Fonts with local CSS font stack
-- [ ] Wire treeview: replace dummy-data imports with real `GET /api/projects` (flat list, no sub-project hierarchy — that is 04c)
-- [ ] Wire WebSocket: one global connection, handle `statusUpdate` messages to drive status dots
-- [ ] Wire terminal: xterm.js as dynamically-imported client component, `POST /api/sessions/:projectId` to start, WS for I/O
-- [ ] Wire settings: `GET /api/settings` on load, `PUT /api/settings` on save in `settings-shell.tsx`
-- [ ] Wire file reader: clicking a file in the treeview opens a basic markdown view panel (main area toggle)
-- [ ] Remove demo controls strip from `dashboard-main.tsx`; remove design-preview Apache alias and `docs/v1.1/design/preview/`
-- [ ] Build (`npm run build:client`), restart CCC server, verify CCC loads from `client/out/` on Dev-Web
+- [x] `git mv docs/v1.1/design/stage01a-dark-light client`
+- [x] Update `client/next.config.mjs`: remove design-preview basePath, set `basePath: process.env.NEXT_PUBLIC_BASE_PATH || ''`
+- [x] Add `"build:client"` script to root `package.json`: `cd client && pnpm build`
+- [x] Replace `express.static('public')` with `express.static(path.join(__dirname, 'client', 'out'))` in `server.js`
+- [x] Add `client/out/` to `.gitignore`; remove `client/out/` from repo tracking
+- [x] Remove `@vercel/analytics` from `client/package.json` and `app/layout.tsx`; replace Google Fonts with local CSS font stack
+- [x] Wire treeview: replace dummy-data imports with real `GET /api/projects` (flat list, no sub-project hierarchy — that is 04c)
+- [x] Wire WebSocket: one global connection, handle `statusUpdate` messages to drive status dots
+- [x] Wire terminal: xterm.js as dynamically-imported client component, `POST /api/sessions/:projectId` to start, WS for I/O
+- [x] Wire settings: `GET /api/settings` on load, `PUT /api/settings` on save in `settings-shell.tsx`
+- [x] Wire file reader: clicking a file in the treeview opens a basic markdown view panel (main area toggle)
+- [x] Remove demo controls strip from `dashboard-main.tsx`; remove design-preview Apache alias and `docs/v1.1/design/preview/`
+- [x] Build (`npm run build:client`), restart CCC server, verify CCC loads from `client/out/` on Dev-Web
 
 ### Sub-Stage 04b01 — Grouped Test Files in Next.js
 - [ ] In `client/components/treeview-shell.tsx` Testing section: group test files by `stagePath` returned from `GET /api/projects/:id/versions`
 - [ ] Stage groups render as non-clickable labels; sub-stage folders nest under their parent stage group
 - [ ] Test file click behaviour unchanged (opens test runner panel)
 
-### Sub-Stage 04c — Treeview: Parent/Sub-Project Rendering
+### Sub-Stage 04c — Treeview: Parent/Sub-Project Rendering + Drag-Drop
 - [ ] Update `client/components/treeview-shell.tsx` to render parent projects with collapsible sub-project list (real data from API `children[]`)
 - [ ] Sub-projects expand under their parent node
 - [ ] Each sub-project has its own status dot, version indicator, and file links
 - [ ] Parent project node shows aggregate status (worst-case of sub-project statuses)
 - [ ] Stage progress bar on parent node: count main-stage test files (completed / total) in active version
+- [ ] Drag-drop reorder: drag projects between groups and within a group; persist via `PUT /api/projects-reorder`
 
 ### Sub-Stage 04d — New Project Wizard Update
 - [ ] Update New Project Wizard to scaffold v1.1 folder structure:
