@@ -2,8 +2,13 @@ const pty = require('node-pty');
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const { ClaudeParser, STATES } = require('./parser');
+const db = require('./db');
+
+// Stage 03d Decision A: Node v24.14.0 on this machine, so use the built-in
+// crypto.randomUUID() (Node >= 14.17.0). No `uuid` package added.
 
 // Active sessions keyed by project ID
 const sessions = new Map();
@@ -57,6 +62,8 @@ function createSession(projectId, projectPath, command) {
     })()
   });
 
+  const dbSessionId = crypto.randomUUID();
+
   const session = {
     id: projectId,
     pty: ptyProcess,
@@ -65,8 +72,16 @@ function createSession(projectId, projectPath, command) {
     claudeStatus: isClaudeCode ? STATES.UNKNOWN : null,
     parser: null,
     degraded: false,
-    wsClients: new Set()
+    wsClients: new Set(),
+    dbSessionId
   };
+
+  // Insert session row - non-blocking, fire and forget with error logging.
+  // user_id is NULL until Stage 05 (authentication).
+  db.query(
+    "INSERT INTO sessions (id, project_id, user_id, status, started_at) VALUES (?, ?, NULL, 'active', NOW())",
+    [dbSessionId, projectId]
+  ).catch(err => console.warn('[sessions] Failed to insert session row:', err.message));
 
   // Create parser for Claude Code sessions
   if (isClaudeCode) {
@@ -116,6 +131,12 @@ function createSession(projectId, projectPath, command) {
       session.parser.stopDegradeMonitor();
       session.parser.reset();
     }
+    if (session.dbSessionId) {
+      db.query(
+        "UPDATE sessions SET status = 'exited', ended_at = NOW() WHERE id = ?",
+        [session.dbSessionId]
+      ).catch(err => console.warn('[sessions] Failed to update session row on exit:', err.message));
+    }
     session.wsClients.forEach(ws => {
       if (ws.readyState === 1) {
         ws.send(JSON.stringify({ type: 'exit', exitCode }));
@@ -137,6 +158,13 @@ function destroySession(projectId) {
 
   if (session.parser) {
     session.parser.stopDegradeMonitor();
+  }
+
+  if (session.dbSessionId) {
+    db.query(
+      "UPDATE sessions SET status = 'error', ended_at = NOW() WHERE id = ?",
+      [session.dbSessionId]
+    ).catch(err => console.warn('[sessions] Failed to update session row on destroy:', err.message));
   }
 
   try {
@@ -214,16 +242,14 @@ function getAllSessionStates() {
 async function autoFileGitHubIssue(info) {
   if (degradedIssueFiled) return;
 
-  // Read settings for GitHub token
-  let settings;
+  // Read GitHub token from the settings table; fall back to env if DB unreachable.
+  let token;
   try {
-    const settingsPath = path.join(__dirname, '..', 'data', 'settings.json');
-    settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    const row = await db.queryOne("SELECT `value` FROM settings WHERE `key` = 'github_token'");
+    token = (row && row.value) ? row.value : process.env.GITHUB_TOKEN;
   } catch (e) {
-    return; // No settings, can't file
+    token = process.env.GITHUB_TOKEN;
   }
-
-  const token = settings.githubToken || process.env.GITHUB_TOKEN;
   if (!token) return; // No token configured
 
   const repo = process.env.GITHUB_REPO;

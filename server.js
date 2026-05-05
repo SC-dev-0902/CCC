@@ -9,6 +9,7 @@ const WebSocket = require('ws');
 const projects = require('./src/projects');
 const sessions = require('./src/sessions');
 const versions = require('./src/versions');
+const db = require('./src/db');
 const { scanUsage, scanWeeklyUsage, PLAN_LIMITS } = require('./src/usage');
 
 const app = express();
@@ -42,18 +43,57 @@ const SETTINGS_DEFAULTS = {
   weeklyMessageBudget: 45000
 };
 
-function readSettings() {
-  const settingsPath = path.join(__dirname, 'data', 'settings.json');
+// DB <-> JS key mapping for the settings table.
+// Only these six keys round-trip through the DB; the remaining SETTINGS_DEFAULTS
+// fields (recoveryInterval, usagePlan, tokenBudget5h, weeklyTokenBudget,
+// weeklyMessageBudget) are usage-related and slated for removal in Stage 15.
+// They always return defaults to the frontend in the meantime.
+const SETTINGS_DB_KEYS = [
+  { js: 'projectRoot', db: 'project_root', json: false },
+  { js: 'editor', db: 'editor', json: false },
+  { js: 'shell', db: 'shell', json: false },
+  { js: 'theme', db: 'theme', json: false },
+  { js: 'filePatterns', db: 'file_patterns', json: true },
+  { js: 'githubToken', db: 'github_token', json: false }
+];
+
+async function readSettingsFromDB() {
+  const result = JSON.parse(JSON.stringify(SETTINGS_DEFAULTS));
   try {
-    return JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-  } catch (e) {
-    // First run or corrupted — create defaults
-    const dataDir = path.join(__dirname, 'data');
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
+    const rows = await db.query('SELECT `key`, `value` FROM settings');
+    for (const row of rows) {
+      const mapping = SETTINGS_DB_KEYS.find(m => m.db === row.key);
+      if (!mapping) continue;
+      if (mapping.json) {
+        try {
+          result[mapping.js] = JSON.parse(row.value);
+        } catch (e) {
+          // Fall back to default on parse error
+        }
+      } else {
+        result[mapping.js] = row.value;
+      }
     }
-    fs.writeFileSync(settingsPath, JSON.stringify(SETTINGS_DEFAULTS, null, 2) + '\n', 'utf8');
-    return JSON.parse(JSON.stringify(SETTINGS_DEFAULTS));
+  } catch (err) {
+    console.warn('[settings] DB read failed, returning defaults:', err.message);
+  }
+  return result;
+}
+
+async function writeSettingsToDB(updates) {
+  try {
+    for (const mapping of SETTINGS_DB_KEYS) {
+      if (updates[mapping.js] === undefined) continue;
+      const value = mapping.json ? JSON.stringify(updates[mapping.js]) : updates[mapping.js];
+      await db.query(
+        'INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)',
+        [mapping.db, value]
+      );
+    }
+    return await readSettingsFromDB();
+  } catch (err) {
+    console.warn('[settings] DB write failed:', err.message);
+    return Object.assign(JSON.parse(JSON.stringify(SETTINGS_DEFAULTS)), updates);
   }
 }
 
@@ -216,28 +256,25 @@ app.get('/api/browse', (req, res) => {
 });
 
 // Get settings
-app.get('/api/settings', (req, res) => {
+app.get('/api/settings', async (req, res) => {
   try {
-    res.json(readSettings());
+    const settings = await readSettingsFromDB();
+    res.json(settings);
   } catch (err) {
     res.status(500).json({ error: 'Failed to read settings' });
   }
 });
 
 // Update settings
-app.put('/api/settings', (req, res) => {
+app.put('/api/settings', async (req, res) => {
   try {
-    const current = readSettings();
-
-    const allowed = ['projectRoot', 'editor', 'shell', 'theme', 'filePatterns', 'githubToken'];
-    for (const key of allowed) {
-      if (req.body[key] !== undefined) {
-        current[key] = req.body[key];
+    const updates = {};
+    for (const mapping of SETTINGS_DB_KEYS) {
+      if (req.body[mapping.js] !== undefined) {
+        updates[mapping.js] = req.body[mapping.js];
       }
     }
-
-    const settingsPath = path.join(__dirname, 'data', 'settings.json');
-    fs.writeFileSync(settingsPath, JSON.stringify(current, null, 2) + '\n', 'utf8');
+    const current = await writeSettingsToDB(updates);
     res.json(current);
   } catch (err) {
     res.status(500).json({ error: 'Failed to save settings' });
@@ -318,14 +355,14 @@ app.put('/api/file/:projectId', async (req, res) => {
 });
 
 // Open a file in the configured external editor
-app.post('/api/open-editor', (req, res) => {
+app.post('/api/open-editor', async (req, res) => {
   const { filePath } = req.body;
   if (!filePath) return res.status(400).json({ error: 'filePath is required' });
 
   // Read editor from settings (empty string = system default)
   let editor = '';
   try {
-    const settings = readSettings();
+    const settings = await readSettingsFromDB();
     if (settings.editor) {
       editor = settings.editor;
     }
@@ -1101,7 +1138,7 @@ app.post('/api/scaffold-project', async (req, res) => {
     // Compute relative path if under projectRoot
     let projectPath = projectDir;
     try {
-      const settingsData = readSettings();
+      const settingsData = await readSettingsFromDB();
       if (settingsData.projectRoot) {
         const root = path.resolve(settingsData.projectRoot);
         if (projectDir.startsWith(root + path.sep) || projectDir === root) {
@@ -1272,7 +1309,7 @@ app.get('/api/version', (req, res) => {
 // --- Scan / Import API ---
 
 // Scan an existing project directory for core files
-app.post('/api/scan-project', (req, res) => {
+app.post('/api/scan-project', async (req, res) => {
   const { dirPath } = req.body;
   if (!dirPath || !dirPath.trim()) {
     return res.status(400).json({ error: 'dirPath is required' });
@@ -1348,7 +1385,7 @@ app.post('/api/scan-project', (req, res) => {
     // 5. Compute registrationPath (relative to projectRoot if applicable)
     let registrationPath = absPath;
     try {
-      const settingsData = readSettings();
+      const settingsData = await readSettingsFromDB();
       if (settingsData.projectRoot) {
         const root = path.resolve(settingsData.projectRoot);
         if (absPath.startsWith(root + path.sep) || absPath === root) {
@@ -1493,7 +1530,7 @@ server.on('error', (err) => {
 
 app.get('/api/usage', async (req, res) => {
   try {
-    const settings = readSettings();
+    const settings = await readSettingsFromDB();
     const plan = settings.usagePlan || 'max5';
     const tokenBudget = settings.tokenBudget5h || 1000000;
     const usage = await scanUsage(plan, tokenBudget);
@@ -1512,7 +1549,7 @@ app.get('/api/usage', async (req, res) => {
 setInterval(async () => {
   try {
     if (wss.clients.size === 0) return;
-    const settings = readSettings();
+    const settings = await readSettingsFromDB();
     const plan = settings.usagePlan || 'max5';
     const tokenBudget = settings.tokenBudget5h || 1000000;
     const usage = await scanUsage(plan, tokenBudget);
@@ -1562,6 +1599,20 @@ setInterval(async () => {
     }
   } catch (e) {
     // Non-fatal — migration is best-effort
+  }
+})();
+
+// Orphaned session cleanup - mark any sessions that were active when the server last died
+(async function cleanupOrphanedSessions() {
+  try {
+    const result = await db.query(
+      "UPDATE sessions SET status = 'error', ended_at = NOW() WHERE status = 'active'"
+    );
+    if (result && result.affectedRows > 0) {
+      console.log(`[startup] Marked ${result.affectedRows} orphaned session(s) as error`);
+    }
+  } catch (err) {
+    console.warn('[startup] Orphaned session cleanup failed (DB may be unreachable):', err.message);
   }
 })();
 
