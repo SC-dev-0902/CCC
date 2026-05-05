@@ -352,7 +352,7 @@ v1.1 ships with full multi-user support.
 ### Database
 - **Server**: Dev-DB (existing MariaDB instance)
 - **Database name**: `ccc`
-- **User**: `ccc_app` with access restricted to `ccc` database
+- **User**: `ccc` with access restricted to `ccc` database
 
 ### Schema
 

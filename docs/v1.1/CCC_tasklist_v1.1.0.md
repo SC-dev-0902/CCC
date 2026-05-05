@@ -131,11 +131,11 @@
 **Focus:** Replace JSON file storage with MariaDB. Existing v1.0 projects.json and settings.json import cleanly. All v1.0 CRUD operations work identically via DB.
 
 ### Sub-Stage 03a — Schema & Migration Runner
-- [ ] Create `migrations/` folder and `migrations/run.js` migration runner
-- [ ] Write `migrations/001_initial.sql`: create all tables per concept doc schema
+- [x] Create `migrations/` folder and `migrations/run.js` migration runner
+- [x] Write `migrations/001_initial.sql`: create all tables per concept doc schema
   - `users`, `projects`, `project_core_files`, `sessions`, `settings`, `project_integrations`
-- [ ] Write `src/db.js`: MariaDB connection pool, query helpers (`query()`, `queryOne()`, `transaction()`)
-- [ ] Run migration on Dev-Web, verify all tables created correctly
+- [x] Write `src/db.js`: MariaDB connection pool, query helpers (`query()`, `queryOne()`, `transaction()`)
+- [x] Run migration on Dev-Web, verify all tables created correctly
 
 ### Sub-Stage 03b — JSON Import Script
 - [ ] Write `migrations/002_seed.sql` / seed script: reads `data/projects.json` and `data/settings.json`, inserts into DB
