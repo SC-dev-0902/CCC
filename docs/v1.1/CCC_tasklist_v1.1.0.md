@@ -176,11 +176,16 @@
 **Focus:** CCC understands and manages the new physically nested project hierarchy. Treeview renders parent/sub-project structure. Version folders at project root (not inside docs/) are correctly scanned.
 
 ### Sub-Stage 04a — DB Schema for Nesting
-- [ ] Add `parent_id` column to `projects` table (FK -> projects.id, nullable)
-- [ ] Add `lock_user_id` and `lock_session_id` columns to `projects` table
-- [ ] Write migration for the column additions
-- [ ] Update `src/projects.js`: `getAllProjects()` returns tree structure (parent with children array)
-- [ ] Update `src/projects.js`: `addProject()` accepts optional `parent_id`
+- [x] Add `parent_id` column to `projects` table (FK -> projects.id, nullable)
+- [x] Add `lock_user_id` and `lock_session_id` columns to `projects` table
+- [x] Write migration for the column additions
+- [x] Update `src/projects.js`: `getAllProjects()` returns tree structure (parent with children array)
+- [x] Update `src/projects.js`: `addProject()` accepts optional `parent_id`
+
+### Sub-Stage 04a01 — group_name Nullable Schema Fix
+- [x] Add migration `migrations/004_group_name_nullable.sql` (`ALTER TABLE projects MODIFY COLUMN group_name VARCHAR(100) NULL`)
+- [x] Update `migrations/001_initial.sql` to declare `group_name` nullable so fresh installs match
+- [x] Re-run the two blocked items in `CCC_test_stage04a.md` - both PASS, 13/13 + 8/8
 
 ### Sub-Stage 04b — Filesystem Scanner Update
 - [ ] Update `src/versions.js`: version folders now at project root (e.g., `v1.0/`), not inside `docs/`

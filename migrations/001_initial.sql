@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS `projects` (
   `name`            VARCHAR(255)  NOT NULL,
   `path`            VARCHAR(512)  NOT NULL,
   `parent_id`       CHAR(36)      NULL,
-  `group_name`      VARCHAR(100)  NOT NULL,
+  `group_name`      VARCHAR(100)  NULL,
   `sort_order`      INT           NOT NULL DEFAULT 0,
   `type`            ENUM('code', 'config') NOT NULL DEFAULT 'code',
   `active_version`  VARCHAR(20)   NULL,
