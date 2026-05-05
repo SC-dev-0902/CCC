@@ -31,10 +31,18 @@ const readPanelTimers = new Map();
 
 // --- API ---
 
+// Base path so the app works whether served direct (port 3000, root) or via
+// an Apache reverse proxy mount like /CCC/. window.location.pathname is "/"
+// at root, "/CCC/" under proxy. Strip trailing slash + any index.html.
+const BASE_PATH = (() => {
+  let p = window.location.pathname.replace(/\/index\.html$/, '/');
+  return p.replace(/\/$/, '');
+})();
+
 async function api(method, url, body) {
   const opts = { method, headers: { 'Content-Type': 'application/json' } };
   if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(url, opts);
+  const res = await fetch(BASE_PATH + url, opts);
   const text = await res.text();
   try {
     return JSON.parse(text);
@@ -364,7 +372,7 @@ function connectTerminal(projectId) {
   }
 
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws?projectId=${projectId}`);
+  const ws = new WebSocket(`${wsProtocol}//${window.location.host}${BASE_PATH}/ws?projectId=${projectId}`);
 
   ws.onopen = () => {
     // Sync terminal size
