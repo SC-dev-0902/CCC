@@ -129,11 +129,12 @@ function SubProjectRow({ sub, theme }: { sub: SubProject; theme: "dark" | "light
   )
 }
 
-function ProjectRow({ project, theme }: { project: Project; theme: "dark" | "light" }) {
+function ProjectRow({ project, theme, forceExpand = false }: { project: Project; theme: "dark" | "light"; forceExpand?: boolean }) {
   const t = tokens(theme)
   const expandedByDefault = project.id === "leadsieve" || project.id === "orion"
   const [expanded, setExpanded] = useState(expandedByDefault)
   const hasChildren = !!project.subProjects?.length
+  const effectiveExpanded = forceExpand || expanded
 
   return (
     <div style={{ marginBottom: 4 }}>
@@ -143,7 +144,7 @@ function ProjectRow({ project, theme }: { project: Project; theme: "dark" | "lig
         style={{ backgroundColor: project.id === "leadsieve" ? t.bgHover : "transparent" }}
       >
         {hasChildren ? (
-          expanded ? <ChevronDown size={11} style={{ color: t.textMuted }} /> : <ChevronRight size={11} style={{ color: t.textMuted }} />
+          effectiveExpanded ? <ChevronDown size={11} style={{ color: t.textMuted }} /> : <ChevronRight size={11} style={{ color: t.textMuted }} />
         ) : (
           <span style={{ width: 11 }} />
         )}
@@ -156,7 +157,7 @@ function ProjectRow({ project, theme }: { project: Project; theme: "dark" | "lig
           <ProgressBar current={project.stageProgress.current} total={project.stageProgress.total} theme={theme} />
         </div>
       )}
-      {expanded && project.subProjects?.map((sub) => (
+      {effectiveExpanded && project.subProjects?.map((sub) => (
         <SubProjectRow key={sub.id} sub={sub} theme={theme} />
       ))}
     </div>
@@ -195,6 +196,10 @@ export function TreeviewShell({ theme, filter = "" }: { theme: "dark" | "light";
   }
   const filteredActive = useMemo(() => filterProjects(ACTIVE_PROJECTS), [query])
   const filteredParked = useMemo(() => filterProjects(PARKED_PROJECTS), [query])
+  const filteredNew = useMemo(
+    () => (!query ? NEW_PROJECTS : NEW_PROJECTS.filter((p) => matches(p.name))),
+    [query]
+  )
 
   return (
     <div
@@ -233,21 +238,27 @@ export function TreeviewShell({ theme, filter = "" }: { theme: "dark" | "light";
 
       {/* Tree */}
       <div className="flex-1 overflow-y-auto px-1 pb-3">
-        {NEW_PROJECTS.length > 0 && (
+        {filteredNew.length > 0 && (
           <>
             <GroupHeader label="New" theme={theme} />
-            {NEW_PROJECTS.map((p) => matches(p.name) || !query ? (
+            {filteredNew.map((p) => (
               <div key={p.id} className="flex items-center gap-2 px-2 py-1" style={{ paddingLeft: 24 }}>
                 <StatusDot status="unknown" />
                 <span className="text-xs italic" style={{ color: t.textSecondary }}>{p.name}</span>
                 <Badge theme={theme}>unregistered</Badge>
               </div>
-            ) : null)}
+            ))}
           </>
         )}
 
         <GroupHeader label="Active" theme={theme} />
-        {filteredActive.map((p) => <ProjectRow key={p.id} project={p} theme={theme} />)}
+        {filteredActive.length === 0 && query ? (
+          <div className="px-2 py-2 text-[10px] italic" style={{ paddingLeft: 24, color: t.textMuted }}>
+            no match
+          </div>
+        ) : (
+          filteredActive.map((p) => <ProjectRow key={p.id} project={p} theme={theme} forceExpand={!!query} />)
+        )}
 
         <GroupHeader label="Parked" theme={theme} />
         {filteredParked.length === 0 ? (
@@ -255,7 +266,7 @@ export function TreeviewShell({ theme, filter = "" }: { theme: "dark" | "light";
             empty
           </div>
         ) : (
-          filteredParked.map((p) => <ProjectRow key={p.id} project={p} theme={theme} />)
+          filteredParked.map((p) => <ProjectRow key={p.id} project={p} theme={theme} forceExpand={!!query} />)
         )}
       </div>
 

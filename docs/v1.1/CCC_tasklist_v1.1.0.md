@@ -114,10 +114,10 @@
 - [x] Usage bar removed from top menu
 
 ### Sub-Stage 02d — Treeview Search/Filter
-- [ ] Search input above treeview renders correctly
-- [ ] Typing filters the hardcoded project list in real time
-- [ ] Non-matching nodes hide; matching nodes and their parents remain visible
-- [ ] Escape clears the filter
+- [x] Search input above treeview renders correctly
+- [x] Typing filters the hardcoded project list in real time
+- [x] Non-matching nodes hide; matching nodes and their parents remain visible
+- [x] Escape clears the filter
 
 ### Go/NoGo Gate
 > Do all new v1.1 UI elements look and feel correct with hardcoded data? Does the implementation match the Stage 01 visual spec?
