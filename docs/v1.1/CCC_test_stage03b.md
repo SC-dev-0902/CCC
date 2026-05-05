@@ -9,13 +9,13 @@ Tick each item when passed, add comments under any that need fixing.
 
 ### Script Present
 
-- [ ] Confirm `migrations/002_import.js` exists at the CCC project root.
+- [x] Confirm `migrations/002_import.js` exists at the CCC project root.
   - Command: `ls -la migrations/002_import.js`
   - Outcome: file present, non-empty.
 
 > Test comment:
 
-- [ ] Confirm the script requires the shared DB layer.
+- [x] Confirm the script requires the shared DB layer.
   - Command: `grep "require('../src/db.js')" migrations/002_import.js`
   - Outcome: one matching line. The import wraps inserts in `transaction()` from `src/db.js`.
 
@@ -25,13 +25,13 @@ Tick each item when passed, add comments under any that need fixing.
 
 ### Import Execution
 
-- [ ] Run the import from the CCC project root.
+- [x] Run the import from the CCC project root.
   - Command: `node migrations/002_import.js`
   - Outcome: prints `Import complete.`, followed by three counts (`Projects inserted`, `Core files inserted`, `Settings rows written`). Exit code 0.
 
 > Test comment:
 
-- [ ] Confirm exit code is 0.
+- [x] Confirm exit code is 0.
   - Command: `node migrations/002_import.js; echo "exit:$?"`
   - Outcome: last line reads `exit:0`.
 
@@ -41,13 +41,13 @@ Tick each item when passed, add comments under any that need fixing.
 
 ### Projects Count
 
-- [ ] Confirm 17 project rows are present.
+- [x] Confirm 17 project rows are present.
   - Command: `node -e "require('./src/db').queryOne('SELECT COUNT(*) AS c FROM projects').then(r => { console.log('projects:', Number(r.c)); process.exit(0); })"`
   - Outcome: prints `projects: 17`.
 
 > Test comment:
 
-- [ ] Spot-check one project row by id.
+- [x] Spot-check one project row by id.
   - Command: `node -e "require('./src/db').queryOne(\"SELECT id, name, group_name, type, active_version, evaluated FROM projects WHERE id = '3b7c2ac6-ffbe-4939-93b8-a905056553f8'\").then(r => { console.log(r); process.exit(0); })"`
   - Outcome: prints the CCC project row - `name: 'CCC'`, `group_name: 'Active'`, `type: 'code'`, `active_version: '1.1'`, `evaluated: 1`.
 
@@ -57,13 +57,13 @@ Tick each item when passed, add comments under any that need fixing.
 
 ### Core Files Count
 
-- [ ] Confirm 51 core file rows are present (17 projects x 3 file types).
+- [x] Confirm 51 core file rows are present (17 projects x 3 file types).
   - Command: `node -e "require('./src/db').queryOne('SELECT COUNT(*) AS c FROM project_core_files').then(r => { console.log('core_files:', Number(r.c)); process.exit(0); })"`
   - Outcome: prints `core_files: 51`.
 
 > Test comment:
 
-- [ ] Confirm each project has exactly three core file rows.
+- [x] Confirm each project has exactly three core file rows.
   - Command: `node -e "require('./src/db').query('SELECT project_id, COUNT(*) AS c FROM project_core_files GROUP BY project_id HAVING c <> 3').then(r => { console.log('rows with non-3 count:', r.length); process.exit(0); })"`
   - Outcome: prints `rows with non-3 count: 0`. Every project has all three of `claude`, `concept`, `tasklist`.
 
@@ -73,19 +73,19 @@ Tick each item when passed, add comments under any that need fixing.
 
 ### Settings Rows
 
-- [ ] Confirm all 6 expected setting keys are present.
+- [x] Confirm all 6 expected setting keys are present.
   - Command: `node -e "require('./src/db').query('SELECT \`key\` FROM settings ORDER BY \`key\`').then(r => { console.log(r.map(x => x.key)); process.exit(0); })"`
   - Outcome: prints `[ 'editor', 'file_patterns', 'github_token', 'project_root', 'shell', 'theme' ]`.
 
 > Test comment:
 
-- [ ] Confirm `file_patterns` value is valid JSON.
+- [x] Confirm `file_patterns` value is valid JSON.
   - Command: `node -e "require('./src/db').queryOne(\"SELECT \`value\` FROM settings WHERE \`key\` = 'file_patterns'\").then(r => { const o = JSON.parse(r.value); console.log('keys:', Object.keys(o)); process.exit(0); })"`
   - Outcome: prints `keys: [ 'concept', 'tasklist' ]`. JSON parse does not throw.
 
 > Test comment:
 
-- [ ] Confirm `forgejo_token` is NOT present (the source `settings.json` does not contain it).
+- [x] Confirm `forgejo_token` is NOT present (the source `settings.json` does not contain it).
   - Command: `node -e "require('./src/db').queryOne(\"SELECT COUNT(*) AS c FROM settings WHERE \`key\` = 'forgejo_token'\").then(r => { console.log('forgejo_token rows:', Number(r.c)); process.exit(0); })"`
   - Outcome: prints `forgejo_token rows: 0`.
 
@@ -95,13 +95,13 @@ Tick each item when passed, add comments under any that need fixing.
 
 ### Idempotency
 
-- [ ] Re-run the import script.
+- [x] Re-run the import script.
   - Command: `node migrations/002_import.js; echo "exit:$?"`
   - Outcome: prints `Import complete.` with `Projects inserted: 0  (skipped: 17)` and `Core files inserted: 0  (skipped: 51)`. Settings line still reads `Settings rows written: 6` because settings use `ON DUPLICATE KEY UPDATE` (this is expected and correct - no new rows are created). Exit code 0.
 
 > Test comment:
 
-- [ ] Confirm row counts are unchanged after the second run.
+- [x] Confirm row counts are unchanged after the second run.
   - Command: `node -e "(async () => { const db = require('./src/db'); const p = await db.queryOne('SELECT COUNT(*) AS c FROM projects'); const c = await db.queryOne('SELECT COUNT(*) AS c FROM project_core_files'); const s = await db.queryOne('SELECT COUNT(*) AS c FROM settings'); console.log('projects:', Number(p.c), 'core_files:', Number(c.c), 'settings:', Number(s.c)); process.exit(0); })()"`
   - Outcome: prints `projects: 17 core_files: 51 settings: 6`. No duplicate rows were inserted.
 
@@ -111,19 +111,19 @@ Tick each item when passed, add comments under any that need fixing.
 
 ### Backup Files Intact
 
-- [ ] Confirm `data/projects.json` is still present.
+- [x] Confirm `data/projects.json` is still present.
   - Command: `ls -la data/projects.json`
   - Outcome: file present, non-empty.
 
 > Test comment:
 
-- [ ] Confirm `data/settings.json` is still present.
+- [x] Confirm `data/settings.json` is still present.
   - Command: `ls -la data/settings.json`
   - Outcome: file present, non-empty.
 
 > Test comment:
 
-- [ ] Confirm the import script never wrote to either backup file.
+- [x] Confirm the import script never wrote to either backup file.
   - Command: `grep -E "fs\.writeFile|fs\.appendFile|writeFileSync|appendFileSync" migrations/002_import.js || echo "no write calls"`
   - Outcome: prints `no write calls`. The script is read-only against the JSON files.
 
