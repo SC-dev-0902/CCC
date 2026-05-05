@@ -747,8 +747,7 @@ function renderTreeView() {
         const vData = projectVersions.get(project.id);
         if (vData && vData.versions) {
           for (const ver of vData.versions) {
-            const flatTests = (ver.version === vData.activeVersion) ? (vData.flatTestFiles || []) : [];
-            renderVersionRow(versionsChildren, project, ver, vData.activeVersion, flatTests);
+            renderVersionRow(versionsChildren, project, ver, vData.activeVersion);
           }
         }
 
@@ -825,7 +824,125 @@ function clearDropIndicators() {
 
 // --- Version Tree Helpers ---
 
-function renderVersionRow(container, project, ver, activeVersion, flatTestFiles) {
+// Group testFiles by stagePath into top-level stages, each with optional sub-stage groups.
+// Files without a stagePath fall back into "ungrouped".
+function groupTestFilesByStage(testFiles) {
+  const groupMap = new Map();
+  const ungrouped = [];
+
+  for (const tf of testFiles || []) {
+    const sp = tf.stagePath;
+    if (!sp) {
+      ungrouped.push(tf);
+      continue;
+    }
+    const parts = sp.split('/');
+    const top = parts[0];
+    if (!groupMap.has(top)) {
+      groupMap.set(top, { stage: top, files: [], subGroups: new Map() });
+    }
+    const group = groupMap.get(top);
+    if (parts.length === 1) {
+      group.files.push(tf);
+    } else {
+      const subKey = parts.slice(1).join('/');
+      if (!group.subGroups.has(subKey)) {
+        group.subGroups.set(subKey, { stage: subKey, files: [] });
+      }
+      group.subGroups.get(subKey).files.push(tf);
+    }
+  }
+
+  const groups = Array.from(groupMap.values())
+    .sort((a, b) => a.stage.localeCompare(b.stage))
+    .map(g => ({
+      stage: g.stage,
+      files: g.files.sort((a, b) => (a.name || '').localeCompare(b.name || '')),
+      subGroups: Array.from(g.subGroups.values())
+        .sort((a, b) => a.stage.localeCompare(b.stage))
+        .map(sg => ({
+          stage: sg.stage,
+          files: sg.files.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+        }))
+    }));
+
+  return { groups, ungrouped };
+}
+
+// Render the contents of an expanded Testing section. baseFolder is the path
+// prefix relative to project root (e.g. "v1.0" or "v1.0/v1.0.1") - test files
+// resolve to `${baseFolder}/docs/testfiles/${stagePath}/${fileName}`.
+function renderTestingFilesGrouped(container, project, baseFolder, testFiles, isPatch) {
+  const { groups, ungrouped } = groupTestFilesByStage(testFiles);
+
+  if (groups.length === 0 && ungrouped.length === 0) {
+    const emptyEl = document.createElement('div');
+    emptyEl.className = 'tree-testing-empty';
+    emptyEl.textContent = 'No test files yet';
+    container.appendChild(emptyEl);
+    return;
+  }
+
+  const baseFileClass = isPatch ? 'tree-file tree-testing-file-patch' : 'tree-file tree-testing-file';
+
+  const appendFile = (parent, testFile, stagePath, depth) => {
+    const testFileName = testFile.name || testFile;
+    const testFilePath = `${baseFolder}/docs/testfiles/${stagePath}/${testFileName}`;
+    const badge = testFile.total ? ` <span class="test-progress-badge">[${testFile.checked}/${testFile.total}]</span>` : '';
+    const depthClass = depth >= 2 ? ' tree-testing-file-deep' : '';
+    const testEl = document.createElement('div');
+    testEl.className = baseFileClass + depthClass;
+    testEl.innerHTML = `<span class="tree-file-icon">&#x1F4CB;</span><span class="tree-file-name">${escapeHtml(testFileName)}${badge}</span>`;
+    testEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openFileTab(project.id, project.name, testFilePath);
+    });
+    parent.appendChild(testEl);
+  };
+
+  for (const group of groups) {
+    const groupHeader = document.createElement('div');
+    groupHeader.className = 'tree-testing-stage-group';
+    groupHeader.innerHTML = `<span class="tree-testing-stage-name">${escapeHtml(group.stage)}</span>`;
+    container.appendChild(groupHeader);
+
+    for (const tf of group.files) {
+      appendFile(container, tf, group.stage, 1);
+    }
+
+    for (const sub of group.subGroups) {
+      const subHeader = document.createElement('div');
+      subHeader.className = 'tree-testing-stage-group tree-testing-stage-group-sub';
+      subHeader.innerHTML = `<span class="tree-testing-stage-name">${escapeHtml(sub.stage)}</span>`;
+      container.appendChild(subHeader);
+      for (const tf of sub.files) {
+        appendFile(container, tf, `${group.stage}/${sub.stage}`, 2);
+      }
+    }
+  }
+
+  if (ungrouped.length > 0) {
+    const ungroupedHeader = document.createElement('div');
+    ungroupedHeader.className = 'tree-testing-stage-group tree-testing-stage-group-ungrouped';
+    ungroupedHeader.innerHTML = `<span class="tree-testing-stage-name">Ungrouped</span>`;
+    container.appendChild(ungroupedHeader);
+    for (const tf of ungrouped) {
+      const testFileName = tf.name || tf;
+      const testFilePath = `${baseFolder}/docs/testfiles/${testFileName}`;
+      const badge = tf.total ? ` <span class="test-progress-badge">[${tf.checked}/${tf.total}]</span>` : '';
+      const testEl = document.createElement('div');
+      testEl.className = fileClass;
+      testEl.innerHTML = `<span class="tree-file-icon">&#x1F4CB;</span><span class="tree-file-name">${escapeHtml(testFileName)}${badge}</span>`;
+      testEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openFileTab(project.id, project.name, testFilePath);
+      });
+      container.appendChild(testEl);
+    }
+  }
+}
+
+function renderVersionRow(container, project, ver, activeVersion) {
   const isActive = ver.version === activeVersion;
   const expandKey = project.id + ':' + ver.version;
   const isExpanded = expandedVersions.has(expandKey);
@@ -946,15 +1063,12 @@ function renderVersionRow(container, project, ver, activeVersion, flatTestFiles)
 
     container.appendChild(versionFiles);
 
-    // Testing sub-header (collapsible, nested under version — always visible)
-    // Merges versioned test files (docs/vX.Y/) with flat test files (docs/) for the active version
+    // Testing sub-header (collapsible, nested under version - always visible)
     {
       const testingKey = project.id + ':' + ver.version;
       const testingExpanded = expandedTestingSections.has(testingKey);
       const versionedTests = (ver.testFiles && ver.testFiles.length) ? ver.testFiles : [];
-      const extraFlatTests = flatTestFiles || [];
-      const allTests = [...versionedTests, ...extraFlatTests];
-      const testCount = allTests.length;
+      const testCount = versionedTests.length;
 
       const testingHeader = document.createElement('div');
       testingHeader.className = 'tree-testing-header' + (testingExpanded ? ' expanded' : '');
@@ -976,7 +1090,6 @@ function renderVersionRow(container, project, ver, activeVersion, flatTestFiles)
           expandedTestingSections.delete(testingKey);
         } else {
           expandedTestingSections.add(testingKey);
-          // Refresh version data to pick up new test files
           await loadProjectVersions(project.id);
         }
         renderTreeView();
@@ -986,41 +1099,7 @@ function renderVersionRow(container, project, ver, activeVersion, flatTestFiles)
       if (testingExpanded) {
         const testingFiles = document.createElement('div');
         testingFiles.className = 'tree-testing-files';
-        if (testCount === 0) {
-          const emptyEl = document.createElement('div');
-          emptyEl.className = 'tree-testing-empty';
-          emptyEl.textContent = 'No test files yet';
-          testingFiles.appendChild(emptyEl);
-        } else {
-          // Versioned test files (path relative to version folder)
-          for (const testFile of versionedTests) {
-            const testFileName = testFile.name || testFile;
-            const testFilePath = ver.folder + '/' + testFileName;
-            const badge = testFile.total ? ` <span class="test-progress-badge">[${testFile.checked}/${testFile.total}]</span>` : '';
-            const testEl = document.createElement('div');
-            testEl.className = 'tree-file tree-testing-file';
-            testEl.innerHTML = `<span class="tree-file-icon">&#x1F4CB;</span><span class="tree-file-name">${escapeHtml(testFileName)}${badge}</span>`;
-            testEl.addEventListener('click', (e) => {
-              e.stopPropagation();
-              openFileTab(project.id, project.name, testFilePath);
-            });
-            testingFiles.appendChild(testEl);
-          }
-          // Flat test files (path relative to docs/)
-          for (const testFile of extraFlatTests) {
-            const testFileName = testFile.name || testFile;
-            const testFilePath = 'docs/' + testFileName;
-            const badge = testFile.total ? ` <span class="test-progress-badge">[${testFile.checked}/${testFile.total}]</span>` : '';
-            const testEl = document.createElement('div');
-            testEl.className = 'tree-file tree-testing-file';
-            testEl.innerHTML = `<span class="tree-file-icon">&#x1F4CB;</span><span class="tree-file-name">${escapeHtml(testFileName)}${badge}</span>`;
-            testEl.addEventListener('click', (e) => {
-              e.stopPropagation();
-              openFileTab(project.id, project.name, testFilePath);
-            });
-            testingFiles.appendChild(testEl);
-          }
-        }
+        renderTestingFilesGrouped(testingFiles, project, ver.folder, versionedTests, false);
         container.appendChild(testingFiles);
       }
     }
@@ -1158,26 +1237,7 @@ function renderPatchRow(container, project, patch, activeVersion) {
       if (testingExpanded) {
         const testingFiles = document.createElement('div');
         testingFiles.className = 'tree-testing-files tree-testing-files-patch';
-        if (testCount === 0) {
-          const emptyEl = document.createElement('div');
-          emptyEl.className = 'tree-testing-empty';
-          emptyEl.textContent = 'No test files yet';
-          testingFiles.appendChild(emptyEl);
-        } else {
-          for (const testFile of patch.testFiles) {
-            const testFileName = testFile.name || testFile;
-            const testFilePath = patch.folder + '/' + testFileName;
-            const badge = testFile.total ? ` <span class="test-progress-badge">[${testFile.checked}/${testFile.total}]</span>` : '';
-            const testEl = document.createElement('div');
-            testEl.className = 'tree-file tree-testing-file-patch';
-            testEl.innerHTML = `<span class="tree-file-icon">&#x1F4CB;</span><span class="tree-file-name">${escapeHtml(testFileName)}${badge}</span>`;
-            testEl.addEventListener('click', (e) => {
-              e.stopPropagation();
-              openFileTab(project.id, project.name, testFilePath);
-            });
-            testingFiles.appendChild(testEl);
-          }
-        }
+        renderTestingFilesGrouped(testingFiles, project, patch.folder, patch.testFiles || [], true);
         container.appendChild(testingFiles);
       }
     }
@@ -3128,7 +3188,7 @@ function showMigrationPrompt(project) {
       <label>Initial Version</label>
       <input type="text" id="migrateVersion" value="1.0" placeholder="e.g. 1.0">
     </div>
-    <p style="margin-top:8px; font-size:12px; color:var(--text-muted);">Files will be moved to <code>docs/v1.0/</code>. This cannot be undone from the UI.</p>
+    <p style="margin-top:8px; font-size:12px; color:var(--text-muted);">Files will be moved to <code>v1.0/docs/</code>. This cannot be undone from the UI.</p>
   `;
 
   showModal('Migrate to Versioned Structure', body, async (overlay) => {

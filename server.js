@@ -566,12 +566,13 @@ app.post('/api/projects/:id/migrate-versions', async (req, res) => {
 
     // Set as active version and update coreFiles to point to versioned paths
     const versionFolder = versions.getVersionFolder(version);
+    const versionDocsFolder = path.join(versionFolder, 'docs');
     await projects.updateProject(req.params.id, {
       activeVersion: version,
       coreFiles: {
         claude: 'CLAUDE.md',
-        concept: path.join(versionFolder, `${found.project.name}_concept.md`),
-        tasklist: path.join(versionFolder, `${found.project.name}_tasklist.md`)
+        concept: path.join(versionDocsFolder, `${found.project.name}_concept.md`),
+        tasklist: path.join(versionDocsFolder, `${found.project.name}_tasklist.md`)
       }
     });
 
@@ -608,14 +609,8 @@ app.get('/api/projects/:id/test-file-path', async (req, res) => {
     }
 
     const activeVersion = found.project.activeVersion || '1.0';
-    const relativePath = versions.getTestFilePath(found.project.name, stageId, activeVersion);
+    const relativePath = versions.getTestFilePath(found.absPath, found.project.name, stageId, activeVersion);
     const absPath = path.join(found.absPath, relativePath);
-
-    // Auto-create the directory if it doesn't exist
-    const dir = path.dirname(absPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
 
     res.json({ path: relativePath, absPath });
   } catch (err) {
