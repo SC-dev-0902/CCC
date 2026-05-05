@@ -213,7 +213,7 @@ export function AppShell({ children, tabs, activeTabId, onSelectTab, onCloseTab,
       <div className="flex flex-1 overflow-hidden">
         <aside
           className="shrink-0 overflow-hidden"
-          style={{ width: sidebarWidth, borderRight: `1px solid ${t.border}` }}
+          style={{ width: sidebarWidth }}
         >
           <TreeviewShell theme={theme} onStartSession={onStartSession || (() => {})} onOpenFile={onOpenFile || (() => {})} />
         </aside>
@@ -222,15 +222,28 @@ export function AppShell({ children, tabs, activeTabId, onSelectTab, onCloseTab,
           onDoubleClick={() => setSidebarWidth(SIDEBAR_DEFAULT)}
           title="Drag to resize - double-click to reset"
           style={{
-            width: 4,
+            width: 8,
             cursor: "col-resize",
-            backgroundColor: dragging ? t.accent : "transparent",
-            transition: dragging ? "none" : "background-color 0.15s ease",
+            position: "relative",
+            backgroundColor: "transparent",
             flexShrink: 0,
+            zIndex: 5,
           }}
-          onMouseEnter={(e) => { if (!dragging) (e.currentTarget as HTMLDivElement).style.backgroundColor = t.border }}
-          onMouseLeave={(e) => { if (!dragging) (e.currentTarget as HTMLDivElement).style.backgroundColor = "transparent" }}
-        />
+        >
+          <span
+            aria-hidden
+            style={{
+              position: "absolute",
+              top: 0,
+              bottom: 0,
+              left: 3,
+              width: 2,
+              backgroundColor: dragging ? t.accent : t.border,
+              transition: dragging ? "none" : "background-color 0.15s ease",
+              pointerEvents: "none",
+            }}
+          />
+        </div>
         <main className="flex-1 overflow-auto" style={{ backgroundColor: t.bgMain }}>
           {children}
         </main>
