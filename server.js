@@ -21,11 +21,8 @@ app.use((req, res, next) => {
   res.set('Cache-Control', 'no-store');
   next();
 });
-app.use(express.static(path.join(__dirname, 'public')));
-app.use('/design-preview', express.static(path.join(__dirname, 'docs/v1.1/design/preview')));
-app.use('/vendor/xterm', express.static(path.join(__dirname, 'node_modules', '@xterm', 'xterm')));
-app.use('/vendor/xterm-addon-fit', express.static(path.join(__dirname, 'node_modules', '@xterm', 'addon-fit')));
-app.use('/vendor/marked', express.static(path.join(__dirname, 'node_modules', 'marked', 'lib')));
+// Stage 04bN: Next.js static export (built from client/) replaces the legacy public/ shell.
+app.use(express.static(path.join(__dirname, 'client', 'out')));
 
 // --- Settings Helper ---
 

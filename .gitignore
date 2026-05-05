@@ -6,3 +6,6 @@ dist/
 debug_parser_output.log
 .next/
 .smbdelete*
+client/out/
+client/.next/
+client/node_modules/
