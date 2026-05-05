@@ -138,11 +138,11 @@
 - [x] Run migration on Dev-Web, verify all tables created correctly
 
 ### Sub-Stage 03b — JSON Import Script
-- [ ] Write `migrations/002_seed.sql` / seed script: reads `data/projects.json` and `data/settings.json`, inserts into DB
-- [ ] Handle all project fields: id, name, path, group, type, activeVersion, evaluated, coreFiles
-- [ ] Handle settings fields: editor, shell, theme, filePatterns, GitHub token, Forgejo token
-- [ ] Run import on Dev-Web with existing projects.json, verify all rows present in DB
-- [ ] Keep `data/` folder files as backup (not deleted)
+- [x] Write `migrations/002_seed.sql` / seed script: reads `data/projects.json` and `data/settings.json`, inserts into DB
+- [x] Handle all project fields: id, name, path, group, type, activeVersion, evaluated, coreFiles
+- [x] Handle settings fields: editor, shell, theme, filePatterns, GitHub token, Forgejo token
+- [x] Run import on Dev-Web with existing projects.json, verify all rows present in DB
+- [x] Keep `data/` folder files as backup (not deleted)
 
 ### Sub-Stage 03c — projects.js Rewrite
 - [ ] Rewrite `src/projects.js` to use MariaDB queries instead of JSON I/O
