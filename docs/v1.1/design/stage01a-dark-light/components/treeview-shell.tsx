@@ -110,6 +110,11 @@ function SubProjectRow({ sub, theme }: { sub: SubProject; theme: "dark" | "light
           <StartSessionButton disabled={locked} theme={theme} />
         </div>
       </div>
+      {sub.stageProgress && (
+        <div className="px-2" style={{ paddingLeft: 44 }}>
+          <ProgressBar current={sub.stageProgress.current} total={sub.stageProgress.total} theme={theme} />
+        </div>
+      )}
       {expanded && sub.files?.map((f) => (
         <div
           key={f.name}
@@ -146,9 +151,11 @@ function ProjectRow({ project, theme }: { project: Project; theme: "dark" | "lig
         <span className="text-xs font-medium" style={{ color: t.textPrimary }}>{project.name}</span>
         <Badge theme={theme}>{project.type === "code" ? "COD" : "CFG"}</Badge>
       </div>
-      <div className="px-2" style={{ paddingLeft: 24 }}>
-        <ProgressBar current={project.stageProgress.current} total={project.stageProgress.total} theme={theme} />
-      </div>
+      {!hasChildren && project.stageProgress && (
+        <div className="px-2" style={{ paddingLeft: 24 }}>
+          <ProgressBar current={project.stageProgress.current} total={project.stageProgress.total} theme={theme} />
+        </div>
+      )}
       {expanded && project.subProjects?.map((sub) => (
         <SubProjectRow key={sub.id} sub={sub} theme={theme} />
       ))}

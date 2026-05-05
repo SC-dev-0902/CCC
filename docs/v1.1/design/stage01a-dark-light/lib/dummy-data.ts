@@ -8,6 +8,7 @@ export interface SubProject {
   status: Status
   version?: string
   lockedBy?: string
+  stageProgress?: { current: number; total: number }
   files?: { name: string; type: "claude" | "shp" | "concept" | "tasklist" }[]
 }
 
@@ -16,7 +17,7 @@ export interface Project {
   name: string
   type: ProjectType
   status: Status
-  stageProgress: { current: number; total: number }
+  stageProgress?: { current: number; total: number }
   subProjects?: SubProject[]
 }
 
@@ -30,7 +31,6 @@ export const ACTIVE_PROJECTS: Project[] = [
     name: "LeadSieve",
     type: "code",
     status: "running",
-    stageProgress: { current: 3, total: 16 },
     subProjects: [
       {
         id: "leadsieve-service",
@@ -38,13 +38,14 @@ export const ACTIVE_PROJECTS: Project[] = [
         type: "code",
         status: "waiting",
         lockedBy: "Phet",
+        stageProgress: { current: 3, total: 16 },
         files: [
           { name: "CLAUDE.md", type: "claude" },
           { name: "SHP", type: "shp" },
         ],
       },
-      { id: "leadsieve-admin", name: "leadsieve-admin", type: "code", status: "completed" },
-      { id: "leadsieve-web", name: "leadsieve-web", type: "code", status: "unknown", lockedBy: "Anna" },
+      { id: "leadsieve-admin", name: "leadsieve-admin", type: "code", status: "completed", stageProgress: { current: 5, total: 12 } },
+      { id: "leadsieve-web", name: "leadsieve-web", type: "code", status: "unknown", lockedBy: "Anna", stageProgress: { current: 2, total: 10 } },
     ],
   },
   {
@@ -59,10 +60,9 @@ export const ACTIVE_PROJECTS: Project[] = [
     name: "Orion",
     type: "code",
     status: "running",
-    stageProgress: { current: 2, total: 8 },
     subProjects: [
-      { id: "orion-api", name: "orion-api", type: "code", status: "running", version: "v1.0" },
-      { id: "orion-web", name: "orion-web", type: "code", status: "unknown", version: "v1.0" },
+      { id: "orion-api", name: "orion-api", type: "code", status: "running", version: "v1.0", stageProgress: { current: 2, total: 8 } },
+      { id: "orion-web", name: "orion-web", type: "code", status: "unknown", version: "v1.0", stageProgress: { current: 1, total: 6 } },
     ],
   },
   {
@@ -70,11 +70,10 @@ export const ACTIVE_PROJECTS: Project[] = [
     name: "Nexus",
     type: "code",
     status: "completed",
-    stageProgress: { current: 1, total: 6 },
     subProjects: [
-      { id: "nexus-core",   name: "nexus-core",   type: "code", status: "completed", version: "v1.0" },
-      { id: "nexus-admin",  name: "nexus-admin",  type: "code", status: "unknown",   version: "v1.0" },
-      { id: "nexus-mobile", name: "nexus-mobile", type: "code", status: "unknown",   version: "v1.0" },
+      { id: "nexus-core",   name: "nexus-core",   type: "code", status: "completed", version: "v1.0", stageProgress: { current: 6, total: 6 } },
+      { id: "nexus-admin",  name: "nexus-admin",  type: "code", status: "unknown",   version: "v1.0", stageProgress: { current: 0, total: 8 } },
+      { id: "nexus-mobile", name: "nexus-mobile", type: "code", status: "unknown",   version: "v1.0", stageProgress: { current: 0, total: 8 } },
     ],
   },
 ]
@@ -85,9 +84,8 @@ export const PARKED_PROJECTS: Project[] = [
     name: "Vertex",
     type: "code",
     status: "unknown",
-    stageProgress: { current: 0, total: 5 },
     subProjects: [
-      { id: "vertex-service", name: "vertex-service", type: "code", status: "unknown", version: "v1.0" },
+      { id: "vertex-service", name: "vertex-service", type: "code", status: "unknown", version: "v1.0", stageProgress: { current: 0, total: 5 } },
     ],
   },
 ]
@@ -99,7 +97,7 @@ export const USERS = [
 ]
 
 export const INTEGRATIONS = [
-  { name: "PatchPilot", status: "connected" as const, url: "http://patchpilot.mcsfam.local", lastChecked: "14s ago" },
+  { name: "PatchPilot", status: "disconnected" as const, url: "http://patchpilot.mcsfam.local", lastChecked: "14s ago" },
   { name: "Forgejo", status: "connected" as const, url: "http://mcs-forgejo.mcsfam.net", lastChecked: "14s ago" },
   { name: "GitHub", status: "connected" as const, url: "https://github.com/SC-dev-0902", lastChecked: "14s ago" },
 ]

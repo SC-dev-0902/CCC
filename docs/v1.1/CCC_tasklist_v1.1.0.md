@@ -108,10 +108,10 @@
 - [x] "New" group renders above "Active" with a sample unregistered project entry
 
 ### Sub-Stage 02c — Top Menu Diodes
-- [ ] Three status diodes in top menu: PatchPilot, Forgejo, GitHub
-- [ ] Each diode renders in green (available) and red (not available) states — toggle via hardcoded flag
-- [ ] Hover tooltip shows service name and placeholder "last checked" timestamp
-- [ ] Usage bar removed from top menu
+- [x] Three status diodes in top menu: PatchPilot, Forgejo, GitHub
+- [x] Each diode renders in green (available) and red (not available) states — toggle via hardcoded flag
+- [x] Hover tooltip shows service name and placeholder "last checked" timestamp
+- [x] Usage bar removed from top menu
 
 ### Sub-Stage 02d — Treeview Search/Filter
 - [ ] Search input above treeview renders correctly
