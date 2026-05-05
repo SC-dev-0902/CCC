@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS `project_core_files` (
 CREATE TABLE IF NOT EXISTS `sessions` (
   `id`         CHAR(36)                          NOT NULL,
   `project_id` CHAR(36)                          NOT NULL,
-  `user_id`    CHAR(36)                          NOT NULL,
+  `user_id`    CHAR(36)                          NULL,
   `status`     ENUM('active', 'exited', 'error') NOT NULL DEFAULT 'active',
   `started_at` DATETIME                          NOT NULL DEFAULT NOW(),
   `ended_at`   DATETIME                          NULL,

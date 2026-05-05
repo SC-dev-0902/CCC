@@ -154,10 +154,15 @@
 - [x] Exported interface stays identical - no changes to server.js route handlers
 
 ### Sub-Stage 03d — Settings & Sessions DB
-- [ ] Update settings read/write in `server.js` to use DB instead of settings.json
-- [ ] Update `src/sessions.js`: session start/end events write to `sessions` table
-- [ ] On server restart: mark all `sessions` with `status = 'active'` as `status = 'error'` (orphaned)
-- [ ] Verify settings persist across server restart via DB
+- [x] Update settings read/write in `server.js` to use DB instead of settings.json
+- [x] Update `src/sessions.js`: session start/end events write to `sessions` table
+- [x] On server restart: mark all `sessions` with `status = 'active'` as `status = 'error'` (orphaned)
+- [x] Verify settings persist across server restart via DB
+
+### Sub-Stage 03d01 — sessions.user_id Schema Fix
+- [x] Add migration `migrations/003_sessions_user_id_nullable.sql` (`ALTER TABLE sessions MODIFY user_id CHAR(36) NULL`)
+- [x] Update `migrations/001_initial.sql` to declare `user_id` nullable so fresh installs match
+- [x] Re-run the seven blocked items in `CCC_test_stage03d.md` - all PASS, 22/22 + 8/8
 
 ### Go/NoGo Gate
 > Do all v1.0 CRUD operations (add/edit/delete/drag project, edit settings) work identically using MariaDB as the backend? Does the JSON import produce a correct DB state?
