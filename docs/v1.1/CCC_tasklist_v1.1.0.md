@@ -223,23 +223,38 @@
 **-> GO declared 2026-05-06** (31/31 items PASS, 10/10 ACs PASS)
 
 ### Sub-Stage 04c — Treeview: Parent/Sub-Project Rendering + Drag-Drop
-- [ ] Update `client/components/treeview-shell.tsx` to render parent projects with collapsible sub-project list (real data from API `children[]`)
-- [ ] Sub-projects expand under their parent node
-- [ ] Each sub-project has its own status dot, version indicator, and file links
-- [ ] Parent project node shows aggregate status (worst-case of sub-project statuses)
-- [ ] Stage progress bar on parent node: count main-stage test files (completed / total) in active version
-- [ ] Drag-drop reorder: drag projects between groups and within a group; persist via `PUT /api/projects-reorder`
+- [x] Update `client/components/treeview-shell.tsx` to render parent projects with collapsible sub-project list (real data from API `subProjects[]`)
+- [x] Sub-projects expand under their parent node
+- [x] Each sub-project has its own status dot, version indicator, and file links
+- [x] Parent project node shows aggregate status (worst-case of sub-project statuses)
+- [x] Stage progress bar on parent node: count main-stage test files (completed / total) in active version
+- [x] Drag-drop reorder: drag projects between groups and within a group; persist via `PUT /api/projects-reorder`
 
-### Sub-Stage 04d — New Project Wizard Update
-- [ ] Update New Project Wizard to scaffold v1.1 folder structure:
-  - `docs/` (project-level, with topic subfolders)
-  - `vX.Y/docs/` (version-level, with topic subfolders including `handoff/`)
-  - `CLAUDE.md` at project root
-- [ ] Add "Is this a sub-project?" option - if yes, select parent project
-- [ ] Sub-project creation registers with `parent_id` in DB
+**-> GO declared 2026-05-06**
+
+### Sub-Stage 04d — First-Run Setup + Migration-via-Drag
+*Redesigned 2026-05-06. Original scope (New Project Wizard update) replaced.*
+- [ ] First-run setup screen (`/setup`): user sets Project Home Folder before anything else
+- [ ] CCC scans Project Home Folder on first run; all found projects appear under reserved group "To Be Migrated"
+- [ ] "To Be Migrated" group hidden automatically when no unmigrated projects remain
+- [ ] Drag from "To Be Migrated" to Active/Parked/Container triggers migration modal
+- [ ] Migration modal State 1 (Preview): shows exact v1.1 folder structure and files to be created; Confirm / Cancel
+- [ ] Migration modal State 2 (Running): live output feed, one line per operation (`Creating vX.Y/docs/...`, etc.); Close button appears on completion
+- [ ] Migration execution: creates v1.1 folder structure (`vX.Y/docs/`, `CLAUDE.md` if missing, `.ccc-project.json`), registers project in DB
+- [ ] Container migration path: user creates container first, drags sub-projects in from "To Be Migrated"; first drop triggers migration modal
+
+### Sub-Stage 04e — Multi-Session Tab Bar
+- [ ] Add a tab bar across the top of the main panel (above the terminal/file reader area)
+- [ ] Each "Start Session" click opens a new tab — does not replace the currently active tab
+- [ ] Tabs display: project name + live status dot (driven by existing WS pool)
+- [ ] Tabs are closeable via an X button; closing kills the session (`DELETE /api/sessions/:id`)
+- [ ] Switching tabs switches the active terminal — xterm instances remain mounted but hidden (`visibility: hidden` / `display: none`), not unmounted, so terminal buffer and session stay alive
+- [ ] Active tab is visually highlighted; inactive tabs are dimmed
+- [ ] File reader opens in a tab alongside terminal tabs (tab label shows filename)
+- [ ] Tab state managed in the page-level component; `DashboardMain` receives the active tab's data
 
 ### Go/NoGo Gate
-> Does the treeview correctly show a parent project with sub-projects? Do version folders at project root scan correctly? Does the New Project Wizard produce the correct v1.1 folder structure?
+> Does the treeview correctly show a parent project with sub-projects? Can the user run multiple simultaneous CC sessions in separate tabs? Does the New Project Wizard (04d) produce the correct v1.1 folder structure?
 
 **-> GO:** Proceed to Stage 05
 **-> NOGO:** Fix structure scanning and rendering
@@ -332,7 +347,8 @@
 ---
 
 ## Stage 08 — Migration Tool
-**Focus:** First-class guided tool to migrate v1.0 flat project structure to v1.1 nested structure. Non-destructive with diff preview. Ships as a public feature for all CCC v1.0 users.
+**Focus:** ~~First-class guided tool to migrate v1.0 flat project structure to v1.1 nested structure. Non-destructive with diff preview. Ships as a public feature for all CCC v1.0 users.~~
+*Scope superseded 2026-05-06. The 4-step Settings wizard is gone. Migration logic (analysis pass, folder creation, DB registration) now lives in Stage 04d as the drag-triggered modal flow. Stage 08 to be redesigned — do not execute current sub-stages.*
 
 ### Sub-Stage 08a — Analysis Pass
 - [ ] Create `tools/migrate-structure/` module
