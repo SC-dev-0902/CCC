@@ -120,12 +120,16 @@ app.get('/api/projects', async (req, res) => {
 
 // Add a project
 app.post('/api/projects', async (req, res) => {
-  const { name, path: projectPath, group, coreFiles, type } = req.body;
-  if (!name || !projectPath || !group) {
-    return res.status(400).json({ error: 'name, path, and group are required' });
+  const { name, path: projectPath, group, coreFiles, type, parentId, evaluated } = req.body;
+  if (!name || !projectPath) {
+    return res.status(400).json({ error: 'name and path are required' });
+  }
+  // Sub-projects (parentId set) inherit no group; top-level rows must declare one.
+  if (!parentId && !group) {
+    return res.status(400).json({ error: 'group is required for top-level projects' });
   }
   try {
-    const project = await projects.addProject({ name, path: projectPath, group, coreFiles, type });
+    const project = await projects.addProject({ name, path: projectPath, group, coreFiles, type, parentId, evaluated });
     res.status(201).json(project);
   } catch (err) {
     res.status(500).json({ error: 'Failed to add project' });
@@ -396,12 +400,59 @@ app.post('/api/open-editor', async (req, res) => {
 
 // --- Version API ---
 
-// Helper: find project and resolve path
+// Helper: find project and resolve path. Walks the tree so sub-projects are found too.
 async function findProjectWithPath(projectId) {
-  const project = (await projects.getAllProjects()).projects.find(p => p.id === projectId);
+  const top = (await projects.getAllProjects()).projects;
+  const findInTree = (arr) => {
+    for (const p of arr) {
+      if (p.id === projectId) return p;
+      if (p.subProjects && p.subProjects.length > 0) {
+        const sub = findInTree(p.subProjects);
+        if (sub) return sub;
+      }
+    }
+    return null;
+  };
+  const project = findInTree(top);
   if (!project) return null;
   return { project, absPath: await projects.resolveProjectPath(project.path) };
 }
+
+// Tasklist progress: count "### Sub-Stage" headers vs "-> GO" markers (one per sub-stage).
+app.get('/api/projects/:id/progress', async (req, res) => {
+  try {
+    const found = await findProjectWithPath(req.params.id);
+    if (!found) return res.status(404).json({ error: 'Project not found' });
+
+    const tasklistRel = found.project.coreFiles?.tasklist;
+    if (!tasklistRel) return res.json({ completed: 0, total: 0 });
+
+    const tasklistAbs = path.join(found.absPath, tasklistRel);
+    if (!fs.existsSync(tasklistAbs)) return res.json({ completed: 0, total: 0 });
+
+    const text = fs.readFileSync(tasklistAbs, 'utf8');
+    const lines = text.split(/\r?\n/);
+    let total = 0;
+    let completed = 0;
+    let inStage = false;
+    let stageHasGo = false;
+    for (const line of lines) {
+      if (/^###\s+Sub-Stage\s+/i.test(line)) {
+        if (inStage && stageHasGo) completed++;
+        total++;
+        inStage = true;
+        stageHasGo = false;
+      } else if (inStage && /->\s*GO/i.test(line)) {
+        stageHasGo = true;
+      }
+    }
+    if (inStage && stageHasGo) completed++;
+
+    res.json({ completed, total });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to read progress: ' + err.message });
+  }
+});
 
 // Scan project versions
 app.get('/api/projects/:id/versions', async (req, res) => {

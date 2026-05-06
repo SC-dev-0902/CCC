@@ -239,8 +239,8 @@ async function reorderProjects(orderedIds) {
   await db.transaction(async (conn) => {
     for (const entry of orderedIds) {
       await conn.query(
-        'UPDATE projects SET group_name = ?, sort_order = ? WHERE id = ?',
-        [entry.group, entry.order, entry.id]
+        'UPDATE projects SET group_name = ?, sort_order = ?, parent_id = ? WHERE id = ?',
+        [entry.group, entry.order, entry.parentId ?? null, entry.id]
       );
     }
   });

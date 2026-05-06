@@ -124,3 +124,32 @@ export interface VersionsResponse {
 export async function fetchProjectVersions(projectId: string): Promise<VersionsResponse> {
   return jsonOrThrow<VersionsResponse>(await fetch(`${API_BASE}/api/projects/${encodeURIComponent(projectId)}/versions`))
 }
+
+// --- Stage Progress (Stage 04c) ---
+
+export interface ProjectProgress {
+  completed: number
+  total: number
+}
+
+export async function fetchProgress(projectId: string): Promise<ProjectProgress> {
+  return jsonOrThrow<ProjectProgress>(await fetch(`${API_BASE}/api/projects/${encodeURIComponent(projectId)}/progress`))
+}
+
+// --- Reorder (Stage 04c) ---
+
+export interface ReorderEntry {
+  id: string
+  group: string | null
+  order: number
+  parentId: string | null
+}
+
+export async function reorderProjects(orderedIds: ReorderEntry[]): Promise<unknown> {
+  const res = await fetch(`${API_BASE}/api/projects-reorder`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ orderedIds }),
+  })
+  return jsonOrThrow<unknown>(res)
+}
