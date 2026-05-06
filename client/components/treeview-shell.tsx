@@ -3,7 +3,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { ChevronDown, ChevronRight, FileText, Plus, RefreshCw, Search } from "lucide-react"
 import { tokens } from "./theme-context"
-import { fetchProjects, type ApiProject, type Status } from "@/lib/api"
+import {
+  fetchProjects,
+  fetchProjectVersions,
+  type ApiProject,
+  type ApiTestFile,
+  type ApiVersion,
+  type Status,
+  type VersionsResponse,
+} from "@/lib/api"
 import { wsPool } from "@/lib/ws"
 
 type Theme = "dark" | "light"
@@ -33,6 +41,50 @@ function statusFromWS(msg: any): Status | null {
   if (msg.type === "exit") return "unknown"
   if (msg.type === "degraded") return "unknown"
   return null
+}
+
+interface GroupedTests {
+  groups: { stage: string; files: ApiTestFile[]; subGroups: { stage: string; files: ApiTestFile[] }[] }[]
+  ungrouped: ApiTestFile[]
+}
+
+// Group testFiles[] by stagePath into top-level stages with optional sub-stage groups.
+// Files without a stagePath fall into "ungrouped".
+function groupTestFilesByStage(testFiles: ApiTestFile[]): GroupedTests {
+  const groupMap = new Map<string, { stage: string; files: ApiTestFile[]; subGroups: Map<string, ApiTestFile[]> }>()
+  const ungrouped: ApiTestFile[] = []
+
+  for (const tf of testFiles || []) {
+    const sp = tf.stagePath
+    if (!sp) {
+      ungrouped.push(tf)
+      continue
+    }
+    const parts = sp.split("/")
+    const top = parts[0]
+    if (!groupMap.has(top)) groupMap.set(top, { stage: top, files: [], subGroups: new Map() })
+    const g = groupMap.get(top)!
+    if (parts.length === 1) {
+      g.files.push(tf)
+    } else {
+      const subKey = parts.slice(1).join("/")
+      if (!g.subGroups.has(subKey)) g.subGroups.set(subKey, [])
+      g.subGroups.get(subKey)!.push(tf)
+    }
+  }
+
+  const sortFiles = (a: ApiTestFile, b: ApiTestFile) => (a.name || "").localeCompare(b.name || "")
+  const groups = Array.from(groupMap.values())
+    .sort((a, b) => a.stage.localeCompare(b.stage))
+    .map((g) => ({
+      stage: g.stage,
+      files: g.files.sort(sortFiles),
+      subGroups: Array.from(g.subGroups.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([stage, files]) => ({ stage, files: files.sort(sortFiles) })),
+    }))
+
+  return { groups, ungrouped: ungrouped.sort(sortFiles) }
 }
 
 function StatusDot({ status, size = 8 }: { status: Status; size?: number }) {
@@ -114,14 +166,43 @@ function ProjectRow({ project, status, theme, forceExpand, onStartSession, onOpe
   const [expanded, setExpanded] = useState(false)
   const effectiveExpanded = forceExpand || expanded
 
-  // Sub-projects are deferred to Stage 04c. Show files directly under project for now.
   const claudeFile = project.coreFiles?.claude || "CLAUDE.md"
   const conceptFile = project.coreFiles?.concept
   const tasklistFile = project.coreFiles?.tasklist
   const shpFile = `docs/handoff/${project.name}_shp.md`
-  const hasFiles = true
 
   const locked = !!project.lockUserId
+
+  const [versionsData, setVersionsData] = useState<VersionsResponse | null>(null)
+  const [loadingVersions, setLoadingVersions] = useState(false)
+  const [versionsError, setVersionsError] = useState<string | null>(null)
+  const [testingExpanded, setTestingExpanded] = useState(false)
+
+  const loadVersions = useCallback(() => {
+    setLoadingVersions(true)
+    setVersionsError(null)
+    fetchProjectVersions(project.id)
+      .then(setVersionsData)
+      .catch((e) => setVersionsError(e.message || "Failed to load versions"))
+      .finally(() => setLoadingVersions(false))
+  }, [project.id])
+
+  useEffect(() => {
+    if (!effectiveExpanded || versionsData || loadingVersions) return
+    loadVersions()
+  }, [effectiveExpanded, versionsData, loadingVersions, loadVersions])
+
+  // Pick the active version's testFiles, falling back to the first version.
+  const activeVersionEntry: ApiVersion | null = useMemo(() => {
+    if (!versionsData) return null
+    if (versionsData.activeVersion) {
+      const found = versionsData.versions.find((v) => v.version === versionsData.activeVersion)
+      if (found) return found
+    }
+    return versionsData.versions[0] || null
+  }, [versionsData])
+
+  const testCount = activeVersionEntry?.testFiles?.length || 0
 
   return (
     <div style={{ marginBottom: 4 }}>
@@ -130,11 +211,7 @@ function ProjectRow({ project, status, theme, forceExpand, onStartSession, onOpe
         onClick={() => setExpanded(!expanded)}
         style={{ backgroundColor: "transparent" }}
       >
-        {hasFiles ? (
-          effectiveExpanded ? <ChevronDown size={11} style={{ color: t.textMuted }} /> : <ChevronRight size={11} style={{ color: t.textMuted }} />
-        ) : (
-          <span style={{ width: 11 }} />
-        )}
+        {effectiveExpanded ? <ChevronDown size={11} style={{ color: t.textMuted }} /> : <ChevronRight size={11} style={{ color: t.textMuted }} />}
         <StatusDot status={status} size={9} />
         <span className="text-xs font-medium" style={{ color: t.textPrimary }}>{project.name}</span>
         <Badge theme={theme}>{project.type === "code" ? "COD" : "CFG"}</Badge>
@@ -147,6 +224,7 @@ function ProjectRow({ project, status, theme, forceExpand, onStartSession, onOpe
           />
         </div>
       </div>
+
       {effectiveExpanded && (
         <>
           <FileLink theme={theme} label={claudeFile} onClick={() => onOpenFile(project.id, project.name, claudeFile)} />
@@ -157,7 +235,267 @@ function ProjectRow({ project, status, theme, forceExpand, onStartSession, onOpe
             <FileLink theme={theme} label={tasklistFile.split("/").pop() || tasklistFile} onClick={() => onOpenFile(project.id, project.name, tasklistFile)} />
           )}
           <FileLink theme={theme} label={`${project.name}_shp.md`} onClick={() => onOpenFile(project.id, project.name, shpFile)} />
+
+          <TestingSection
+            theme={theme}
+            expanded={testingExpanded}
+            onToggle={() => setTestingExpanded((e) => !e)}
+            onRefresh={loadVersions}
+            loading={loadingVersions}
+            error={versionsError}
+            testCount={testCount}
+            activeVersionFolder={activeVersionEntry?.folder}
+            testFiles={activeVersionEntry?.testFiles || []}
+            project={project}
+            onOpenFile={onOpenFile}
+          />
         </>
+      )}
+    </div>
+  )
+}
+
+interface TestingSectionProps {
+  theme: Theme
+  expanded: boolean
+  onToggle: () => void
+  onRefresh: () => void
+  loading: boolean
+  error: string | null
+  testCount: number
+  activeVersionFolder: string | undefined
+  testFiles: ApiTestFile[]
+  project: ApiProject
+  onOpenFile: (projectId: string, projectName: string, filePath: string) => void
+}
+
+function TestingSection({
+  theme,
+  expanded,
+  onToggle,
+  onRefresh,
+  loading,
+  error,
+  testCount,
+  activeVersionFolder,
+  testFiles,
+  project,
+  onOpenFile,
+}: TestingSectionProps) {
+  const t = tokens(theme)
+  return (
+    <div style={{ marginTop: 2 }}>
+      <div
+        className="flex items-center gap-2 px-2 py-1 cursor-pointer"
+        style={{ paddingLeft: 28, color: t.textMuted }}
+        onClick={(e) => {
+          e.stopPropagation()
+          onToggle()
+        }}
+      >
+        {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+        <span className="text-[10px] uppercase tracking-wider">Testing</span>
+        <span className="text-[10px] font-mono">{testCount}</span>
+        <RefreshCw
+          size={10}
+          className="cursor-pointer ml-1"
+          onClick={(e) => {
+            e.stopPropagation()
+            onRefresh()
+          }}
+          style={{ opacity: loading ? 0.4 : 0.7 }}
+        />
+      </div>
+
+      {expanded && (
+        <TestingBody
+          theme={theme}
+          loading={loading}
+          error={error}
+          testFiles={testFiles}
+          activeVersionFolder={activeVersionFolder}
+          project={project}
+          onOpenFile={onOpenFile}
+        />
+      )}
+    </div>
+  )
+}
+
+function TestingBody({
+  theme,
+  loading,
+  error,
+  testFiles,
+  activeVersionFolder,
+  project,
+  onOpenFile,
+}: {
+  theme: Theme
+  loading: boolean
+  error: string | null
+  testFiles: ApiTestFile[]
+  activeVersionFolder: string | undefined
+  project: ApiProject
+  onOpenFile: (projectId: string, projectName: string, filePath: string) => void
+}) {
+  const t = tokens(theme)
+
+  if (loading && testFiles.length === 0) {
+    return (
+      <div className="text-[10px] italic" style={{ paddingLeft: 50, color: t.textMuted }}>
+        loading...
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="text-[10px]" style={{ paddingLeft: 50, color: t.statusError }}>
+        {error}
+      </div>
+    )
+  }
+
+  if (!testFiles.length) {
+    return (
+      <div className="text-[10px] italic" style={{ paddingLeft: 50, color: t.textMuted }}>
+        no test files
+      </div>
+    )
+  }
+
+  const grouped = groupTestFilesByStage(testFiles)
+  const baseFolder = activeVersionFolder || ""
+
+  return (
+    <>
+      {grouped.groups.map((g) => (
+        <StageGroup
+          key={g.stage}
+          group={g}
+          theme={theme}
+          baseFolder={baseFolder}
+          project={project}
+          onOpenFile={onOpenFile}
+        />
+      ))}
+      {grouped.ungrouped.length > 0 && (
+        <>
+          <div
+            className="text-[10px] italic"
+            style={{ paddingLeft: 44, color: t.textMuted, marginTop: 4 }}
+          >
+            Ungrouped
+          </div>
+          {grouped.ungrouped.map((tf) => (
+            <TestFileRow
+              key={tf.name}
+              testFile={tf}
+              theme={theme}
+              depth={1}
+              onClick={() => onOpenFile(project.id, project.name, `${baseFolder}/docs/testfiles/${tf.name}`)}
+            />
+          ))}
+        </>
+      )}
+    </>
+  )
+}
+
+function StageGroup({
+  group,
+  theme,
+  baseFolder,
+  project,
+  onOpenFile,
+}: {
+  group: { stage: string; files: ApiTestFile[]; subGroups: { stage: string; files: ApiTestFile[] }[] }
+  theme: Theme
+  baseFolder: string
+  project: ApiProject
+  onOpenFile: (projectId: string, projectName: string, filePath: string) => void
+}) {
+  const t = tokens(theme)
+  const [stageOpen, setStageOpen] = useState(false)
+
+  return (
+    <div>
+      <div
+        className="flex items-center gap-1 cursor-pointer text-[10px] uppercase tracking-wider"
+        style={{ paddingLeft: 44, color: t.textMuted, paddingTop: 2, paddingBottom: 2 }}
+        onClick={(e) => {
+          e.stopPropagation()
+          setStageOpen((v) => !v)
+        }}
+      >
+        {stageOpen ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
+        <span>{group.stage}</span>
+      </div>
+
+      {stageOpen && (
+        <>
+          {group.files.map((tf) => (
+            <TestFileRow
+              key={tf.name}
+              testFile={tf}
+              theme={theme}
+              depth={1}
+              onClick={() => onOpenFile(project.id, project.name, `${baseFolder}/docs/testfiles/${group.stage}/${tf.name}`)}
+            />
+          ))}
+          {group.subGroups.map((sg) => (
+            <div key={sg.stage}>
+              <div
+                className="text-[10px] uppercase tracking-wider"
+                style={{ paddingLeft: 60, color: t.textMuted, paddingTop: 2, paddingBottom: 2 }}
+              >
+                {sg.stage}
+              </div>
+              {sg.files.map((tf) => (
+                <TestFileRow
+                  key={tf.name}
+                  testFile={tf}
+                  theme={theme}
+                  depth={2}
+                  onClick={() => onOpenFile(project.id, project.name, `${baseFolder}/docs/testfiles/${group.stage}/${sg.stage}/${tf.name}`)}
+                />
+              ))}
+            </div>
+          ))}
+        </>
+      )}
+    </div>
+  )
+}
+
+function TestFileRow({
+  testFile,
+  theme,
+  depth,
+  onClick,
+}: {
+  testFile: ApiTestFile
+  theme: Theme
+  depth: 1 | 2
+  onClick: () => void
+}) {
+  const t = tokens(theme)
+  return (
+    <div
+      className="flex items-center gap-2 py-0.5 text-[11px] cursor-pointer"
+      style={{ paddingLeft: depth === 2 ? 76 : 60, color: t.textSecondary }}
+      onClick={(e) => {
+        e.stopPropagation()
+        onClick()
+      }}
+    >
+      <FileText size={10} style={{ color: t.textMuted }} />
+      <span>{testFile.name}</span>
+      {testFile.total > 0 && (
+        <span className="text-[9px] font-mono ml-1" style={{ color: t.textMuted }}>
+          [{testFile.checked}/{testFile.total}]
+        </span>
       )}
     </div>
   )
@@ -217,10 +555,10 @@ export function TreeviewShell({ theme, filter = "", onStartSession, onOpenFile }
       .finally(() => setLoading(false))
   }, [])
 
-  useEffect(() => { reload() }, [reload])
+  useEffect(() => {
+    reload()
+  }, [reload])
 
-  // Subscribe to all WS messages to keep the status map fresh whenever a
-  // session emits a state change (regardless of which project tab is active).
   useEffect(() => {
     const unsub = wsPool.subscribe("*", (msg) => {
       const next = statusFromWS(msg)
@@ -238,6 +576,7 @@ export function TreeviewShell({ theme, filter = "", onStartSession, onOpenFile }
   const filtered = useMemo(() => {
     if (!query) return projects
     return projects.filter((p) => matches(p.name))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projects, query])
 
   const active = filtered.filter((p) => (p.group || "Active").toLowerCase() === "active" || !p.group)
@@ -248,7 +587,6 @@ export function TreeviewShell({ theme, filter = "", onStartSession, onOpenFile }
       className="flex flex-col h-full w-full"
       style={{ backgroundColor: t.bgSidebar, color: t.textPrimary }}
     >
-      {/* Header */}
       <div
         className="flex items-center justify-between px-3 py-2"
         style={{ borderBottom: `1px solid ${t.border}` }}
@@ -267,7 +605,6 @@ export function TreeviewShell({ theme, filter = "", onStartSession, onOpenFile }
         </div>
       </div>
 
-      {/* Search */}
       <div className="px-3 py-2" style={{ borderBottom: `1px solid ${t.border}` }}>
         <div className="flex items-center gap-2 px-2 py-1.5" style={{ backgroundColor: t.bgInput }}>
           <Search size={11} style={{ color: t.textMuted }} />
@@ -283,7 +620,6 @@ export function TreeviewShell({ theme, filter = "", onStartSession, onOpenFile }
         </div>
       </div>
 
-      {/* Tree */}
       <div className="flex-1 overflow-y-auto px-1 pb-3">
         {error && (
           <div className="px-3 py-3 text-[11px]" style={{ color: t.statusError }}>
@@ -334,7 +670,6 @@ export function TreeviewShell({ theme, filter = "", onStartSession, onOpenFile }
         )}
       </div>
 
-      {/* Status legend */}
       <div className="px-3 py-2" style={{ borderTop: `1px solid ${t.border}`, backgroundColor: t.bgMain }}>
         <div className="text-[9px] uppercase tracking-wider mb-1.5" style={{ color: t.textMuted }}>Status legend</div>
         <div className="flex flex-wrap gap-x-3 gap-y-1">

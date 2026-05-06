@@ -95,3 +95,32 @@ export async function startSession(projectId: string, command: "claude" | "shell
 export async function fetchVersionInfo(): Promise<{ version: string; build: string }> {
   return jsonOrThrow<{ version: string; build: string }>(await fetch(`${API_BASE}/api/version`))
 }
+
+// --- Versions / Test Files (Stage 04b + 04b01) ---
+
+export interface ApiTestFile {
+  name: string
+  checked: number
+  total: number
+  stagePath?: string
+}
+
+export interface ApiVersion {
+  version: string
+  type: "major" | "minor" | "patch"
+  folder: string
+  files: Array<string | { name: string; stagesCompleted: number; stagesTotal: number }>
+  testFiles: ApiTestFile[]
+  patches?: ApiVersion[]
+}
+
+export interface VersionsResponse {
+  versions: ApiVersion[]
+  hasFlatDocs: boolean
+  activeVersion: string | null
+  evaluated?: boolean
+}
+
+export async function fetchProjectVersions(projectId: string): Promise<VersionsResponse> {
+  return jsonOrThrow<VersionsResponse>(await fetch(`${API_BASE}/api/projects/${encodeURIComponent(projectId)}/versions`))
+}

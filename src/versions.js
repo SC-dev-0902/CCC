@@ -48,6 +48,12 @@ function detectFlatDocs(projectAbsPath, projectName) {
  * Returns { versions: [...], hasFlatDocs: bool }
  */
 function scanVersions(projectAbsPath, projectName) {
+  const projectRoot = process.env.PROJECT_ROOT ? path.resolve(process.env.PROJECT_ROOT) : null;
+  if (projectRoot && path.resolve(projectAbsPath) === projectRoot) {
+    console.error('[versions] scanVersions called with PROJECT_ROOT - refusing to scan. Fix the call site.');
+    return { versions: [], hasFlatDocs: false };
+  }
+
   const result = {
     versions: [],
     hasFlatDocs: detectFlatDocs(projectAbsPath, projectName)

@@ -21,7 +21,7 @@
         "concept": "docs/v1.0/v1.0.1/CCC_concept_v1.0.1.md",
         "tasklist": "docs/v1.0/v1.0.1/CCC_tasklist.md"
       },
-      "activeVersion": "1.1.0",
+      "activeVersion": "1.1",
       "evaluated": true,
       "type": "code"
     },
@@ -207,14 +207,14 @@
     },
     {
       "id": "9df6a1e7-5d89-47f3-bef2-a5f3e6372e28",
-      "name": "TheMediaDB",
-      "path": "Projects/TheMediaDB",
+      "name": "TheMediaDB-Service",
+      "path": "Projects/TheMediaDB-Service",
       "group": "Parked",
       "order": 12,
       "coreFiles": {
         "claude": "CLAUDE.md",
-        "concept": "docs/v1.0/TheMediaDB_concept.md",
-        "tasklist": "docs/v1.0/TheMediaDB_tasklist.md"
+        "concept": "docs/v1.0/TheMediaDB-Service_concept.md",
+        "tasklist": "docs/v1.0/TheMediaDB-Service_tasklist.md"
       },
       "evaluated": true,
       "activeVersion": "1.0",
@@ -262,6 +262,21 @@
         "tasklist": "docs/v1.0/MCSFAM_tasklist_v1.0.md"
       },
       "type": "config",
+      "evaluated": true,
+      "activeVersion": "1.0"
+    },
+    {
+      "id": "74868c1e-d0ca-49f2-bc8b-3b0655f30e7f",
+      "name": "TheMediaDB-Admin",
+      "path": "Projects/TheMediaDB-Admin",
+      "group": "Parked",
+      "order": 14,
+      "coreFiles": {
+        "claude": "CLAUDE.md",
+        "concept": "docs/v1.0/TheMediaDB-Admin_concept_v1.0.md",
+        "tasklist": "docs/v1.0/TheMediaDB-Admin_tasklist_v1.0.md"
+      },
+      "type": "code",
       "evaluated": true,
       "activeVersion": "1.0"
     }

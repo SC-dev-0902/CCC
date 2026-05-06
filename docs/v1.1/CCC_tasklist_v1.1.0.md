@@ -211,10 +211,16 @@
 - [x] Remove demo controls strip from `dashboard-main.tsx`; remove design-preview Apache alias and `docs/v1.1/design/preview/`
 - [x] Build (`npm run build:client`), restart CCC server, verify CCC loads from `client/out/` on Dev-Web
 
-### Sub-Stage 04b01 — Grouped Test Files in Next.js
-- [ ] In `client/components/treeview-shell.tsx` Testing section: group test files by `stagePath` returned from `GET /api/projects/:id/versions`
-- [ ] Stage groups render as non-clickable labels; sub-stage folders nest under their parent stage group
-- [ ] Test file click behaviour unchanged (opens test runner panel)
+**-> GO declared 2026-05-06** (40/40 items PASS, 12/12 ACs PASS)
+
+### Sub-Stage 04b01 — Grouped Test Files in Next.js (+ Scan Fix + Dev-Projects Import)
+- [x] In `client/components/treeview-shell.tsx` Testing section: group test files by `stagePath` returned from `GET /api/projects/:id/versions`
+- [x] Stage groups render as non-clickable labels; sub-stage folders nest under their parent stage group
+- [x] Test file click behaviour unchanged (opens test runner panel)
+- [x] Defensive guard added at top of `scanVersions()` in `src/versions.js` (refuses to scan if called with PROJECT_ROOT)
+- [x] Three dev fixtures imported to DB: Alpha (Active), Bravo (Parked), Charlie (Active, v1.1 layout with grouped test files)
+
+**-> GO declared 2026-05-06** (31/31 items PASS, 10/10 ACs PASS)
 
 ### Sub-Stage 04c — Treeview: Parent/Sub-Project Rendering + Drag-Drop
 - [ ] Update `client/components/treeview-shell.tsx` to render parent projects with collapsible sub-project list (real data from API `children[]`)
