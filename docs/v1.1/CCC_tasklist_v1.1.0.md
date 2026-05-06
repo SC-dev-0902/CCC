@@ -234,14 +234,16 @@
 
 ### Sub-Stage 04d — First-Run Setup + Migration-via-Drag
 *Redesigned 2026-05-06. Original scope (New Project Wizard update) replaced.*
-- [ ] First-run setup screen (`/setup`): user sets Project Home Folder before anything else
-- [ ] CCC scans Project Home Folder on first run; all found projects appear under reserved group "To Be Migrated"
-- [ ] "To Be Migrated" group hidden automatically when no unmigrated projects remain
-- [ ] Drag from "To Be Migrated" to Active/Parked/Container triggers migration modal
-- [ ] Migration modal State 1 (Preview): shows exact v1.1 folder structure and files to be created; Confirm / Cancel
-- [ ] Migration modal State 2 (Running): live output feed, one line per operation (`Creating vX.Y/docs/...`, etc.); Close button appears on completion
-- [ ] Migration execution: creates v1.1 folder structure (`vX.Y/docs/`, `CLAUDE.md` if missing, `.ccc-project.json`), registers project in DB
-- [ ] Container migration path: user creates container first, drags sub-projects in from "To Be Migrated"; first drop triggers migration modal
+- [x] First-run setup screen (`/setup`): user sets Project Home Folder before anything else
+- [x] CCC scans Project Home Folder on first run; all found projects appear under reserved group "To Be Migrated"
+- [x] "To Be Migrated" group hidden automatically when no unmigrated projects remain
+- [x] Drag from "To Be Migrated" to Active/Parked/Container triggers migration modal
+- [x] Migration modal State 1 (Preview): shows exact v1.1 folder structure and files to be created; Confirm / Cancel
+- [x] Migration modal State 2 (Running): live output feed, one line per operation (`Creating vX.Y/docs/...`, etc.); Close button appears on completion
+- [x] Migration execution: creates v1.1 folder structure (`vX.Y/docs/`, `CLAUDE.md` if missing, `.ccc-project.json`), registers project in DB
+- [x] Container migration path: user creates container first, drags sub-projects in from "To Be Migrated"; first drop triggers migration modal
+
+**-> GO declared 2026-05-06** (browser-tested by Phet, all ACs pass)
 
 ### Sub-Stage 04e — Multi-Session Tab Bar
 - [ ] Add a tab bar across the top of the main panel (above the terminal/file reader area)
