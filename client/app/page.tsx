@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { AppShell } from "@/components/app-shell"
 import { DashboardMain } from "@/components/dashboard-main"
-import { startSession, type ApiProject } from "@/lib/api"
+import { fetchSettings, startSession, type ApiProject } from "@/lib/api"
 import { wsPool } from "@/lib/ws"
 
 type TabStatus = "running" | "completed" | "unknown" | "error" | "waiting"
@@ -35,6 +35,15 @@ export default function Page() {
   const [tabs, setTabs] = useState<Tab[]>([SETTINGS_TAB])
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
   const [statusByProject, setStatusByProject] = useState<Map<string, TabStatus>>(new Map())
+
+  // First-run redirect: send the user to /setup until projectRoot is configured.
+  useEffect(() => {
+    fetchSettings()
+      .then((s) => {
+        if (!s.projectRoot) router.push("/setup")
+      })
+      .catch(() => {})
+  }, [router])
 
   // Translate WS events into tab statuses (for the tab dot).
   useEffect(() => {

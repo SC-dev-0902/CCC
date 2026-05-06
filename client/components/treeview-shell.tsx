@@ -34,6 +34,9 @@ import {
   type VersionsResponse,
 } from "@/lib/api"
 import { wsPool } from "@/lib/ws"
+import { MigrationModal } from "./migration-modal"
+
+const TO_BE_MIGRATED = "To Be Migrated"
 
 type Theme = "dark" | "light"
 
@@ -801,6 +804,73 @@ function DraggableSubProjectRow(props: {
   )
 }
 
+function MigrationEntryRow({
+  project,
+  theme,
+  setRowRef,
+  rowStyle,
+  isDragging,
+  dragHandleProps,
+}: {
+  project: ApiProject
+  theme: Theme
+  setRowRef?: (el: HTMLElement | null) => void
+  rowStyle?: React.CSSProperties
+  isDragging?: boolean
+  dragHandleProps?: { listeners?: any; attributes?: any; setActivatorRef?: (el: HTMLElement | null) => void }
+}) {
+  const t = tokens(theme)
+  return (
+    <div
+      ref={setRowRef}
+      style={{ marginBottom: 4, ...(rowStyle || {}), opacity: isDragging ? 0.5 : 1 }}
+    >
+      <div
+        className="flex flex-col px-2 py-1.5 cursor-grab"
+        ref={dragHandleProps?.setActivatorRef}
+        {...(dragHandleProps?.attributes || {})}
+        {...(dragHandleProps?.listeners || {})}
+      >
+        <span className="text-xs font-medium" style={{ color: t.textPrimary }}>
+          {project.name}
+        </span>
+        <span
+          className="text-[10px] mt-0.5"
+          style={{ color: t.textMuted, fontFamily: "var(--font-jetbrains-mono), ui-monospace, monospace" }}
+        >
+          {project.path}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function DraggableMigrationRow({ project, theme }: { project: ApiProject; theme: Theme }) {
+  const drag = useDraggable({
+    id: project.id,
+    data: { kind: "migration", group: TO_BE_MIGRATED },
+  })
+  const style: React.CSSProperties = {
+    transform: drag.transform
+      ? `translate3d(${drag.transform.x}px, ${drag.transform.y}px, 0)`
+      : undefined,
+  }
+  return (
+    <MigrationEntryRow
+      project={project}
+      theme={theme}
+      setRowRef={drag.setNodeRef}
+      rowStyle={style}
+      isDragging={drag.isDragging}
+      dragHandleProps={{
+        listeners: drag.listeners,
+        attributes: drag.attributes,
+        setActivatorRef: drag.setActivatorNodeRef,
+      }}
+    />
+  )
+}
+
 interface TreeviewShellProps {
   theme: Theme
   filter?: string
@@ -818,6 +888,11 @@ export function TreeviewShell({ theme, filter = "", onStartSession, onOpenFile }
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragError, setDragError] = useState<string | null>(null)
   const previousProjectsRef = useRef<ApiProject[] | null>(null)
+  const [migratingProject, setMigratingProject] = useState<{
+    project: ApiProject
+    targetGroup: string
+    targetParentId: string | null
+  } | null>(null)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
@@ -873,7 +948,11 @@ export function TreeviewShell({ theme, filter = "", onStartSession, onOpenFile }
     return out
   }, [projects, query])
 
-  const active = filtered.filter(({ project }) => (project.group || "Active").toLowerCase() === "active" || !project.group)
+  const tobeMigrated = filtered.filter(({ project }) => project.group === TO_BE_MIGRATED)
+  const active = filtered.filter(({ project }) => {
+    if (project.group === TO_BE_MIGRATED) return false
+    return (project.group || "Active").toLowerCase() === "active" || !project.group
+  })
   const parked = filtered.filter(({ project }) => (project.group || "").toLowerCase() === "parked")
 
   const activeIds = useMemo(() => active.map((e) => e.project.id), [active])
@@ -970,6 +1049,21 @@ export function TreeviewShell({ theme, filter = "", onStartSession, onOpenFile }
       }
     }
 
+    // To Be Migrated: open the migration modal instead of writing to the DB.
+    // The optimistic update + DB update happen only after the user confirms.
+    if (dragged.group === TO_BE_MIGRATED) {
+      const resolvedTargetGroup =
+        targetParentId ? "" : (targetGroup || "Active")
+      // Block self-drop (onto another To-Be-Migrated row, etc.)
+      if (resolvedTargetGroup === TO_BE_MIGRATED) return
+      setMigratingProject({
+        project: dragged,
+        targetGroup: resolvedTargetGroup,
+        targetParentId,
+      })
+      return
+    }
+
     // No-op?
     if (
       dragged.parentId === targetParentId &&
@@ -1050,6 +1144,21 @@ export function TreeviewShell({ theme, filter = "", onStartSession, onOpenFile }
             <div className="px-3 py-2 text-[10px]" style={{ color: t.statusError }}>
               {dragError}
             </div>
+          )}
+
+          {tobeMigrated.length > 0 && (
+            <>
+              <div
+                className="flex items-center gap-2 px-2 py-1 text-[11px] font-semibold uppercase tracking-wider mt-2"
+                style={{ color: t.textPrimary, borderBottom: `1px solid ${t.border}` }}
+              >
+                <ChevronDown size={10} />
+                To Be Migrated
+              </div>
+              {tobeMigrated.map(({ project }) => (
+                <DraggableMigrationRow key={project.id} project={project} theme={theme} />
+              ))}
+            </>
           )}
 
           <GroupHeader label="Active" theme={theme} />
@@ -1152,6 +1261,20 @@ export function TreeviewShell({ theme, filter = "", onStartSession, onOpenFile }
           </div>
         ) : null}
       </DragOverlay>
+
+      {migratingProject && (
+        <MigrationModal
+          project={migratingProject.project}
+          targetGroup={migratingProject.targetGroup}
+          targetParentId={migratingProject.targetParentId}
+          theme={theme}
+          onComplete={() => {
+            setMigratingProject(null)
+            reload()
+          }}
+          onCancel={() => setMigratingProject(null)}
+        />
+      )}
     </DndContext>
   )
 }

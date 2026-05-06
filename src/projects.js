@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const db = require('./db');
 
 const PROTECTED_GROUPS = ['Active', 'Parked'];
+const RESERVED_GROUP_NAMES = ['To Be Migrated'];
 
 // ---------------------------- helpers ----------------------------
 
@@ -248,6 +249,7 @@ async function reorderProjects(orderedIds) {
 }
 
 async function addGroup(name) {
+  if (RESERVED_GROUP_NAMES.includes(name)) return null;
   const countRows = await db.query(
     'SELECT COUNT(*) AS c FROM projects WHERE group_name = ?',
     [name]

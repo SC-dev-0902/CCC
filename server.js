@@ -11,6 +11,7 @@ const sessions = require('./src/sessions');
 const versions = require('./src/versions');
 const db = require('./src/db');
 const { scanUsage, scanWeeklyUsage, PLAN_LIMITS } = require('./src/usage');
+const migration = require('./src/migration');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -92,6 +93,11 @@ async function writeSettingsToDB(updates) {
     console.warn('[settings] DB write failed:', err.message);
     return Object.assign(JSON.parse(JSON.stringify(SETTINGS_DEFAULTS)), updates);
   }
+}
+
+async function getProjectRoot() {
+  const settingsData = await readSettingsFromDB();
+  return settingsData.projectRoot || '';
 }
 
 // --- Path Security Helper ---
@@ -1479,6 +1485,57 @@ app.post('/api/scan-project', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Failed to scan project: ' + err.message });
   }
+});
+
+// Scan the configured project root for unregistered top-level dirs.
+// Inserts each as a new "To Be Migrated" project row. Returns { added }.
+app.post('/api/scan-home', async (req, res) => {
+  try {
+    const projectRoot = await getProjectRoot();
+    if (!projectRoot) {
+      return res.status(400).json({ error: 'project_root not configured' });
+    }
+    const result = await migration.scanHomeFolder(projectRoot);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to scan home: ' + err.message });
+  }
+});
+
+// Dry-run preview of paths that would be created on migrate.
+app.get('/api/projects/:id/migrate-preview', async (req, res) => {
+  try {
+    const preview = await migration.previewMigration(req.params.id);
+    if (!preview) return res.status(404).json({ error: 'project not found' });
+    res.json(preview);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to preview migration: ' + err.message });
+  }
+});
+
+// SSE stream of migration progress. Updates DB row when complete.
+app.get('/api/projects/:id/migrate', async (req, res) => {
+  const { targetGroup, parentId } = req.query;
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const emit = (msg) => res.write(`data: ${JSON.stringify({ message: msg })}\n\n`);
+
+  try {
+    await migration.executeMigration(
+      req.params.id,
+      typeof targetGroup === 'string' && targetGroup ? targetGroup : 'Active',
+      typeof parentId === 'string' && parentId ? parentId : null,
+      emit
+    );
+    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+  } catch (err) {
+    res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+  }
+  res.end();
 });
 
 // --- Session API ---
