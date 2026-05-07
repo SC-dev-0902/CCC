@@ -1,6 +1,5 @@
 "use client"
 
-import { useState } from "react"
 import { Settings as SettingsIcon } from "lucide-react"
 import Link from "next/link"
 import dynamic from "next/dynamic"
@@ -25,13 +24,20 @@ interface ActiveTab {
   filePath?: string
 }
 
+export interface SessionSlot {
+  projectId: string
+  projectName: string
+  sessionId: string
+}
+
 interface DashboardMainProps {
+  sessionSlots: SessionSlot[]
   active: ActiveTab
   watchdog: boolean
   reconnecting: boolean
 }
 
-export function DashboardMain({ active, watchdog, reconnecting }: DashboardMainProps) {
+export function DashboardMain({ sessionSlots, active, watchdog, reconnecting }: DashboardMainProps) {
   const { theme } = useTheme()
   const t = tokens(theme)
 
@@ -68,13 +74,39 @@ export function DashboardMain({ active, watchdog, reconnecting }: DashboardMainP
         </div>
       )}
 
-      {/* Main content area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {active.kind === "terminal" && active.sessionId && active.projectId ? (
-          <TerminalPanel sessionId={active.sessionId} projectId={active.projectId} theme={theme} />
-        ) : active.kind === "file" && active.projectId && active.filePath ? (
-          <FileReaderPanel projectId={active.projectId} filePath={active.filePath} theme={theme} />
-        ) : (
+      {/* Main content area: keep all session terminals mounted, hide inactive ones */}
+      <div className="flex-1 flex flex-col overflow-hidden" style={{ position: "relative" }}>
+        {sessionSlots.map((slot) => {
+          const isActive =
+            active.kind === "terminal" && active.sessionId === slot.sessionId
+          return (
+            <div
+              key={slot.sessionId}
+              style={{
+                display: isActive ? "flex" : "none",
+                flexDirection: "column",
+                flex: 1,
+                overflow: "hidden",
+              }}
+            >
+              <TerminalPanel
+                sessionId={slot.sessionId}
+                projectId={slot.projectId}
+                theme={theme}
+              />
+            </div>
+          )
+        })}
+
+        {active.kind === "file" && active.projectId && active.filePath && (
+          <FileReaderPanel
+            projectId={active.projectId}
+            filePath={active.filePath}
+            theme={theme}
+          />
+        )}
+
+        {sessionSlots.length === 0 && active.kind !== "file" && (
           <NoActiveSession theme={theme} />
         )}
       </div>

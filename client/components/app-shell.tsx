@@ -1,9 +1,9 @@
 "use client"
 
-import { useEffect, useState, type ReactNode } from "react"
+import { useEffect, useState, Fragment, type ReactNode } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { Hexagon, Moon, Sun, X } from "lucide-react"
+import { usePathname, useRouter } from "next/navigation"
+import { FolderInput, Hexagon, Moon, Sun, X } from "lucide-react"
 import { TreeviewShell } from "./treeview-shell"
 import { INTEGRATIONS } from "@/lib/dummy-data"
 import { tokens, useTheme } from "./theme-context"
@@ -76,39 +76,52 @@ function TabBar({
     waiting: t.statusWaiting,
   }
   return (
-    <div className="flex items-stretch" style={{ backgroundColor: t.bgTabBar, borderBottom: `1px solid ${t.border}` }}>
+    <div
+      data-testid="ccc-tabbar"
+      className="flex items-stretch shrink-0"
+      style={{
+        backgroundColor: t.bgSidebar,
+        borderTop: `1px solid ${t.border}`,
+        borderBottom: `2px solid ${t.accent}`,
+        minHeight: 34,
+        flexShrink: 0,
+      }}
+    >
       {tabs.map((tab) => {
         const active = tab.id === activeId
         const dimmed = tab.reconnecting
-        const inner = (
+        const showClose = onClose && tab.id !== "__settings__"
+        const content = (
           <div
-            key={tab.id}
             onClick={() => onSelect(tab.id)}
-            className="flex items-center gap-2 px-4 py-2 text-xs cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2 text-xs cursor-pointer shrink-0"
             style={{
               backgroundColor: active ? t.bgApp : "transparent",
               color: dimmed ? t.textMuted : t.textPrimary,
               borderTop: active ? `2px solid ${t.accent}` : "2px solid transparent",
               borderRight: `1px solid ${t.border}`,
               opacity: dimmed ? 0.6 : 1,
+              flexShrink: 0,
             }}
           >
             <span style={{ width: 7, height: 7, borderRadius: "50%", backgroundColor: dotFor[tab.status] }} />
             <span>{tab.label}</span>
             {tab.reconnecting && <span style={{ fontSize: 10, color: t.textMuted }}>(reconnecting)</span>}
-            {onClose && (
+            {showClose && (
               <X
                 size={11}
                 style={{ color: t.textMuted }}
                 onClick={(e) => {
                   e.stopPropagation()
-                  onClose(tab.id)
+                  onClose!(tab.id)
                 }}
               />
             )}
           </div>
         )
-        return tab.href ? <Link key={tab.id} href={tab.href}>{inner}</Link> : inner
+        return tab.href
+          ? <Link key={tab.id} href={tab.href} style={{ flexShrink: 0 }}>{content}</Link>
+          : <Fragment key={tab.id}>{content}</Fragment>
       })}
     </div>
   )
@@ -116,6 +129,7 @@ function TabBar({
 
 function AppHeader() {
   const { theme, toggle } = useTheme()
+  const router = useRouter()
   const t = tokens(theme)
   return (
     <header
@@ -133,8 +147,22 @@ function AppHeader() {
           <Diode key={i.name} name={i.name} connected={i.status === "connected"} url={i.url} />
         ))}
         <button
-          onClick={toggle}
+          onClick={() => router.push('/import')}
           className="ml-2 flex items-center justify-center"
+          style={{
+            width: 28, height: 28,
+            border: `1px solid ${t.border}`,
+            backgroundColor: t.bgInput,
+            color: t.textSecondary,
+            cursor: "pointer",
+          }}
+          title="Import existing project"
+        >
+          <FolderInput size={14} />
+        </button>
+        <button
+          onClick={toggle}
+          className="flex items-center justify-center"
           style={{
             width: 28, height: 28,
             border: `1px solid ${t.border}`,
@@ -207,9 +235,6 @@ export function AppShell({ children, tabs, activeTabId, onSelectTab, onCloseTab,
       style={{ backgroundColor: t.bgApp, color: t.textPrimary, height: "100vh", minHeight: 700 }}
     >
       <AppHeader />
-      {tabs && tabs.length > 0 && activeTabId && onSelectTab && (
-        <TabBar tabs={tabs} activeId={activeTabId} onSelect={onSelectTab} onClose={onCloseTab} />
-      )}
       <div className="flex flex-1 overflow-hidden">
         <aside
           className="shrink-0 overflow-hidden"
@@ -244,8 +269,13 @@ export function AppShell({ children, tabs, activeTabId, onSelectTab, onCloseTab,
             }}
           />
         </div>
-        <main className="flex-1 overflow-auto" style={{ backgroundColor: t.bgMain }}>
-          {children}
+        <main className="flex-1 overflow-hidden flex flex-col" style={{ backgroundColor: t.bgMain }}>
+          {tabs && tabs.length > 0 && activeTabId && onSelectTab && (
+            <TabBar tabs={tabs} activeId={activeTabId} onSelect={onSelectTab} onClose={onCloseTab} />
+          )}
+          <div className="flex-1 overflow-auto flex flex-col">
+            {children}
+          </div>
         </main>
       </div>
     </div>

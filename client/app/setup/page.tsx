@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Moon, Sun } from "lucide-react"
-import { API_BASE, fetchSettings, saveSettings, scanHome } from "@/lib/api"
+import { API_BASE, fetchSettings, saveSettings } from "@/lib/api"
 import { tokens, useTheme } from "@/components/theme-context"
 
 export default function Page() {
@@ -106,14 +106,6 @@ function ProjectRootCard({ theme }: { theme: "dark" | "light" }) {
       await saveSettings({ projectRoot: pathValue.trim() })
     } catch (e: any) {
       setError(e.message || "Save failed")
-      setBusy("idle")
-      return
-    }
-    setBusy("scanning")
-    try {
-      await scanHome()
-    } catch (e: any) {
-      setError(e.message || "Scan failed")
       setBusy("idle")
       return
     }

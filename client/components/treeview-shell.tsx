@@ -34,9 +34,6 @@ import {
   type VersionsResponse,
 } from "@/lib/api"
 import { wsPool } from "@/lib/ws"
-import { MigrationModal } from "./migration-modal"
-
-const TO_BE_MIGRATED = "To Be Migrated"
 
 type Theme = "dark" | "light"
 
@@ -721,21 +718,34 @@ function FileLink({ theme, label, onClick }: { theme: Theme; label: string; onCl
   )
 }
 
-function GroupHeader({ label, theme, droppableId }: { label: string; theme: Theme; droppableId?: string }) {
+function GroupHeader({
+  label,
+  theme,
+  droppableId,
+  collapsed,
+  onToggle,
+}: {
+  label: string
+  theme: Theme
+  droppableId?: string
+  collapsed?: boolean
+  onToggle?: () => void
+}) {
   const t = tokens(theme)
   const drop = useDroppable({ id: droppableId || `group:${label}`, data: { kind: "group", group: label } })
   const isOver = drop.isOver
   return (
     <div
       ref={drop.setNodeRef}
-      className="flex items-center gap-2 px-2 py-1 text-[11px] font-semibold uppercase tracking-wider mt-2"
+      onClick={onToggle}
+      className="flex items-center gap-2 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider mt-2 cursor-pointer select-none"
       style={{
         color: t.textPrimary,
         borderBottom: `1px solid ${t.border}`,
         backgroundColor: isOver ? t.bgHover : "transparent",
       }}
     >
-      <ChevronDown size={10} />
+      {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
       {label}
     </div>
   )
@@ -804,73 +814,6 @@ function DraggableSubProjectRow(props: {
   )
 }
 
-function MigrationEntryRow({
-  project,
-  theme,
-  setRowRef,
-  rowStyle,
-  isDragging,
-  dragHandleProps,
-}: {
-  project: ApiProject
-  theme: Theme
-  setRowRef?: (el: HTMLElement | null) => void
-  rowStyle?: React.CSSProperties
-  isDragging?: boolean
-  dragHandleProps?: { listeners?: any; attributes?: any; setActivatorRef?: (el: HTMLElement | null) => void }
-}) {
-  const t = tokens(theme)
-  return (
-    <div
-      ref={setRowRef}
-      style={{ marginBottom: 4, ...(rowStyle || {}), opacity: isDragging ? 0.5 : 1 }}
-    >
-      <div
-        className="flex flex-col px-2 py-1.5 cursor-grab"
-        ref={dragHandleProps?.setActivatorRef}
-        {...(dragHandleProps?.attributes || {})}
-        {...(dragHandleProps?.listeners || {})}
-      >
-        <span className="text-xs font-medium" style={{ color: t.textPrimary }}>
-          {project.name}
-        </span>
-        <span
-          className="text-[10px] mt-0.5"
-          style={{ color: t.textMuted, fontFamily: "var(--font-jetbrains-mono), ui-monospace, monospace" }}
-        >
-          {project.path}
-        </span>
-      </div>
-    </div>
-  )
-}
-
-function DraggableMigrationRow({ project, theme }: { project: ApiProject; theme: Theme }) {
-  const drag = useDraggable({
-    id: project.id,
-    data: { kind: "migration", group: TO_BE_MIGRATED },
-  })
-  const style: React.CSSProperties = {
-    transform: drag.transform
-      ? `translate3d(${drag.transform.x}px, ${drag.transform.y}px, 0)`
-      : undefined,
-  }
-  return (
-    <MigrationEntryRow
-      project={project}
-      theme={theme}
-      setRowRef={drag.setNodeRef}
-      rowStyle={style}
-      isDragging={drag.isDragging}
-      dragHandleProps={{
-        listeners: drag.listeners,
-        attributes: drag.attributes,
-        setActivatorRef: drag.setActivatorNodeRef,
-      }}
-    />
-  )
-}
-
 interface TreeviewShellProps {
   theme: Theme
   filter?: string
@@ -884,15 +827,19 @@ export function TreeviewShell({ theme, filter = "", onStartSession, onOpenFile }
   const [projects, setProjects] = useState<ApiProject[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  const toggleGroup = (label: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(label)) next.delete(label)
+      else next.add(label)
+      return next
+    })
+  }
   const [statusMap, setStatusMap] = useState<Map<string, Status>>(new Map())
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragError, setDragError] = useState<string | null>(null)
   const previousProjectsRef = useRef<ApiProject[] | null>(null)
-  const [migratingProject, setMigratingProject] = useState<{
-    project: ApiProject
-    targetGroup: string
-    targetParentId: string | null
-  } | null>(null)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
@@ -948,9 +895,7 @@ export function TreeviewShell({ theme, filter = "", onStartSession, onOpenFile }
     return out
   }, [projects, query])
 
-  const tobeMigrated = filtered.filter(({ project }) => project.group === TO_BE_MIGRATED)
   const active = filtered.filter(({ project }) => {
-    if (project.group === TO_BE_MIGRATED) return false
     return (project.group || "Active").toLowerCase() === "active" || !project.group
   })
   const parked = filtered.filter(({ project }) => (project.group || "").toLowerCase() === "parked")
@@ -1049,21 +994,6 @@ export function TreeviewShell({ theme, filter = "", onStartSession, onOpenFile }
       }
     }
 
-    // To Be Migrated: open the migration modal instead of writing to the DB.
-    // The optimistic update + DB update happen only after the user confirms.
-    if (dragged.group === TO_BE_MIGRATED) {
-      const resolvedTargetGroup =
-        targetParentId ? "" : (targetGroup || "Active")
-      // Block self-drop (onto another To-Be-Migrated row, etc.)
-      if (resolvedTargetGroup === TO_BE_MIGRATED) return
-      setMigratingProject({
-        project: dragged,
-        targetGroup: resolvedTargetGroup,
-        targetParentId,
-      })
-      return
-    }
-
     // No-op?
     if (
       dragged.parentId === targetParentId &&
@@ -1146,96 +1076,95 @@ export function TreeviewShell({ theme, filter = "", onStartSession, onOpenFile }
             </div>
           )}
 
-          {tobeMigrated.length > 0 && (
-            <>
-              <div
-                className="flex items-center gap-2 px-2 py-1 text-[11px] font-semibold uppercase tracking-wider mt-2"
-                style={{ color: t.textPrimary, borderBottom: `1px solid ${t.border}` }}
-              >
-                <ChevronDown size={10} />
-                To Be Migrated
-              </div>
-              {tobeMigrated.map(({ project }) => (
-                <DraggableMigrationRow key={project.id} project={project} theme={theme} />
-              ))}
-            </>
+          <GroupHeader
+            label="Active"
+            theme={theme}
+            collapsed={collapsedGroups.has("Active")}
+            onToggle={() => toggleGroup("Active")}
+          />
+          {!collapsedGroups.has("Active") && (
+            <SortableContext items={activeIds} strategy={verticalListSortingStrategy}>
+              {loading && projects.length === 0 ? (
+                <div className="px-2 py-2 text-[10px] italic" style={{ paddingLeft: 24, color: t.textMuted }}>
+                  loading projects...
+                </div>
+              ) : active.length === 0 ? (
+                <div className="px-2 py-2 text-[10px] italic" style={{ paddingLeft: 24, color: t.textMuted }}>
+                  {query ? "no match" : "no projects"}
+                </div>
+              ) : (
+                active.map(({ project, visibleSubProjects }) =>
+                  isContainer(project) ? (
+                    <DroppableContainerRow
+                      key={project.id}
+                      id={project.id}
+                      project={project}
+                      visibleSubProjects={visibleSubProjects}
+                      statusMap={statusMap}
+                      theme={theme}
+                      forceExpand={!!query}
+                      onStartSession={onStartSession}
+                      onOpenFile={onOpenFile}
+                    />
+                  ) : (
+                    <SortableLeafRow
+                      key={project.id}
+                      id={project.id}
+                      project={project}
+                      status={statusMap.get(project.id) || "unknown"}
+                      theme={theme}
+                      forceExpand={!!query}
+                      onStartSession={onStartSession}
+                      onOpenFile={onOpenFile}
+                    />
+                  )
+                )
+              )}
+            </SortableContext>
           )}
 
-          <GroupHeader label="Active" theme={theme} />
-          <SortableContext items={activeIds} strategy={verticalListSortingStrategy}>
-            {loading && projects.length === 0 ? (
-              <div className="px-2 py-2 text-[10px] italic" style={{ paddingLeft: 24, color: t.textMuted }}>
-                loading projects...
-              </div>
-            ) : active.length === 0 ? (
-              <div className="px-2 py-2 text-[10px] italic" style={{ paddingLeft: 24, color: t.textMuted }}>
-                {query ? "no match" : "no projects"}
-              </div>
-            ) : (
-              active.map(({ project, visibleSubProjects }) =>
-                isContainer(project) ? (
-                  <DroppableContainerRow
-                    key={project.id}
-                    id={project.id}
-                    project={project}
-                    visibleSubProjects={visibleSubProjects}
-                    statusMap={statusMap}
-                    theme={theme}
-                    forceExpand={!!query}
-                    onStartSession={onStartSession}
-                    onOpenFile={onOpenFile}
-                  />
-                ) : (
-                  <SortableLeafRow
-                    key={project.id}
-                    id={project.id}
-                    project={project}
-                    status={statusMap.get(project.id) || "unknown"}
-                    theme={theme}
-                    forceExpand={!!query}
-                    onStartSession={onStartSession}
-                    onOpenFile={onOpenFile}
-                  />
+          <GroupHeader
+            label="Parked"
+            theme={theme}
+            collapsed={collapsedGroups.has("Parked")}
+            onToggle={() => toggleGroup("Parked")}
+          />
+          {!collapsedGroups.has("Parked") && (
+            <SortableContext items={parkedIds} strategy={verticalListSortingStrategy}>
+              {parked.length === 0 ? (
+                <div className="px-2 py-2 text-[10px] italic" style={{ paddingLeft: 24, color: t.textMuted }}>
+                  empty
+                </div>
+              ) : (
+                parked.map(({ project, visibleSubProjects }) =>
+                  isContainer(project) ? (
+                    <DroppableContainerRow
+                      key={project.id}
+                      id={project.id}
+                      project={project}
+                      visibleSubProjects={visibleSubProjects}
+                      statusMap={statusMap}
+                      theme={theme}
+                      forceExpand={!!query}
+                      onStartSession={onStartSession}
+                      onOpenFile={onOpenFile}
+                    />
+                  ) : (
+                    <SortableLeafRow
+                      key={project.id}
+                      id={project.id}
+                      project={project}
+                      status={statusMap.get(project.id) || "unknown"}
+                      theme={theme}
+                      forceExpand={!!query}
+                      onStartSession={onStartSession}
+                      onOpenFile={onOpenFile}
+                    />
+                  )
                 )
-              )
-            )}
-          </SortableContext>
-
-          <GroupHeader label="Parked" theme={theme} />
-          <SortableContext items={parkedIds} strategy={verticalListSortingStrategy}>
-            {parked.length === 0 ? (
-              <div className="px-2 py-2 text-[10px] italic" style={{ paddingLeft: 24, color: t.textMuted }}>
-                empty
-              </div>
-            ) : (
-              parked.map(({ project, visibleSubProjects }) =>
-                isContainer(project) ? (
-                  <DroppableContainerRow
-                    key={project.id}
-                    id={project.id}
-                    project={project}
-                    visibleSubProjects={visibleSubProjects}
-                    statusMap={statusMap}
-                    theme={theme}
-                    forceExpand={!!query}
-                    onStartSession={onStartSession}
-                    onOpenFile={onOpenFile}
-                  />
-                ) : (
-                  <SortableLeafRow
-                    key={project.id}
-                    id={project.id}
-                    project={project}
-                    status={statusMap.get(project.id) || "unknown"}
-                    theme={theme}
-                    forceExpand={!!query}
-                    onStartSession={onStartSession}
-                    onOpenFile={onOpenFile}
-                  />
-                )
-              )
-            )}
-          </SortableContext>
+              )}
+            </SortableContext>
+          )}
         </div>
 
         <div className="px-3 py-2" style={{ borderTop: `1px solid ${t.border}`, backgroundColor: t.bgMain }}>
@@ -1262,19 +1191,6 @@ export function TreeviewShell({ theme, filter = "", onStartSession, onOpenFile }
         ) : null}
       </DragOverlay>
 
-      {migratingProject && (
-        <MigrationModal
-          project={migratingProject.project}
-          targetGroup={migratingProject.targetGroup}
-          targetParentId={migratingProject.targetParentId}
-          theme={theme}
-          onComplete={() => {
-            setMigratingProject(null)
-            reload()
-          }}
-          onCancel={() => setMigratingProject(null)}
-        />
-      )}
     </DndContext>
   )
 }

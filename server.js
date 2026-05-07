@@ -11,7 +11,6 @@ const sessions = require('./src/sessions');
 const versions = require('./src/versions');
 const db = require('./src/db');
 const { scanUsage, scanWeeklyUsage, PLAN_LIMITS } = require('./src/usage');
-const migration = require('./src/migration');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -204,6 +203,19 @@ app.put('/api/projects-reorder', async (req, res) => {
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: 'Failed to reorder projects' });
+  }
+});
+
+// List group names (lightweight, for the Import Wizard container selector)
+app.get('/api/groups', async (req, res) => {
+  try {
+    const { groups } = await projects.getAllProjects();
+    const names = groups
+      .map(g => (typeof g === 'string' ? g : g.name))
+      .filter(n => n && n !== 'To Be Migrated');
+    res.json({ groups: names });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to list groups: ' + err.message });
   }
 });
 
@@ -1487,57 +1499,6 @@ app.post('/api/scan-project', async (req, res) => {
   }
 });
 
-// Scan the configured project root for unregistered top-level dirs.
-// Inserts each as a new "To Be Migrated" project row. Returns { added }.
-app.post('/api/scan-home', async (req, res) => {
-  try {
-    const projectRoot = await getProjectRoot();
-    if (!projectRoot) {
-      return res.status(400).json({ error: 'project_root not configured' });
-    }
-    const result = await migration.scanHomeFolder(projectRoot);
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to scan home: ' + err.message });
-  }
-});
-
-// Dry-run preview of paths that would be created on migrate.
-app.get('/api/projects/:id/migrate-preview', async (req, res) => {
-  try {
-    const preview = await migration.previewMigration(req.params.id);
-    if (!preview) return res.status(404).json({ error: 'project not found' });
-    res.json(preview);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to preview migration: ' + err.message });
-  }
-});
-
-// SSE stream of migration progress. Updates DB row when complete.
-app.get('/api/projects/:id/migrate', async (req, res) => {
-  const { targetGroup, parentId } = req.query;
-
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.flushHeaders();
-
-  const emit = (msg) => res.write(`data: ${JSON.stringify({ message: msg })}\n\n`);
-
-  try {
-    await migration.executeMigration(
-      req.params.id,
-      typeof targetGroup === 'string' && targetGroup ? targetGroup : 'Active',
-      typeof parentId === 'string' && parentId ? parentId : null,
-      emit
-    );
-    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
-  } catch (err) {
-    res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
-  }
-  res.end();
-});
-
 // --- Session API ---
 
 // Start a session for a project
@@ -1572,6 +1533,72 @@ app.get('/api/sessions/:projectId', (req, res) => {
 // Get all session states
 app.get('/api/sessions', (req, res) => {
   res.json(sessions.getAllSessionStates());
+});
+
+// Destroy a session (Stage 04e)
+app.delete('/api/sessions/:projectId', (req, res) => {
+  const { projectId } = req.params;
+  sessions.destroySession(projectId);
+  res.json({ ok: true });
+});
+
+// --- Import Wizard (Stage 04e01 Part C) ---
+
+app.post('/api/import/start', async (req, res) => {
+  const { sourcePath, containerName, projectName } = req.body || {};
+
+  if (!sourcePath || !containerName || !projectName) {
+    return res.status(400).json({ error: 'sourcePath, containerName, and projectName are required' });
+  }
+
+  const projectRoot = await getProjectRoot();
+  if (!projectRoot) {
+    return res.status(400).json({ error: 'Project root not configured' });
+  }
+
+  const destPath = path.join(projectRoot, containerName, projectName);
+
+  if (path.resolve(sourcePath) === path.resolve(destPath)) {
+    return res.status(400).json({ error: 'Source and destination cannot be the same' });
+  }
+
+  if (!fs.existsSync(sourcePath)) {
+    return res.status(400).json({ error: 'Source folder does not exist' });
+  }
+
+  if (fs.existsSync(destPath)) {
+    return res.status(409).json({ error: 'Destination already exists' });
+  }
+
+  try {
+    const project = await projects.addProject({
+      name: projectName,
+      path: path.join(containerName, projectName),
+      group: containerName,
+      evaluated: 0,
+      activeVersion: null,
+    });
+
+    sessions.createSession(project.id, sourcePath, 'claude');
+
+    res.json({ ok: true, projectId: project.id, destPath });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to start import: ' + err.message });
+  }
+});
+
+app.post('/api/import/kickoff', (req, res) => {
+  const { projectId, sourcePath, destPath } = req.body || {};
+  if (!projectId || !sourcePath || !destPath) {
+    return res.status(400).json({ error: 'projectId, sourcePath, and destPath are required' });
+  }
+  const prompt = `You are importing an existing project into CCC v1.1.\n\nSource: ${sourcePath}\nDestination: ${destPath}\n\nTask:\n1. Analyse the source project (read key files: package.json, README, existing docs, CLAUDE.md if present)\n2. Explain to the developer what you found and what you plan to do\n3. Copy ALL files from source to ${destPath}/v1.0/\n4. Create the CCC v1.1 structure at the destination:\n   - CLAUDE.md (generate based on project analysis)\n   - .ccc-project.json (content: {"imported":true,"importedAt":"${new Date().toISOString()}","sourceVersion":"1.0"})\n   - docs/handoff/ (empty folder)\n   - docs/v1.0/{projectName}_concept_v1.0.md (generate)\n   - docs/v1.0/{projectName}_tasklist_v1.0.md (generate)\n5. Ask the developer to confirm each major step before executing it\n\nNever use em dash (-). Use a regular hyphen with spaces ( - ) instead.\n\nStart by reading the source project and explaining what you found.`;
+  try {
+    sessions.writeToSession(projectId, prompt + '\n');
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to send kickoff: ' + err.message });
+  }
 });
 
 // --- Start ---

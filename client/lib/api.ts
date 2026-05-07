@@ -92,6 +92,10 @@ export async function startSession(projectId: string, command: "claude" | "shell
   return jsonOrThrow<StartSessionResponse>(res)
 }
 
+export async function deleteSession(projectId: string): Promise<void> {
+  await fetch(`${API_BASE}/api/sessions/${encodeURIComponent(projectId)}`, { method: "DELETE" })
+}
+
 export async function fetchVersionInfo(): Promise<{ version: string; build: string }> {
   return jsonOrThrow<{ version: string; build: string }>(await fetch(`${API_BASE}/api/version`))
 }
@@ -154,29 +158,3 @@ export async function reorderProjects(orderedIds: ReorderEntry[]): Promise<unkno
   return jsonOrThrow<unknown>(res)
 }
 
-// --- Home folder scan + migration (Stage 04d) ---
-
-export async function scanHome(): Promise<{ added: number }> {
-  const res = await fetch(`${API_BASE}/api/scan-home`, { method: "POST" })
-  return jsonOrThrow<{ added: number }>(res)
-}
-
-export interface MigratePreview {
-  projectName: string
-  rootPath: string
-  version: string
-  toCreate: string[]
-}
-
-export async function fetchMigratePreview(projectId: string): Promise<MigratePreview> {
-  return jsonOrThrow<MigratePreview>(
-    await fetch(`${API_BASE}/api/projects/${encodeURIComponent(projectId)}/migrate-preview`)
-  )
-}
-
-export function buildMigrateUrl(projectId: string, targetGroup: string, parentId: string | null): string {
-  const params = new URLSearchParams()
-  params.set("targetGroup", targetGroup)
-  if (parentId) params.set("parentId", parentId)
-  return `${API_BASE}/api/projects/${encodeURIComponent(projectId)}/migrate?${params.toString()}`
-}

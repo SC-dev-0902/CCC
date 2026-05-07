@@ -4,7 +4,6 @@ const crypto = require('crypto');
 const db = require('./db');
 
 const PROTECTED_GROUPS = ['Active', 'Parked'];
-const RESERVED_GROUP_NAMES = ['To Be Migrated'];
 
 // ---------------------------- helpers ----------------------------
 
@@ -63,12 +62,20 @@ async function buildGroupsArray() {
 
   const ordered = [];
   for (const row of projectGroupRows) {
-    if (!PROTECTED_GROUPS.includes(row.group_name) && !ordered.includes(row.group_name)) {
+    if (
+      !PROTECTED_GROUPS.includes(row.group_name) &&
+      row.group_name !== 'To Be Migrated' &&
+      !ordered.includes(row.group_name)
+    ) {
       ordered.push(row.group_name);
     }
   }
   for (const row of extraGroupRows) {
-    if (!PROTECTED_GROUPS.includes(row.value) && !ordered.includes(row.value)) {
+    if (
+      !PROTECTED_GROUPS.includes(row.value) &&
+      row.value !== 'To Be Migrated' &&
+      !ordered.includes(row.value)
+    ) {
       ordered.push(row.value);
     }
   }
@@ -87,6 +94,8 @@ async function buildGroupsArray() {
 // ---------------------------- public API ----------------------------
 
 async function getAllProjects() {
+  // Stage 04e01: hide leftover "To Be Migrated" rows from Stage 04d's scan-home
+  // call. They remain in the DB (non-destructive) but are filtered from API.
   const rows = await db.query(
     `SELECT p.id, p.name, p.path, p.group_name, p.sort_order,
             p.type, p.active_version, p.evaluated,
@@ -94,6 +103,7 @@ async function getAllProjects() {
             pcf.file_type, pcf.file_path
        FROM projects p
        LEFT JOIN project_core_files pcf ON p.id = pcf.project_id
+      WHERE p.group_name IS NULL OR p.group_name != 'To Be Migrated'
       ORDER BY p.sort_order ASC`
   );
 
@@ -130,6 +140,25 @@ async function getAllProjects() {
       }
     }
   }
+
+  // Auto-register check (Stage 04e01 Task C6): for any project with
+  // evaluated=false and activeVersion=null, if .ccc-project.json exists at
+  // the resolved path, the import has finished -- promote the row.
+  // Fire-and-forget: do not block the response.
+  (async () => {
+    const candidates = flat.filter((p) => !p.evaluated && p.activeVersion === null);
+    for (const cand of candidates) {
+      try {
+        const abs = await resolveProjectPath(cand.path);
+        if (fs.existsSync(path.join(abs, '.ccc-project.json'))) {
+          db.query(
+            "UPDATE projects SET evaluated = 1, active_version = '1.0' WHERE id = ?",
+            [cand.id]
+          ).catch(() => {});
+        }
+      } catch { /* path unresolvable - skip */ }
+    }
+  })();
 
   const groups = await buildGroupsArray();
   return { groups, projects };
@@ -249,7 +278,6 @@ async function reorderProjects(orderedIds) {
 }
 
 async function addGroup(name) {
-  if (RESERVED_GROUP_NAMES.includes(name)) return null;
   const countRows = await db.query(
     'SELECT COUNT(*) AS c FROM projects WHERE group_name = ?',
     [name]

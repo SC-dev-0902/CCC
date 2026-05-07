@@ -3,8 +3,8 @@
 import { useState, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { AppShell } from "@/components/app-shell"
-import { DashboardMain } from "@/components/dashboard-main"
-import { fetchSettings, startSession, type ApiProject } from "@/lib/api"
+import { DashboardMain, type SessionSlot } from "@/components/dashboard-main"
+import { startSession, deleteSession, type ApiProject } from "@/lib/api"
 import { wsPool } from "@/lib/ws"
 
 type TabStatus = "running" | "completed" | "unknown" | "error" | "waiting"
@@ -35,15 +35,6 @@ export default function Page() {
   const [tabs, setTabs] = useState<Tab[]>([SETTINGS_TAB])
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
   const [statusByProject, setStatusByProject] = useState<Map<string, TabStatus>>(new Map())
-
-  // First-run redirect: send the user to /setup until projectRoot is configured.
-  useEffect(() => {
-    fetchSettings()
-      .then((s) => {
-        if (!s.projectRoot) router.push("/setup")
-      })
-      .catch(() => {})
-  }, [router])
 
   // Translate WS events into tab statuses (for the tab dot).
   useEffect(() => {
@@ -82,7 +73,6 @@ export default function Page() {
 
   const handleStartSession = useCallback(async (project: ApiProject) => {
     const tabId = `session:${project.id}`
-    // If a tab already exists for this project, just activate it.
     setTabs((curr) => {
       if (curr.some((t) => t.id === tabId)) return curr
       const newTab: Tab = {
@@ -133,11 +123,27 @@ export default function Page() {
   }, [tabs, router])
 
   const handleCloseTab = useCallback((id: string) => {
+    const tab = tabs.find((t) => t.id === id)
+    if (tab?.kind === "session" && tab.projectId) {
+      deleteSession(tab.projectId).catch(() => {})
+    }
     setTabs((curr) => curr.filter((t) => t.id !== id))
-    setActiveTabId((prev) => (prev === id ? null : prev))
-  }, [])
+    setActiveTabId((prev) => {
+      if (prev !== id) return prev
+      const remaining = tabs.filter((t) => t.id !== id && t.id !== "__settings__")
+      return remaining.length > 0 ? remaining[0].id : null
+    })
+  }, [tabs])
 
   const activeTab = tabs.find((t) => t.id === activeTabId) || null
+
+  const sessionSlots: SessionSlot[] = tabs
+    .filter((t) => t.kind === "session" && !!t.projectId && !!t.sessionId)
+    .map((t) => ({
+      projectId: t.projectId!,
+      projectName: t.projectName!,
+      sessionId: t.sessionId!,
+    }))
 
   const dashActive = activeTab && activeTab.kind === "session"
     ? {
@@ -175,6 +181,7 @@ export default function Page() {
       onOpenFile={handleOpenFile}
     >
       <DashboardMain
+        sessionSlots={sessionSlots}
         active={dashActive}
         watchdog={false}
         reconnecting={false}
