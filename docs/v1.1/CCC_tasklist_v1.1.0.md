@@ -246,14 +246,48 @@
 **-> GO declared 2026-05-06** (browser-tested by Phet, all ACs pass)
 
 ### Sub-Stage 04e — Multi-Session Tab Bar
-- [ ] Add a tab bar across the top of the main panel (above the terminal/file reader area)
-- [ ] Each "Start Session" click opens a new tab — does not replace the currently active tab
-- [ ] Tabs display: project name + live status dot (driven by existing WS pool)
-- [ ] Tabs are closeable via an X button; closing kills the session (`DELETE /api/sessions/:id`)
-- [ ] Switching tabs switches the active terminal — xterm instances remain mounted but hidden (`visibility: hidden` / `display: none`), not unmounted, so terminal buffer and session stay alive
-- [ ] Active tab is visually highlighted; inactive tabs are dimmed
-- [ ] File reader opens in a tab alongside terminal tabs (tab label shows filename)
-- [ ] Tab state managed in the page-level component; `DashboardMain` receives the active tab's data
+- [x] Add a tab bar across the top of the main panel (above the terminal/file reader area)
+- [x] Each "Start Session" click opens a new tab — does not replace the currently active tab
+- [x] Tabs display: project name + live status dot (driven by existing WS pool)
+- [x] Tabs are closeable via an X button; closing kills the session (`DELETE /api/sessions/:id`)
+- [x] Switching tabs switches the active terminal — xterm instances remain mounted but hidden (`visibility: hidden` / `display: none`), not unmounted, so terminal buffer and session stay alive
+- [x] Active tab is visually highlighted; inactive tabs are dimmed
+- [x] File reader opens in a tab alongside terminal tabs (tab label shows filename)
+- [x] Tab state managed in the page-level component; `DashboardMain` receives the active tab's data
+
+**-> GO declared 2026-05-07** (Phet confirmed in Safari after tab bar relocated into `<main>` to match v1.0 layout)
+
+### Sub-Stage 04e01 — Multi-Tab Fix + Import Wizard
+*Discovered after 04e GO: the tab bar's placement above the sidebar+main split (instead of inside `<main>` like v1.0) made it invisible to the eye, which was looking at the "ACTIVE: project" subtitle in the main panel. Migration code from 04d was also slated for removal in favour of an Import Wizard.*
+
+**Part A — Multi-Tab visibility fix**
+- [x] Move TabBar from above the sidebar+main split into `<main>` (matches v1.0's `index.html` structure)
+- [x] Fragment-based React keys; explicit `flex-shrink: 0` on container and tab content; explicit `min-height` on tab bar wrapper
+- [x] Settings tab X button hidden via `tab.id !== "__settings__"` gate
+
+**Part B — Stage 04d migration code removed**
+- [x] Delete `src/migration.js`
+- [x] Remove `POST /api/scan-home`, `GET /api/projects/:id/migrate-preview`, `GET /api/projects/:id/migrate` (SSE) from server.js
+- [x] Remove `RESERVED_GROUP_NAMES` from `src/projects.js`
+- [x] Remove "To Be Migrated" treeview code (`MigrationEntryRow`, `DraggableMigrationRow`, `tobeMigrated` slice, `migratingProject` state, drag-end TBM intercept)
+- [x] Delete `client/components/migration-modal.tsx`
+- [x] Remove `scanHome / fetchMigratePreview / MigratePreview / buildMigrateUrl` from `client/lib/api.ts`
+- [x] Remove first-run `/setup` redirect from `client/app/page.tsx`
+- [x] 9 leftover TBM rows non-destructively filtered from `getAllProjects` and `buildGroupsArray`
+
+**Part C — Import Wizard**
+- [x] `GET /api/groups` (lightweight, names only, excludes "To Be Migrated")
+- [x] `POST /api/import/start` (validates, INSERTs unevaluated row, starts CC session in source folder)
+- [x] `POST /api/import/kickoff` (`writeToSession` injects the import prompt)
+- [x] `client/app/import/page.tsx` — 3-step wizard (source browse / container+name / live terminal)
+- [x] Sidebar Import button — placed in top-header diodes row as `FolderInput` icon (per Phet UX feedback)
+- [x] `getAllProjects` auto-register check: promotes `evaluated=1, active_version='1.0'` if `.ccc-project.json` exists at resolved path
+
+**Task D — UX refinements + test file**
+- [x] Active/Parked group headers collapsible on click; chevron `size={10}` -> `size={14}`; per-group collapsed state
+- [x] Generate `docs/v1.1/CCC_test_stage04e01.md`
+
+**-> GO declared 2026-05-07** (Phet confirmed via Safari + verbal /go)
 
 ### Go/NoGo Gate
 > Does the treeview correctly show a parent project with sub-projects? Can the user run multiple simultaneous CC sessions in separate tabs? Does the New Project Wizard (04d) produce the correct v1.1 folder structure?
