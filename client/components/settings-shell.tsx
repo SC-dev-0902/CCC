@@ -2,12 +2,17 @@
 
 import { useEffect, useState } from "react"
 import { Folder } from "lucide-react"
-import { USERS, INTEGRATIONS, MIGRATION_FAMILIES } from "@/lib/dummy-data"
-import { fetchSettings, saveSettings, type SettingsPayload } from "@/lib/api"
+import { INTEGRATIONS, MIGRATION_FAMILIES } from "@/lib/dummy-data"
+import { API_BASE, fetchSettings, saveSettings, type SettingsPayload } from "@/lib/api"
 import { tokens, useTheme } from "./theme-context"
 
-const SECTIONS = ["General", "Integrations", "User Management", "Migration Tool"] as const
-type Section = typeof SECTIONS[number]
+type Section = "General" | "Integrations" | "User Management" | "Migration Tool"
+
+interface CurrentUser {
+  id: string
+  username: string
+  role: string
+}
 
 export function SettingsShell({ theme, initialSection = "General", initialMigrationStep = 1 }: {
   theme: "dark" | "light"
@@ -16,6 +21,26 @@ export function SettingsShell({ theme, initialSection = "General", initialMigrat
 }) {
   const t = tokens(theme)
   const [section, setSection] = useState<Section>(initialSection)
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/me`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return (await res.json()) as CurrentUser
+      })
+      .then((u) => setCurrentUser(u))
+      .catch(() => setCurrentUser(null))
+  }, [])
+
+  const sections: ReadonlyArray<Section> = currentUser?.role === "admin"
+    ? ["General", "Integrations", "User Management", "Migration Tool"]
+    : ["General", "Integrations", "Migration Tool"]
+
+  // If the user lands on a hidden section (e.g. role downgrade), bounce to General.
+  useEffect(() => {
+    if (!sections.includes(section)) setSection("General")
+  }, [sections, section])
 
   return (
     <div className="flex" style={{ border: `1px solid ${t.border}`, backgroundColor: t.bgApp, minHeight: 540 }}>
@@ -23,7 +48,7 @@ export function SettingsShell({ theme, initialSection = "General", initialMigrat
         <div className="text-[10px] uppercase tracking-wider px-4 pt-4 pb-2" style={{ color: t.textMuted }}>
           Settings
         </div>
-        {SECTIONS.map((s) => {
+        {sections.map((s) => {
           const active = section === s
           return (
             <button
@@ -45,7 +70,7 @@ export function SettingsShell({ theme, initialSection = "General", initialMigrat
       <div className="flex-1 p-6 overflow-auto">
         {section === "General" && <GeneralPanel theme={theme} />}
         {section === "Integrations" && <IntegrationsPanel theme={theme} />}
-        {section === "User Management" && <UserManagementPanel theme={theme} />}
+        {section === "User Management" && <UserManagementPanel theme={theme} currentUser={currentUser} />}
         {section === "Migration Tool" && <MigrationPanel theme={theme} initialStep={initialMigrationStep} />}
       </div>
     </div>
@@ -222,7 +247,7 @@ function Field({
   const t = tokens(theme)
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wider mb-1.5" style={{ color: t.textMuted }}>{label}</div>
+      <div className="text-[10px] uppercase tracking-wider mb-1.5" style={{ color: t.textSecondary }}>{label}</div>
       {children}
       {hint && (
         <div className="text-[11px] mt-1" style={{ color: t.textMuted }}>{hint}</div>
@@ -260,26 +285,262 @@ function IntegrationsPanel({ theme }: { theme: "dark" | "light" }) {
   )
 }
 
-function UserManagementPanel({ theme }: { theme: "dark" | "light" }) {
+// ---------------------------------------------------------------------------
+// User Management - Stage 05c
+// ---------------------------------------------------------------------------
+
+interface ApiUser {
+  id: string
+  username: string
+  role: "admin" | "developer"
+  created_at: string | null
+  last_login: string | null
+}
+
+function UserManagementPanel({
+  theme,
+  currentUser,
+}: {
+  theme: "dark" | "light"
+  currentUser: CurrentUser | null
+}) {
   const t = tokens(theme)
+  const [users, setUsers] = useState<ApiUser[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const [addUsername, setAddUsername] = useState("")
+  const [addPassword, setAddPassword] = useState("")
+  const [addRole, setAddRole] = useState<"admin" | "developer">("developer")
+  const [addError, setAddError] = useState<string | null>(null)
+  const [addBusy, setAddBusy] = useState(false)
+
+  const [deleteBusy, setDeleteBusy] = useState<string | null>(null)
+
+  async function loadUsers() {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`${API_BASE}/api/users`)
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({} as any))
+        throw new Error(body?.message || `HTTP ${res.status}`)
+      }
+      const list = (await res.json()) as ApiUser[]
+      setUsers(list)
+    } catch (e: any) {
+      setError(e?.message || "Failed to load users")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadUsers()
+  }, [])
+
+  async function handleAdd(e: React.FormEvent) {
+    e.preventDefault()
+    if (addBusy) return
+    setAddError(null)
+    if (!addUsername.trim()) {
+      setAddError("Username is required.")
+      return
+    }
+    if (addPassword.length < 8) {
+      setAddError("Password must be at least 8 characters.")
+      return
+    }
+    setAddBusy(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/users`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: addUsername.trim(), password: addPassword, role: addRole }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({} as any))
+        setAddError(body?.message || `Create failed (HTTP ${res.status}).`)
+        return
+      }
+      setAddUsername("")
+      setAddPassword("")
+      setAddRole("developer")
+      await loadUsers()
+    } catch (err: any) {
+      setAddError(err?.message || "Create failed")
+    } finally {
+      setAddBusy(false)
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (deleteBusy) return
+    setDeleteBusy(id)
+    try {
+      const res = await fetch(`${API_BASE}/api/users/${encodeURIComponent(id)}`, { method: "DELETE" })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({} as any))
+        setError(body?.message || `Delete failed (HTTP ${res.status}).`)
+        return
+      }
+      await loadUsers()
+    } catch (err: any) {
+      setError(err?.message || "Delete failed")
+    } finally {
+      setDeleteBusy(null)
+    }
+  }
+
+  const fieldStyle: React.CSSProperties = {
+    backgroundColor: t.bgInput,
+    color: t.textPrimary,
+    border: `1px solid ${t.border}`,
+    padding: "6px 10px",
+    fontSize: 13,
+    width: "100%",
+  }
+
+  function fmtLastLogin(v: string | null): string {
+    if (!v) return "Never"
+    const d = new Date(v)
+    if (Number.isNaN(d.getTime())) return v
+    return d.toLocaleString()
+  }
+
   return (
     <div>
       <h3 className="text-lg font-semibold mb-1" style={{ color: t.textPrimary }}>User Management</h3>
-      <div className="text-xs mb-5" style={{ color: t.textMuted }}>Lands in Stage 05 (Authentication & Multi-User).</div>
+      <div className="text-xs mb-5" style={{ color: t.textMuted }}>Admin accounts can create and remove users. Self-deletion is blocked.</div>
+
+      {error && (
+        <div className="text-[11px] mb-3" style={{ color: t.statusError }}>{error}</div>
+      )}
+
       <div style={{ border: `1px solid ${t.border}` }}>
-        {USERS.map((u, idx) => (
-          <div
-            key={u.username}
-            className="flex items-center gap-4 px-4 py-3"
-            style={{ borderTop: idx > 0 ? `1px solid ${t.border}` : undefined }}
-          >
-            <div className="flex-1">
-              <div className="text-sm font-medium" style={{ color: t.textPrimary }}>{u.username}</div>
-              <div className="text-[11px]" style={{ color: t.textMuted }}>{u.role}</div>
+        <div
+          className="flex items-center gap-4 px-4 py-2"
+          style={{
+            backgroundColor: t.bgSidebar,
+            borderBottom: `1px solid ${t.border}`,
+            color: t.textSecondary,
+          }}
+        >
+          <div className="flex-1 text-[10px] uppercase tracking-wider">Username</div>
+          <div className="w-[100px] text-[10px] uppercase tracking-wider">Role</div>
+          <div className="w-[180px] text-[10px] uppercase tracking-wider">Last login</div>
+          <div className="w-[80px]" />
+        </div>
+        {loading && (
+          <div className="px-4 py-3 text-[11px]" style={{ color: t.textMuted }}>Loading users...</div>
+        )}
+        {!loading && users.length === 0 && (
+          <div className="px-4 py-3 text-[11px]" style={{ color: t.textMuted }}>No users yet.</div>
+        )}
+        {!loading && users.map((u, idx) => {
+          const isSelf = currentUser?.id === u.id
+          const removing = deleteBusy === u.id
+          return (
+            <div
+              key={u.id}
+              className="flex items-center gap-4 px-4 py-3"
+              style={{ borderTop: idx > 0 ? `1px solid ${t.border}` : undefined }}
+            >
+              <div className="flex-1">
+                <div className="text-sm font-medium" style={{ color: t.textPrimary }}>{u.username}</div>
+              </div>
+              <div className="w-[100px]">
+                <span
+                  className="text-[10px] uppercase tracking-wider px-2 py-0.5"
+                  style={{
+                    border: `1px solid ${t.border}`,
+                    color: u.role === "admin" ? t.accent : t.textSecondary,
+                    backgroundColor: t.bgInput,
+                  }}
+                >
+                  {u.role}
+                </span>
+              </div>
+              <div className="w-[180px] text-[11px]" style={{ color: t.textMuted }}>
+                {fmtLastLogin(u.last_login)}
+              </div>
+              <div className="w-[80px] flex justify-end">
+                <button
+                  onClick={() => handleDelete(u.id)}
+                  disabled={isSelf || removing}
+                  className="text-[11px] px-2 py-1"
+                  style={{
+                    border: `1px solid ${t.border}`,
+                    backgroundColor: t.bgInput,
+                    color: isSelf ? t.textMuted : t.textSecondary,
+                    cursor: isSelf || removing ? "not-allowed" : "pointer",
+                    opacity: isSelf ? 0.5 : 1,
+                  }}
+                  title={isSelf ? "Cannot remove your own account" : "Remove user"}
+                >
+                  {removing ? "Removing..." : "Remove"}
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
+
+      <form onSubmit={handleAdd} className="mt-6" style={{ border: `1px solid ${t.border}`, backgroundColor: t.bgCard }}>
+        <div className="px-4 py-3" style={{ borderBottom: `1px solid ${t.border}` }}>
+          <div className="text-sm font-medium" style={{ color: t.textPrimary }}>Add user</div>
+          <div className="text-[11px] mt-1" style={{ color: t.textMuted }}>
+            Password must be at least 8 characters. Stored as a bcrypt hash.
+          </div>
+        </div>
+        <div className="px-4 py-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+          <Field label="USERNAME" theme={theme}>
+            <input
+              type="text"
+              value={addUsername}
+              onChange={(e) => setAddUsername(e.target.value)}
+              style={fieldStyle}
+            />
+          </Field>
+          <Field label="PASSWORD" theme={theme}>
+            <input
+              type="password"
+              value={addPassword}
+              onChange={(e) => setAddPassword(e.target.value)}
+              style={fieldStyle}
+            />
+          </Field>
+          <Field label="ROLE" theme={theme}>
+            <select
+              value={addRole}
+              onChange={(e) => setAddRole(e.target.value as "admin" | "developer")}
+              style={fieldStyle}
+            >
+              <option value="developer">Developer</option>
+              <option value="admin">Admin</option>
+            </select>
+          </Field>
+        </div>
+        <div className="px-4 pb-4 flex items-center gap-3">
+          <button
+            type="submit"
+            disabled={addBusy}
+            className="text-xs px-4 py-1.5"
+            style={{
+              border: `1px solid ${t.accent}`,
+              backgroundColor: addBusy ? "transparent" : t.accent,
+              color: addBusy ? t.textMuted : "#FFFFFF",
+              cursor: addBusy ? "not-allowed" : "pointer",
+              opacity: addBusy ? 0.5 : 1,
+            }}
+          >
+            {addBusy ? "Adding..." : "Add User"}
+          </button>
+          {addError && (
+            <span className="text-[11px]" style={{ color: t.statusError }}>{addError}</span>
+          )}
+        </div>
+      </form>
     </div>
   )
 }

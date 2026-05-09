@@ -11,7 +11,7 @@ const sessions = require('./src/sessions');
 const versions = require('./src/versions');
 const db = require('./src/db');
 const { scanUsage, scanWeeklyUsage, PLAN_LIMITS } = require('./src/usage');
-const { sessionMiddleware, requireAuth, requireApiToken } = require('./src/auth');
+const { sessionMiddleware, requireAuth, requireApiToken, requireAdmin } = require('./src/auth');
 const bcrypt = require('bcrypt');
 
 const app = express();
@@ -21,9 +21,11 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(sessionMiddleware);
 
-// Session auth: all /api/* routes except /api/v1/* (which uses bearer token auth)
+// Session auth: all /api/* routes except /api/v1/* (bearer token auth) and
+// the public first-run setup endpoints (Stage 05c).
 app.use('/api', (req, res, next) => {
   if (req.path.startsWith('/v1')) return next();
+  if (req.path === '/setup-status' || req.path === '/setup') return next();
   return requireAuth(req, res, next);
 });
 
@@ -36,10 +38,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// Browser-route auth guard (Stage 05b)
-// Redirects unauthenticated page requests to /login.
+// Browser-route auth guard (Stage 05b, first-run branch added in 05c)
+// Redirects unauthenticated page requests to /login (or /setup on first run).
 // Assets and explicitly excluded paths pass through unchanged.
-app.use((req, res, next) => {
+app.use(async (req, res, next) => {
   if (req.session && req.session.userId) return next();
   const p = req.path;
   if (
@@ -49,6 +51,15 @@ app.use((req, res, next) => {
     p === '/setup' ||
     /\.(js|css|json|ico|png|txt|map)$/.test(p)
   ) return next();
+
+  // Stage 05c: first-run branch. If users table is empty, send the visitor
+  // to /setup instead of /login. DB failures fall through to /login.
+  try {
+    const row = await db.queryOne('SELECT COUNT(*) AS cnt FROM users');
+    if (row && Number(row.cnt) === 0) {
+      return res.redirect((process.env.NEXT_PUBLIC_BASE_PATH || '') + '/setup');
+    }
+  } catch (e) { /* fall through */ }
   return res.redirect((process.env.NEXT_PUBLIC_BASE_PATH || '') + '/login');
 });
 
@@ -56,6 +67,10 @@ app.use((req, res, next) => {
 // Without this, express.static issues a 301 from /login to /login/, which loses
 // the basePath when the browser follows the host-absolute Location header.
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'client', 'out', 'login.html')));
+
+// Stage 05c: same fix for /setup. Without an explicit handler express.static
+// 301s /setup to /setup/, dropping the basePath at Apache.
+app.get('/setup', (req, res) => res.sendFile(path.join(__dirname, 'client', 'out', 'setup.html')));
 
 // Stage 04bN: Next.js static export (built from client/) replaces the legacy public/ shell.
 app.use(express.static(path.join(__dirname, 'client', 'out')));
@@ -327,6 +342,12 @@ app.post('/login', async (req, res) => {
     const match = await bcrypt.compare(password, user.password_hash);
     if (!match) return res.status(401).json({ error: 'invalid_credentials' });
     req.session.userId = user.id;
+    // Stage 05c: stamp last_login. Best-effort; failure here doesn't block the login.
+    try {
+      await db.query('UPDATE users SET last_login = NOW() WHERE id = ?', [user.id]);
+    } catch (e) {
+      console.error('[login] last_login update failed:', e.message);
+    }
     return res.json({ ok: true });
   } catch (err) {
     console.error('[login] error:', err.message);
@@ -353,6 +374,119 @@ app.get('/api/me', async (req, res) => {
     return res.json(user);
   } catch (err) {
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// --- First-run Setup (Stage 05c, public - no auth) ---
+
+// GET /api/setup-status - reports whether admin and projectRoot still need
+// to be configured. Used by the /setup page to choose which step to show.
+app.get('/api/setup-status', async (req, res) => {
+  try {
+    const userRow = await db.queryOne('SELECT COUNT(*) AS cnt FROM users');
+    const userCount = userRow ? Number(userRow.cnt) : 0;
+    const rootRow = await db.queryOne(
+      "SELECT `value` FROM settings WHERE `key` = 'project_root'"
+    );
+    const projectRoot = rootRow ? rootRow.value : null;
+    const needsAdmin = userCount === 0;
+    const needsProjectRoot = !projectRoot || String(projectRoot).trim() === '';
+    return res.json({ needsAdmin, needsProjectRoot });
+  } catch (err) {
+    console.error('[setup-status] error:', err.message);
+    return res.status(500).json({ error: 'server_error' });
+  }
+});
+
+// POST /api/setup - one-shot admin creation. Only works while users table is
+// empty; subsequent calls return 409.
+app.post('/api/setup', async (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !String(username).trim() || !password || String(password).length < 8) {
+    return res.status(400).json({
+      error: 'VALIDATION',
+      message: 'Username required and password must be at least 8 characters.'
+    });
+  }
+  try {
+    const row = await db.queryOne('SELECT COUNT(*) AS cnt FROM users');
+    const cnt = row ? Number(row.cnt) : 0;
+    if (cnt > 0) {
+      return res.status(409).json({ error: 'ALREADY_SETUP', message: 'Setup already completed.' });
+    }
+    const hash = await bcrypt.hash(password, 12);
+    await db.query(
+      'INSERT INTO users (id, username, password_hash, role) VALUES (UUID(), ?, ?, ?)',
+      [String(username).trim(), hash, 'admin']
+    );
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[setup] error:', err.message);
+    return res.status(500).json({ error: 'server_error' });
+  }
+});
+
+// --- User Management (Stage 05c, admin only) ---
+
+// GET /api/users - admin-only listing.
+app.get('/api/users', requireAdmin, async (req, res) => {
+  try {
+    const rows = await db.query(
+      'SELECT id, username, role, created_at, last_login FROM users ORDER BY created_at ASC'
+    );
+    return res.json(rows);
+  } catch (err) {
+    console.error('[users:list] error:', err.message);
+    return res.status(500).json({ error: 'server_error' });
+  }
+});
+
+// POST /api/users - admin creates an account.
+app.post('/api/users', requireAdmin, async (req, res) => {
+  const { username, password, role } = req.body || {};
+  if (!username || !String(username).trim()) {
+    return res.status(400).json({ error: 'VALIDATION', message: 'Username is required.' });
+  }
+  if (!password || String(password).length < 8) {
+    return res.status(400).json({ error: 'VALIDATION', message: 'Password must be at least 8 characters.' });
+  }
+  if (role !== 'admin' && role !== 'developer') {
+    return res.status(400).json({ error: 'VALIDATION', message: "Role must be 'admin' or 'developer'." });
+  }
+  try {
+    const hash = await bcrypt.hash(password, 12);
+    await db.query(
+      'INSERT INTO users (id, username, password_hash, role) VALUES (UUID(), ?, ?, ?)',
+      [String(username).trim(), hash, role]
+    );
+    const created = await db.queryOne(
+      'SELECT id, username, role, created_at FROM users WHERE username = ?',
+      [String(username).trim()]
+    );
+    return res.json(created);
+  } catch (err) {
+    if (err && err.errno === 1062) {
+      return res.status(409).json({ error: 'DUPLICATE', message: 'Username already exists.' });
+    }
+    console.error('[users:create] error:', err.message);
+    return res.status(500).json({ error: 'server_error' });
+  }
+});
+
+// DELETE /api/users/:id - admin removes an account. Self-delete is blocked.
+app.delete('/api/users/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  if (id === req.session.userId) {
+    return res.status(400).json({ error: 'SELF_DELETE', message: 'Cannot delete your own account' });
+  }
+  try {
+    const result = await db.query('DELETE FROM users WHERE id = ?', [id]);
+    const affected = result && (result.affectedRows ?? result.affected_rows ?? 0);
+    if (!affected) return res.status(404).json({ error: 'NOT_FOUND' });
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[users:delete] error:', err.message);
+    return res.status(500).json({ error: 'server_error' });
   }
 });
 

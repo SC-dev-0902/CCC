@@ -166,7 +166,7 @@ function Field({ label, theme, children }: { label: string; theme: "dark" | "lig
   const t = tokens(theme)
   return (
     <div className="mb-4">
-      <div className="text-[10px] uppercase tracking-wider mb-1.5" style={{ color: t.textMuted }}>
+      <div className="text-[10px] uppercase tracking-wider mb-1.5" style={{ color: t.textSecondary }}>
         {label}
       </div>
       {children}
