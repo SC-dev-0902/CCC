@@ -319,13 +319,15 @@
 **-> GO declared 2026-05-09:** 8/8 ACs + 30/30 test bullets pass. bcrypt installed, phet/test1234 admin seeded, auth_sessions row lifecycle verified (create on login, destroy on logout). Browser auth guard, POST /login + POST /logout + GET /api/me wired; SignInCard wired with real fetch + loading state; UserBadge in sidebar footer with LogOut. Option A deviation (approved): redirect prepends NEXT_PUBLIC_BASE_PATH + explicit `app.get('/login', ...)` handler bypasses the express.static 301 quirk so /CCC/login resolves cleanly. Proceed to Stage 05c.
 
 ### Sub-Stage 05c — User Management
-- [ ] First-run detection: if `users` table empty, redirect to `/setup` for admin account creation
-- [ ] `GET/POST /setup`: create first admin account, then redirect to login
-- [ ] Settings panel: admin-only "Manage Users" section (add developer, set role, delete account)
-- [ ] `POST /api/users`: create user (admin only)
-- [ ] `DELETE /api/users/:id`: delete user (admin only, cannot delete self)
-- [ ] Password hashing with bcrypt (cost factor 12)
-- [ ] Update `last_login` in `users` table on successful login
+- [x] First-run detection: if `users` table empty, redirect to `/setup` for admin account creation
+- [x] `GET/POST /setup`: create first admin account, then redirect to login
+- [x] Settings panel: admin-only "Manage Users" section (add developer, set role, delete account)
+- [x] `POST /api/users`: create user (admin only)
+- [x] `DELETE /api/users/:id`: delete user (admin only, cannot delete self)
+- [x] Password hashing with bcrypt (cost factor 12)
+- [x] Update `last_login` in `users` table on successful login
+
+**-> GO declared 2026-05-09:** 10/10 ACs + 51/51 test bullets pass. requireAdmin middleware + first-run /setup redirect + AdminCreationCard + admin-only User Management UI + bcrypt cost 12 + last_login stamping all live. Two fixes during test cycle: client/.env added with NEXT_PUBLIC_BASE_PATH=/CCC (Next.js auto-loads .env from client/, not project root - first build dropped basePath); Field label contrast bumped textMuted -> textSecondary for WCAG AA on dark cards. Carry-forwards: last-admin guard not implemented (out of scope), WS auth gating still deferred from 05b.
 
 ### Go/NoGo Gate
 > Does the login gate work? Can an admin create developer accounts? Do sessions persist correctly? Do unauthenticated requests redirect to login?
