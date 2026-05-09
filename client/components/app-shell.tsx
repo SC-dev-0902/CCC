@@ -3,9 +3,10 @@
 import { useEffect, useState, Fragment, type ReactNode } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { FolderInput, Hexagon, Moon, Sun, X } from "lucide-react"
+import { FolderInput, Hexagon, LogOut, Moon, Sun, X } from "lucide-react"
 import { TreeviewShell } from "./treeview-shell"
 import { INTEGRATIONS } from "@/lib/dummy-data"
+import { API_BASE } from "@/lib/api"
 import { tokens, useTheme } from "./theme-context"
 
 function Diode({ name, connected, url }: { name: string; connected: boolean; url: string }) {
@@ -240,7 +241,14 @@ export function AppShell({ children, tabs, activeTabId, onSelectTab, onCloseTab,
           className="shrink-0 overflow-hidden"
           style={{ width: sidebarWidth }}
         >
-          <TreeviewShell theme={theme} onStartSession={onStartSession || (() => {})} onOpenFile={onOpenFile || (() => {})} />
+          <div className="flex flex-col h-full overflow-hidden">
+            <div className="flex-1 overflow-hidden">
+              <TreeviewShell theme={theme} onStartSession={onStartSession || (() => {})} onOpenFile={onOpenFile || (() => {})} />
+            </div>
+            <div className="shrink-0 px-3 py-2.5" style={{ borderTop: `1px solid ${t.border}` }}>
+              <UserBadge />
+            </div>
+          </div>
         </aside>
         <div
           onMouseDown={(e) => { e.preventDefault(); setDragging(true) }}
@@ -278,6 +286,93 @@ export function AppShell({ children, tabs, activeTabId, onSelectTab, onCloseTab,
           </div>
         </main>
       </div>
+    </div>
+  )
+}
+
+function UserBadge() {
+  const { theme } = useTheme()
+  const t = tokens(theme)
+  const [user, setUser] = useState<{ id: string; username: string; role: string } | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    const redirectToLogin = () => {
+      window.location.href = (process.env.NEXT_PUBLIC_BASE_PATH || "") + "/login"
+    }
+    fetch(`${API_BASE}/api/me`)
+      .then(async (res) => {
+        if (cancelled) return
+        if (!res.ok) {
+          redirectToLogin()
+          return
+        }
+        const data = await res.json()
+        if (cancelled) return
+        setUser(data)
+        setLoading(false)
+      })
+      .catch(() => {
+        if (!cancelled) redirectToLogin()
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  async function handleLogout() {
+    try {
+      await fetch(`${API_BASE}/logout`, { method: "POST" })
+    } catch {
+      // Logout is best-effort - redirect anyway
+    }
+    window.location.href = (process.env.NEXT_PUBLIC_BASE_PATH || "") + "/login"
+  }
+
+  if (loading || !user) {
+    return (
+      <div
+        aria-hidden
+        style={{
+          height: 28,
+          backgroundColor: t.bgInput,
+          opacity: 0.5,
+        }}
+      />
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex flex-col flex-1 min-w-0">
+        <span
+          className="font-medium text-[12px] truncate"
+          style={{ color: t.textPrimary }}
+          title={user.username}
+        >
+          {user.username}
+        </span>
+        <span
+          className="text-[10px] uppercase tracking-wider"
+          style={{ color: t.textMuted }}
+        >
+          {user.role}
+        </span>
+      </div>
+      <button
+        onClick={handleLogout}
+        title="Sign out"
+        className="flex items-center justify-center shrink-0"
+        style={{
+          width: 24,
+          height: 24,
+          color: t.textMuted,
+          cursor: "pointer",
+          backgroundColor: "transparent",
+          border: "none",
+        }}
+      >
+        <LogOut size={14} />
+      </button>
     </div>
   )
 }

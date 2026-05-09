@@ -3,14 +3,41 @@
 import { useState } from "react"
 import { tokens } from "./theme-context"
 
-export function SignInCard({ theme, withError = false }: { theme: "dark" | "light"; withError?: boolean }) {
+export function SignInCard({ theme }: { theme: "dark" | "light" }) {
   const t = tokens(theme)
   const [username, setUsername] = useState("")
-  const [password, setPassword] = useState(withError ? "wrongpass" : "")
-  const [submitted, setSubmitted] = useState(withError)
+  const [password, setPassword] = useState("")
+  const [error, setError] = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || ""
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (loading) return
+    setError(false)
+    setLoading(true)
+    try {
+      const res = await fetch(`${basePath}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      })
+      if (res.ok) {
+        window.location.href = basePath + "/"
+        return
+      }
+      setError(true)
+    } catch {
+      setError(true)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
-    <div
+    <form
+      onSubmit={handleSubmit}
       className="w-full max-w-[440px] p-7"
       style={{ backgroundColor: t.bgCard, border: `1px solid ${t.border}` }}
     >
@@ -39,24 +66,30 @@ export function SignInCard({ theme, withError = false }: { theme: "dark" | "ligh
         />
       </Field>
 
-      {submitted && (
+      {error && (
         <div className="text-[11px] mb-4 flex items-center gap-1" style={{ color: t.statusWaiting }}>
           <span>x Invalid credentials. Please try again.</span>
         </div>
       )}
 
       <button
-        onClick={() => setSubmitted(true)}
+        type="submit"
+        disabled={loading}
         className="w-full py-2.5 text-sm font-medium"
-        style={{ backgroundColor: t.accent, color: "#FFFFFF" }}
+        style={{
+          backgroundColor: t.accent,
+          color: "#FFFFFF",
+          cursor: loading ? "not-allowed" : "pointer",
+          opacity: loading ? 0.7 : 1,
+        }}
       >
-        Sign in
+        {loading ? "Signing in..." : "Sign in"}
       </button>
 
       <div className="text-[10px] text-center mt-5" style={{ color: t.textMuted }}>
         CCC v1.1.0 - Internal use only
       </div>
-    </div>
+    </form>
   )
 }
 

@@ -12,6 +12,7 @@ const versions = require('./src/versions');
 const db = require('./src/db');
 const { scanUsage, scanWeeklyUsage, PLAN_LIMITS } = require('./src/usage');
 const { sessionMiddleware, requireAuth, requireApiToken } = require('./src/auth');
+const bcrypt = require('bcrypt');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -34,6 +35,28 @@ app.use((req, res, next) => {
   res.set('Cache-Control', 'no-store');
   next();
 });
+
+// Browser-route auth guard (Stage 05b)
+// Redirects unauthenticated page requests to /login.
+// Assets and explicitly excluded paths pass through unchanged.
+app.use((req, res, next) => {
+  if (req.session && req.session.userId) return next();
+  const p = req.path;
+  if (
+    p.startsWith('/_next/') ||
+    p.startsWith('/api/') ||
+    p === '/login' ||
+    p === '/setup' ||
+    /\.(js|css|json|ico|png|txt|map)$/.test(p)
+  ) return next();
+  return res.redirect((process.env.NEXT_PUBLIC_BASE_PATH || '') + '/login');
+});
+
+// Stage 05b: explicit /login handler (must precede express.static).
+// Without this, express.static issues a 301 from /login to /login/, which loses
+// the basePath when the browser follows the host-absolute Location header.
+app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'client', 'out', 'login.html')));
+
 // Stage 04bN: Next.js static export (built from client/) replaces the legacy public/ shell.
 app.use(express.static(path.join(__dirname, 'client', 'out')));
 
@@ -284,6 +307,52 @@ app.get('/api/browse', (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: 'Failed to browse directory' });
+  }
+});
+
+// --- Auth Routes (Stage 05b) ---
+
+// POST /login (Stage 05b)
+app.post('/login', async (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password) {
+    return res.status(400).json({ error: 'invalid_credentials' });
+  }
+  try {
+    const user = await db.queryOne(
+      'SELECT id, password_hash FROM users WHERE username = ?',
+      [username]
+    );
+    if (!user) return res.status(401).json({ error: 'invalid_credentials' });
+    const match = await bcrypt.compare(password, user.password_hash);
+    if (!match) return res.status(401).json({ error: 'invalid_credentials' });
+    req.session.userId = user.id;
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[login] error:', err.message);
+    return res.status(500).json({ error: 'server_error' });
+  }
+});
+
+// POST /logout (Stage 05b)
+app.post('/logout', (req, res) => {
+  req.session.destroy((err) => {
+    if (err) console.error('[logout] session destroy error:', err.message);
+    return res.json({ ok: true });
+  });
+});
+
+// GET /api/me (Stage 05b) - returns current session user
+app.get('/api/me', async (req, res) => {
+  try {
+    const user = await db.queryOne(
+      'SELECT id, username, role FROM users WHERE id = ?',
+      [req.session.userId]
+    );
+    if (!user) return res.status(404).json({ error: 'USER_NOT_FOUND' });
+    return res.json(user);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
   }
 });
 
