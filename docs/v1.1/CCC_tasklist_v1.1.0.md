@@ -310,11 +310,13 @@
 **-> GO declared 2026-05-09:** 13/13 ACs pass. express-session@1.19.0 + express-mysql-session@3.0.3 installed, auth_sessions table created, all /api/* return 401, static files unaffected. Proceed to Stage 05b.
 
 ### Sub-Stage 05b — Login UI
-- [ ] Login page at `/login`: username + password form, minimal styling consistent with CCC UI
-- [ ] `POST /login`: validate credentials, create session, redirect to `/`
-- [ ] `POST /logout`: destroy session, redirect to `/login`
-- [ ] Unauthenticated requests to any route redirect to `/login`
-- [ ] Invalid credentials show error message without revealing which field is wrong
+- [x] Login page at `/login`: username + password form, minimal styling consistent with CCC UI
+- [x] `POST /login`: validate credentials, create session, redirect to `/`
+- [x] `POST /logout`: destroy session, redirect to `/login`
+- [x] Unauthenticated requests to any route redirect to `/login`
+- [x] Invalid credentials show error message without revealing which field is wrong
+
+**-> GO declared 2026-05-09:** 8/8 ACs + 30/30 test bullets pass. bcrypt installed, phet/test1234 admin seeded, auth_sessions row lifecycle verified (create on login, destroy on logout). Browser auth guard, POST /login + POST /logout + GET /api/me wired; SignInCard wired with real fetch + loading state; UserBadge in sidebar footer with LogOut. Option A deviation (approved): redirect prepends NEXT_PUBLIC_BASE_PATH + explicit `app.get('/login', ...)` handler bypasses the express.static 301 quirk so /CCC/login resolves cleanly. Proceed to Stage 05c.
 
 ### Sub-Stage 05c — User Management
 - [ ] First-run detection: if `users` table empty, redirect to `/setup` for admin account creation
