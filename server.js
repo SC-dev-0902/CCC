@@ -11,12 +11,25 @@ const sessions = require('./src/sessions');
 const versions = require('./src/versions');
 const db = require('./src/db');
 const { scanUsage, scanWeeklyUsage, PLAN_LIMITS } = require('./src/usage');
+const { sessionMiddleware, requireAuth, requireApiToken } = require('./src/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(express.json());
+app.use(sessionMiddleware);
+
+// Session auth: all /api/* routes except /api/v1/* (which uses bearer token auth)
+app.use('/api', (req, res, next) => {
+  if (req.path.startsWith('/v1')) return next();
+  return requireAuth(req, res, next);
+});
+
+// Bearer token auth: all /api/v1/* routes
+// No routes exist yet - guard is established here for Stage 09
+app.use('/api/v1', requireApiToken);
+
 app.use((req, res, next) => {
   res.set('Cache-Control', 'no-store');
   next();
