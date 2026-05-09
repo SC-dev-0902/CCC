@@ -292,7 +292,7 @@
 ### Go/NoGo Gate
 > Does the treeview correctly show a parent project with sub-projects? Can the user run multiple simultaneous CC sessions in separate tabs? Does the New Project Wizard (04d) produce the correct v1.1 folder structure?
 
-**-> GO:** Proceed to Stage 05
+**-> GO 2026-05-09:** All sub-stages complete (04a, 04a01, 04b, 04bN, 04b01, 04c, 04d, 04e, 04e01). Proceed to Stage 05.
 **-> NOGO:** Fix structure scanning and rendering
 
 ---
@@ -301,11 +301,13 @@
 **Focus:** Login system, session management, developer accounts. All routes protected. First-run admin setup.
 
 ### Sub-Stage 05a — Auth Middleware
-- [ ] Create `src/auth.js`: session middleware, `requireAuth()` route guard, `requireApiToken()` for /api/v1
-- [ ] Configure `express-session` with `express-mysql-session` store (sessions in MariaDB)
-- [ ] Mount session middleware globally in `server.js`
-- [ ] Apply `requireAuth()` to all routes except `/login` and `/api/v1/health`
-- [ ] Apply `requireApiToken()` to all `/api/v1/*` routes except health check
+- [x] Create `src/auth.js`: session middleware, `requireAuth()` route guard, `requireApiToken()` for /api/v1
+- [x] Configure `express-session` with `express-mysql-session` store (sessions in MariaDB)
+- [x] Mount session middleware globally in `server.js`
+- [x] Apply `requireAuth()` to all routes except `/login` and `/api/v1/health`
+- [x] Apply `requireApiToken()` to all `/api/v1/*` routes except health check
+
+**-> GO declared 2026-05-09:** 13/13 ACs pass. express-session@1.19.0 + express-mysql-session@3.0.3 installed, auth_sessions table created, all /api/* return 401, static files unaffected. Proceed to Stage 05b.
 
 ### Sub-Stage 05b — Login UI
 - [ ] Login page at `/login`: username + password form, minimal styling consistent with CCC UI
